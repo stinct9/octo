@@ -1,0 +1,619 @@
+<title>Octo Case</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a design review. The model leads, full width; the reasoning follows in one readable
+   column; numbers and the print plan in tables and steps. Octo's palette: mist and ink, Octo blue. */
+:root {
+  color-scheme: light;
+  --bg: #EDF2F1; --bg-2: #E2EBEA; --card: #FFFFFF; --ink: #0E1E29; --ink-2: #33464F; --muted: #566870;
+  --line: #CAD7D7; --acc: #1D4F7A; --acc-soft: #DCE7F1; --on-acc: #FFFFFF; --live: #23806F; --warn: #9A5200; --warn-soft: #FBEFDD;
+  --stage-a: #F6F8F7; --stage-b: #D9E2E1; --label-bg: rgba(255, 255, 255, 0.92);
+  --cut-case: #263645; --cut-plate: #3A4B5A; --cut-part: #D6D0C4; --cut-cell: #B3BAC6; --cut-deck: rgba(10, 14, 18, 0.55); --bad: #C2412D;
+  --display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0D1A23; --bg-2: #0A161E; --card: #12232E; --ink: #E3ECEE; --ink-2: #C1CFD4; --muted: #8FA2AB;
+    --line: #22394A; --acc: #6FA8D8; --acc-soft: #1A2C3B; --on-acc: #0B1824; --live: #66CDBD; --warn: #E3A456; --warn-soft: #2E2214;
+    --stage-a: #1A2A35; --stage-b: #0B151C; --label-bg: rgba(18, 35, 46, 0.92);
+    --cut-case: #5D7A90; --cut-plate: #48627A; --cut-part: #9E978A; --cut-cell: #6E7887; --cut-deck: rgba(150, 175, 195, 0.28); --bad: #F0785F;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0D1A23; --bg-2: #0A161E; --card: #12232E; --ink: #E3ECEE; --ink-2: #C1CFD4; --muted: #8FA2AB;
+  --line: #22394A; --acc: #6FA8D8; --acc-soft: #1A2C3B; --on-acc: #0B1824; --live: #66CDBD; --warn: #E3A456; --warn-soft: #2E2214;
+  --stage-a: #1A2A35; --stage-b: #0B151C; --label-bg: rgba(18, 35, 46, 0.92);
+  --cut-case: #5D7A90; --cut-plate: #48627A; --cut-part: #9E978A; --cut-cell: #6E7887; --cut-deck: rgba(150, 175, 195, 0.28); --bad: #F0785F;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 1.0625rem/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin-inline: auto; padding-inline: clamp(16px, 4vw, 40px); }
+h1, h2 { font-family: var(--display); font-variation-settings: "SOFT" 100, "WONK" 0; font-weight: 400; letter-spacing: -0.015em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.4rem, 1.6rem + 3vw, 3.6rem); line-height: 1.04; }
+h2 { font-size: clamp(1.7rem, 1.3rem + 1.4vw, 2.3rem); line-height: 1.1; }
+h3 { font-size: 1.0625rem; margin: 0; line-height: 1.35; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--acc); }
+.eyebrow { font: 500 0.75rem/1.2 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+.lede { font-size: clamp(1.08rem, 1rem + 0.3vw, 1.25rem); color: var(--ink-2); line-height: 1.55; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); }
+section { padding-block: clamp(44px, 6vw, 72px); }
+header.top { padding-block: clamp(36px, 5vw, 64px) 26px; display: grid; gap: 16px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 6px; list-style: none; padding: 0; }
+.facts li { font: 500 0.8125rem/1 var(--mono); padding: 9px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.facts li b { font-weight: 500; color: var(--acc); }
+
+/* the model */
+.viewer { position: relative; border-radius: 26px; overflow: hidden; border: 1px solid var(--line);
+  background: radial-gradient(90% 80% at 50% 30%, var(--stage-a), var(--stage-b)); aspect-ratio: 16 / 10; max-height: 76vh; width: 100%; }
+@media (max-width: 700px) { .viewer { aspect-ratio: 1 / 1.08; } }
+.viewer canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.viewer canvas:active { cursor: grabbing; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.lbl { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 6px; transform: translate(-6px, -50%); transition: opacity .25s ease; white-space: nowrap; }
+.lbl i { width: 9px; height: 9px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 25%, transparent); flex: none; }
+.lbl span { font: 500 0.75rem/1 var(--sans); padding: 5px 8px; border-radius: 7px; background: var(--label-bg); color: var(--ink); border: 1px solid var(--line); }
+.lbl.flip { flex-direction: row-reverse; }
+.lbl.air i { background: #E8873A; box-shadow: 0 0 0 3px rgba(232, 135, 58, .25); }
+.lbl.cool i { background: #3FA7D6; box-shadow: 0 0 0 3px rgba(63, 167, 214, .25); }
+@media (max-width: 700px) { .lbl span { font-size: 0.6875rem; padding: 4px 6px; } }
+.hint { position: absolute; left: 16px; bottom: 14px; font: 400 0.8125rem/1.3 var(--sans); color: var(--muted); pointer-events: none; }
+.nogl { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+.tools { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 14px; }
+.group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.group > span { font: 500 0.6875rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.tools button { font: 500 0.875rem/1 var(--sans); min-height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+.tools button[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); color: var(--on-acc); }
+.tools button:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; vertical-align: -2px; margin-right: 6px; border: 1px solid #0003; }
+
+/* the reasoning */
+.cols { display: grid; grid-template-columns: minmax(0, 0.36fr) minmax(0, 0.64fr); gap: clamp(24px, 4vw, 56px); align-items: start; }
+@media (max-width: 860px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.decisions { list-style: none; margin: 0; padding: 0; counter-reset: d; display: grid; gap: 0; }
+.decisions li { counter-increment: d; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 4px 12px; padding: 16px 0; border-top: 1px solid var(--line); }
+.decisions li::before { content: counter(d, decimal-leading-zero); font: 500 0.8125rem/1.6 var(--mono); color: var(--acc); grid-row: span 2; }
+.decisions h3 { font-weight: 600; }
+.decisions p { color: var(--ink-2); font-size: 0.9688rem; }
+.principles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
+@media (max-width: 860px) { .principles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .principles { grid-template-columns: minmax(0, 1fr); } }
+.principles div { border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: var(--card); display: grid; gap: 6px; align-content: start; }
+.principles h3 { font: 400 1.25rem/1.2 var(--display); font-variation-settings: "SOFT" 100, "WONK" 0; }
+.principles p { font-size: 0.9375rem; color: var(--ink-2); }
+.table-scroll { overflow-x: auto; margin-top: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; min-width: 640px; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font: 500 0.75rem/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+tbody tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--mono); font-size: 0.875rem; white-space: nowrap; }
+.tag { display: inline-block; font: 500 0.6875rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 7px; border-radius: 6px; white-space: nowrap; }
+.tag.pub { color: var(--live); background: color-mix(in srgb, var(--live) 14%, transparent); }
+.tag.est { color: var(--warn); background: var(--warn-soft); }
+.tag.asm { color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); }
+.steps { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 12px; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start; }
+.steps li::before { content: counter(s); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 500 0.875rem/1 var(--mono); background: var(--acc-soft); color: var(--acc); }
+.steps p { color: var(--ink-2); }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(24px, 4vw, 48px); }
+@media (max-width: 860px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.qs { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 14px; }
+.qs li { border: 1px solid var(--line); border-left: 3px solid var(--acc); border-radius: 10px; padding: 14px 16px; background: var(--card); display: grid; gap: 6px; }
+.qs p { color: var(--ink-2); font-size: 0.9688rem; }
+.cuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 3vw, 32px); margin-top: 26px; }
+@media (max-width: 760px) { .cuts { grid-template-columns: minmax(0, 1fr); } }
+.cuts figure { margin: 0; border: 1px solid var(--line); border-radius: 18px; background: var(--card); padding: 14px 16px 18px; display: grid; gap: 12px; align-content: start; }
+.cuts figure.pick { border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); }
+.cuts figcaption { font-size: 0.9688rem; color: var(--ink-2); }
+.cuts figcaption b { color: var(--ink); font-weight: 600; }
+.cut { width: 100%; height: auto; display: block; }
+.cut .sh { fill: var(--cut-case); } .cut .pl { fill: var(--cut-plate); } .cut .pcb { fill: #14191E; } .cut .oled { fill: #050607; }
+.cut .part { fill: var(--cut-part); } .cut .cell { fill: var(--cut-cell); } .cut .deck { fill: var(--cut-deck); stroke: var(--muted); stroke-width: 0.15; }
+.cut .ray { stroke: var(--acc); stroke-width: 0.22; stroke-dasharray: 0.9 0.6; fill: none; } .cut .ray.no { stroke: var(--bad); }
+.cut .aa { stroke: var(--muted); stroke-width: 0.9; } .cut .aa.lit { stroke: var(--live); }
+.cut text { font: 500 2.1px var(--sans); fill: var(--ink-2); } .cut text.in { fill: #2B3640; }
+.key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-size: 0.875rem; color: var(--muted); }
+.key i { display: inline-block; width: 18px; height: 0; border-top: 2px dashed; vertical-align: middle; margin-right: 6px; }
+.key i.solid { border-top-style: solid; border-top-width: 3px; }
+footer { padding-block: 28px 56px; color: var(--muted); font-size: 0.875rem; }
+</style>
+
+<header class="wrap top">
+  <p class="eyebrow">Octo · the recorder's case · concept v1 · 6 Oct 2026</p>
+  <h1>Octo case</h1>
+  <p class="lede">Your two-level sketch, fitted to the real boards and worked through the way an industrial designer would, with your decisions of 6 Oct: a dark-glass top, a flat LiPo, and the camera kept behind a cap. Since 15 Oct the positions on the expansion board come from Seeed's PCB layout, checked against your measurements, and the screen is the recording light: no LED is added. M1's camera, microSD card and USB-C come from Seeed's 3D model: the card runs out past the USB-C to the end wall's outside face, through a slot above the USB-C opening. Don't print it yet: M1's mic and the sockets' height are still estimates.</p>
+  <ul class="facts">
+    <li><b id="fSize">63 × 48 mm</b> footprint</li>
+    <li><b id="fTall">40 mm</b> at M1 · <b id="fLow">22 mm</b> at the screen</li>
+    <li><b>3</b> printed parts · <b>1</b> acrylic pane</li>
+    <li><b>8</b> screws · <b>4</b> feet</li>
+    <li><b>PETG</b></li>
+  </ul>
+</header>
+
+<div class="wrap">
+  <div class="viewer" id="viewer">
+    <canvas id="gl" aria-label="The case in 3D. Drag to turn it, scroll or pinch to zoom."></canvas>
+    <div class="labels" id="labels" aria-hidden="true"></div>
+    <p class="hint" id="hint">Drag to turn · scroll or pinch to zoom · the screen runs the recorder's real code for recording</p>
+  </div>
+  <div class="tools" role="group" aria-label="Model controls">
+    <div class="group" role="group" aria-label="Show"><span>Show</span>
+      <button type="button" data-mode="case" aria-pressed="true">Case</button>
+      <button type="button" data-mode="xray" aria-pressed="false">See inside</button>
+      <button type="button" data-mode="explode" aria-pressed="false">Taken apart</button>
+      <button type="button" id="airBtn" aria-pressed="false">Airflow</button>
+    </div>
+    <div class="group" role="group" aria-label="Colour"><span>Colour</span>
+      <button type="button" data-color="ink" aria-pressed="true"><i class="swatch" style="background:#263645"></i>Ink</button>
+      <button type="button" data-color="bone" aria-pressed="false"><i class="swatch" style="background:#E6E0D3"></i>Bone</button>
+    </div>
+    <div class="group" role="group" aria-label="View"><span>View</span>
+      <button type="button" data-view="hero">¾</button>
+      <button type="button" data-view="front">Front</button>
+      <button type="button" data-view="back">Back</button>
+      <button type="button" data-view="end">USB end</button>
+      <button type="button" data-view="top">Top</button>
+    </div>
+  </div>
+</div>
+
+<section class="wrap" id="sight">
+  <p class="eyebrow">Why the top is glass</p>
+  <h2>Can you see the screen from across the table?</h2>
+  <p class="lede" style="margin-top:12px">The screen sits @@DEPTH@@ mm below the top: the pin headers and Grove sockets beside it are taller, and the top has to clear them. Here's a cut through the middle of the screen, with the lines of sight of someone across the table: eyes about 40 cm above it and 60 cm away, so @@SEATED@@° above the table.</p>
+  <div class="cuts">
+    <figure><!--@CUT_WINDOW@--><figcaption><b>Open window, as sketched,</b> sloped out as far as the parts beside it allow. They see <b>@@SEEN_W@@</b> of the screen. All of it shows only from @@FULL_W@@° up, which means leaning over it.</figcaption></figure>
+    <figure class="pick"><!--@CUT_GLASS@--><figcaption><b>Dark glass, flush with the walls.</b> They see all of it, and so does anyone from @@FULL_G@@° up. Nothing collects in a well, and the screen, which says REC while recording, shows through it. Chosen on 6 Oct.</figcaption></figure>
+  </div>
+  <p class="key"><span><i style="color:var(--acc)"></i>lines of sight that reach the screen</span><span><i style="color:var(--bad)"></i>blocked by the top</span><span><i class="solid" style="color:var(--live)"></i>the part of the screen they see</span><span>From behind: @@SEEN_WB@@ through the window, all of it through glass.</span></p>
+</section>
+
+<section class="wrap">
+  <div class="cols">
+    <div>
+      <p class="eyebrow">What the sketch became</p>
+      <h2>Twelve decisions, each for a reason.</h2>
+    </div>
+    <ol class="decisions">
+      <li><h3>The step is crisp.</h3><p>M1's edge ends about 2 mm before the screen's glass begins, so there's no room for a soft curve. The glass deck runs straight into the step's face: one block standing on a dark pane.</p></li>
+      <li><h3>The lower level's top is dark glass.</h3><p>A flush pane of grey-smoke acrylic instead of an opening. The octopus glows up out of the dark, someone across the table sees all of it, and it wipes clean. It's the move Dieter Rams and Hans Gugelot made on the Braun SK4 in 1956: a clear lid over the works. The pane rests on a ledge inside the walls, which has a 45° chamfer under it so it prints without support.</p></li>
+      <li><h3>The screen is the recording light.</h3><p>No LED is added (15 Oct). The screen is always on, dim, and while recording it shows REC and the time under the glass. The boards' own lights stay as they are: M1's charge light should show through the USB-C opening (not checked), and EB's green power light sits under the lid.</p></li>
+      <li><h3>The controls go where the boards put them.</h3><p>Start/stop (D1) is on the front, the side people face. The battery switch is on the back. Reset and USB-C share M1's end. The control you use daily faces you; the rarely used ones face away.</p></li>
+      <li><h3>Start/stop is a flexing tongue.</h3><p>D1 sits 0.6 mm behind the wall, too close for a loose plunger with a collar to hold it in. Instead a tongue cut into the wall presses D1 with a nub on its back: a plunger with no loose part. It's hinged at one end, so it bends along the print layers, not across them, where printed parts crack. The hinge is thinned to 0.7 mm, which makes the press about 1 N on top of D1's own spring (a beam estimate; the test ring below checks it). A raised dot over the nub shows where to press, and the firmware's 2-second hold still guards against accidental starts.</p></li>
+      <li><h3>Reset is a pinhole.</h3><p>A paper clip reaches the button; a finger can't. A reset mid-recording loses up to two seconds of audio, so it shouldn't be easy to press.</p></li>
+      <li><h3>The battery switch gets a slot and a thumb scallop.</h3><p>The lever stays inside the wall line, so nothing snags, and the scallop gives your thumb room to push it. With the LiPo, it's a real off.</p></li>
+      <li><h3>The microphone gets its own port.</h3><p>One 1.6 mm hole straight above the mic. The mic sits on the Sense board, below the camera's height, so a short duct reaches down to it, and a foam ring seals the duct to the mic. Without the seal, sound fills the box first and comes out boomy. A faint ring around the hole shows people where it listens.</p></li>
+      <li><h3>The camera stays, behind a cap.</h3><p>A 7 mm port sits over its lens, for later. Until then a cap fills it flush, with a rim inside so it can't be pushed in. Nobody at the table sees a lens, and the port is ready when the camera is wanted. As M1 stands, the lens looks straight up.</p></li>
+      <li><h3>Air rises through the tall end.</h3><p>Cool air comes in through the far end and the floor; warm air leaves through six slots high on the back of the tall end, the way a chimney draws. The warm parts are the ESP32 and the battery charger, which runs hottest while charging. The battery sits lowest, in the coolest air: a LiPo shouldn't be charged above about 45 °C.</p></li>
+      <li><h3>Nothing on top but the glass, the mic and the cap.</h3><p>Four screws hold EB to the bottom plate and four more hold the plate to the case from underneath. Four stick-on feet stop it sliding and keep table knocks away from the mic. The Wi-Fi antenna sticks inside the tall end's front wall, high up, where about 17 mm of air separates it from M1 and nothing metal is near.</p></li>
+      <li><h3>PETG, not PLA.</h3><p>PLA starts to soften around 60 °C, PETG around 80 °C. That margin matters for a closed box that charges a battery through a Bengaluru summer.</p></li>
+    </ol>
+  </div>
+  <div class="principles" aria-label="Principles">
+    <div><h3>Useful</h3><p>Every opening has a job: mic, start/stop, reset, switch, USB-C with the microSD card's slot over it, air, and the camera's port for later. There are no others, and the screen reads from across the table.</p></div>
+    <div><h3>Understandable</h3><p>One control faces people, and it's the one you use. The others sit at the back and the end.</p></div>
+    <div><h3>Unobtrusive</h3><p>One colour and dark glass, no logo, the vents at the back and underneath. The screen is dim until something changes.</p></div>
+    <div><h3>Honest</h3><p>The mic port is visible, the screen always shows when it's recording, and the camera is capped until it's used.</p></div>
+    <div><h3>Thorough</h3><p>Glass that sits flush and fits either way round, a shadow gap round the start/stop tongue, a cap you can't push in, hidden screws, soft feet.</p></div>
+    <div><h3>As little design as possible</h3><p>The step is there because M1 stands on EB. The shape is the stack plus clearance.</p></div>
+  </div>
+  <p class="muted" style="margin-top:14px;font-size:0.875rem">Six of Dieter Rams' ten principles for good design, the ones that decided something here.</p>
+</section>
+
+<section class="wrap">
+  <p class="eyebrow">The numbers</p>
+  <h2>What's known, and what's a guess.</h2>
+  <p class="lede" style="margin-top:12px">The boards' outlines are published, and since 15 Oct so is where things sit on EB: positions there come from Seeed's PCB layout (v1.0, checked 15 Oct against your measurements); on M1 from their pinout drawing, for now.</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Item</th><th>Value</th><th>Where it's from</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>EB, the expansion board</td><td class="num">58 × 42.5 mm</td><td>Seeed, as DigiKey lists it</td><td><span class="tag pub">Published</span></td></tr>
+        <tr><td>M1, the XIAO ESP32S3</td><td class="num">20.98 × 17.8 mm</td><td>Seeed's KiCad footprint (their spec table says 21 × 17.5)</td><td><span class="tag pub">Exact</span></td></tr>
+        <tr><td>M1 with the Sense board</td><td class="num">15 mm tall</td><td>Seeed's spec table; taken to include the camera</td><td><span class="tag pub">Published</span></td></tr>
+        <tr><td>Screen</td><td class="num">0.96", 128 × 64</td><td>Seeed; the glass size is the usual panel's</td><td><span class="tag asm">Assumed</span></td></tr>
+        <tr><td>Microphone</td><td class="num">13 mm from M1's USB-C end, 2 mm in from its front edge</td><td>Seeed's pinout drawing of the Sense board, scaled; its sound hole shows on top in their photo</td><td><span class="tag est">Check</span></td></tr>
+        <tr><td>Camera lens</td><td class="num">2.7 mm from the USB-C end, centred</td><td>Seeed's pinout drawing; the housing (about 8 × 9 mm) overhangs that end by 1.5 mm</td><td><span class="tag est">Check</span></td></tr>
+        <tr><td>Camera height above the Sense board</td><td class="num">4.5 mm</td><td>A guess; it sets how far the mic's duct reaches down</td><td><span class="tag asm">Assumed</span></td></tr>
+        <tr><td>Sockets under M1, PCB thickness</td><td class="num">8.5 + 2.5 mm, 1.6 mm</td><td>The usual 2.54 mm headers and boards</td><td><span class="tag asm">Assumed</span></td></tr>
+        <tr><td>Where M1, the screen, the buttons, the switch and the four holes sit</td><td class="num">D1 49, reset 9 (front edge), switch 15 (back edge); screen 24.74 × 16.9</td><td>Seeed's PCB layout; your measurements agree (15 Oct)</td><td><span class="tag pub">Published</span></td></tr>
+        <tr><td>Button plungers, switch lever</td><td class="num">0.9 mm past the front edge; 1.5 mm past the back</td><td>Seeed's footprint; you measured both</td><td><span class="tag pub">Published</span></td></tr>
+        <tr><td>Under EB: microSD slot and coin-cell holder</td><td class="num">from the layout</td><td>Seeed's PCB layout</td><td><span class="tag pub">Published</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="wrap two">
+  <div>
+    <p class="eyebrow">No calipers needed</p>
+    <h2>A ruler and three photos.</h2>
+    <p class="lede" style="margin-top:12px">EB's outline is known exactly, so it calibrates the photos. From them I can place every part to about half a millimetre, which the 0.6 mm clearances absorb.</p>
+    <ol class="steps">
+      <li><p><b>From above.</b> Boards flat on white paper, a ruler along the long edge. Phone parallel to the table, about 30 cm up, at 2× zoom so the edges stay straight. M1's mic and camera show in this one.</p></li>
+      <li><p><b>From the side.</b> At table height, with the ruler standing upright beside the stack. It gives the camera's height.</p></li>
+      <li><p><b>From underneath.</b> Like the first, board upside down, so the microSD slot and coin-cell holder show.</p></li>
+      <li><p><b>Two checks.</b> Seeed's drawing puts the mic near M1's front edge (the side with R), about 13 mm from the USB-C end. Is the small square with a pinhole there?</p></li>
+    </ol>
+  </div>
+  <div>
+    <p class="eyebrow">Before the real print</p>
+    <h2>Print the cheap tests first.</h2>
+    <ol class="steps">
+      <li><p><b>The bottom plate</b> (about an hour). Checks the four holes and the battery bay.</p></li>
+      <li><p><b>A 12 mm ring of the case</b> at button height: in the slicer, cut the case at 7 and 19 mm and print the middle. Checks how start/stop feels, and that the reset pinhole and the switch slot line up, before the long print.</p></li>
+      <li><p><b>The case,</b> standing upright, with tree supports inside; the open bottom lets them out. Print the camera cap with it: it takes minutes.</p></li>
+      <li><p><b>The glass:</b> @@DECK@@ from 2 mm grey-smoke acrylic, corners R@@DECK_R@@. Score and snap it, then file the corners, or send <span class="mono">out/deck.svg</span> to a laser-cutting shop. Hold a light and a dark sample over the running screen first: the dim always-on screen has to show through. Fix it with clear silicone or thin clear tape on the ledge, not superglue, which fogs acrylic white.</p></li>
+      <li><p><b>Fit the parts inside.</b> The cap goes into its port from inside before EB goes in. Stick a foam ring, about 4 mm across with a 1.5 mm hole, on the end of the mic's duct. EB's corner holes go over the four pins on the plate's standoffs: they keep the buttons' plungers off the wall. The battery is a 603040 flat LiPo (6 × 30 × 40 mm) with a JST-PH 2.0 plug: check its polarity with a multimeter first.</p></li>
+      <li><p><b>Then measure three things.</b> The mic: record the same 30 seconds at 1 m with and without the case, and compare levels with <span class="mono">bench analyse</span>. Heat: the ESP32-S3 has a temperature sensor, and the firmware could report it in <span class="mono">/status</span>, a small change for rec-12. The screen: through the glass it looks dimmer; check the dim always-on screen still reads from across the table.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="wrap">
+  <p class="eyebrow">Decided on 6 Oct</p>
+  <h2>Your answers, and what's left.</h2>
+  <ol class="qs">
+    <li><h3>The top: dark glass</h3><p>Someone across the table sees the whole screen, against @@SEEN_W@@ of it through an opening, and there's no well to collect crumbs. It costs one small piece of acrylic and some cutting.</p></li>
+    <li><h3>The recording light: the screen (changed 15 Oct)</h3><p>No LED is added. The boards' own lights can't show recording (M1's user LED is wired to the SD card's chip-select, and the charge and power lights show only power), so the screen does: REC and the time, always on, under the glass.</p></li>
+    <li><h3>The battery: a flat LiPo</h3><p>A 603040 cell (6 × 30 × 40 mm) with a JST-PH 2.0 plug, so the switch is a real off. The bay is drawn for it. On a cell this small, expect hours rather than a full day; the recorder's current draw hasn't been measured. At home it runs on USB.</p></li>
+    <li><h3>The camera: kept, with a capped port</h3><p>For an enhancement later. As M1 stands, the lens looks straight up at the ceiling. If the enhancement needs to see people at the table, the camera would have to face sideways, which means a different mount for it; its ribbon looks short in Seeed's photo.</p></li>
+    <li><h3>The pin headers: left as they are</h3><p>With the glass they cost only 2.5 mm of height, and cutting them can't be undone.</p></li>
+    <li><h3>Still needed: the three photos</h3><p>Every position marked Check above comes from Seeed's photos and drawings. The photos replace them, and then the case can be printed.</p></li>
+  </ol>
+</section>
+
+<footer class="wrap">Made from <span class="mono">hardware/case/case.py</span> in this repository. Change a number there and run it to get new STLs and this page. Concept v1, 6 Oct 2026.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*@OLED@*/
+</script>
+<script>
+(() => {
+'use strict';
+const MODEL = /*@MODEL@*/;
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const [L, W, HT, HL] = MODEL.size;
+$('#fSize').textContent = `${Math.round(L)} × ${Math.round(W)} mm`;
+$('#fTall').textContent = `${Math.round(HT)} mm`;
+$('#fLow').textContent = `${Math.round(HL)} mm`;
+
+const viewerEl = $('#viewer'), canvas = $('#gl');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+} catch (e) { renderer = null; }
+if (!renderer || typeof THREE === 'undefined') {
+  viewerEl.insertAdjacentHTML('beforeend', '<p class="nogl">This browser can\'t show the 3D model here. The STL files are in hardware/case/out/.</p>');
+  $('#hint').hidden = true;
+  return;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(28, 1, 1, 2000);
+camera.up.set(0, 0, 1);
+const root = new THREE.Group();
+root.position.set(-L / 2, -W / 2, 0);
+scene.add(root);
+
+// Light: a soft sky, a key from front-left above, a cool rim from behind.
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9a948a, 0.85));
+const key = new THREE.DirectionalLight(0xffffff, 1.35);
+key.position.set(-60, -90, 140);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 10, far: 400 });
+key.shadow.bias = -0.0004;
+key.shadow.radius = 4;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xcfe3ff, 0.45);
+rim.position.set(80, 120, 60);
+scene.add(rim);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: 0.16 }));
+ground.position.z = -2.5;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
+// Reflections, for the glass above all: a small studio (a soft box, a ceiling, a window), blurred.
+let studio = null;
+try {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new THREE.Scene();
+  room.background = new THREE.Color(0x15191d);
+  const soft = (w, h, v, pos) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(v, v, v), side: THREE.DoubleSide }));
+    m.position.set(...pos); m.lookAt(0, 0, 0); room.add(m);
+  };
+  soft(9, 3, 3.2, [-4, -6, 7]); soft(12, 12, 0.8, [0, 0, 10]); soft(4, 7, 1.6, [8, 7, 3]);
+  studio = pmrem.fromScene(room, 0.04).texture;
+  pmrem.dispose();
+} catch (e) { studio = null; }
+const COLOURS = { ink: { shell: '#263645', plate: '#1D2B38' }, bone: { shell: '#E6E0D3', plate: '#D8D1C2' } };
+const KIND = {
+  deck: { color: '#06080A', roughness: 0.03, opacity: 0.66, env: 0.6 },
+  cap: { color: '#263645', roughness: 0.7 },
+  pcb: { color: '#14191E', roughness: 0.55 }, glass: { color: '#050607', roughness: 0.12, metalness: 0.3 },
+  m1: { color: '#2A2F36', roughness: 0.5 }, plastic: { color: '#EFEBE3', roughness: 0.6 },
+  metal: { color: '#A9B0B6', roughness: 0.32, metalness: 0.7 }, cell: { color: '#BFC7CF', roughness: 0.35, metalness: 0.45 },
+};
+const b64 = (s, T) => { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new T(u.buffer); };
+const parts = [];
+for (const p of MODEL.parts) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(b64(p.pos, Float32Array), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(b64(p.nrm, Float32Array), 3));
+  g.setIndex(new THREE.BufferAttribute(b64(p.idx, Uint32Array), 1));
+  const spec = KIND[p.kind] || { color: '#263645', roughness: 0.7 };
+  const mat = new THREE.MeshStandardMaterial({ color: lin(spec.color), roughness: spec.roughness ?? 0.7, metalness: spec.metalness ?? 0 });
+  if (spec.opacity) Object.assign(mat, { transparent: true, opacity: spec.opacity, depthWrite: false });
+  if (spec.emissive) Object.assign(mat, { emissive: lin(spec.emissive), emissiveIntensity: 0.1 });
+  if (studio) Object.assign(mat, { envMap: studio, envMapIntensity: spec.env ?? (p.kind === 'shell' || p.kind === 'plate' ? 0.3 : 0.5) });
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.castShadow = !spec.opacity; mesh.receiveShadow = !spec.opacity;
+  if (spec.opacity) mesh.renderOrder = 1;
+  root.add(mesh);
+  parts.push({ kind: p.kind, name: p.name, mesh, mat, lift: 0 });
+}
+const shells = parts.filter((p) => p.kind === 'shell' || p.kind === 'cap'), platePart = parts.find((p) => p.kind === 'plate');
+const deckPart = parts.find((p) => p.kind === 'deck'), capPart = parts.find((p) => p.kind === 'cap');
+
+// The screen: the recorder's own octopus, drawn by OD (ported from octo_display.h), recording.
+const oc = document.createElement('canvas');
+oc.width = 128; oc.height = 64;
+const octx = oc.getContext('2d');
+const img = octx.createImageData(128, 64);
+const fb = OD.frame();
+const tex = new THREE.CanvasTexture(oc);
+tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.LinearFilter; tex.encoding = THREE.sRGBEncoding;
+const screen = new THREE.Mesh(new THREE.PlaneGeometry(MODEL.screen.size[0], MODEL.screen.size[1]), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+screen.position.set(...MODEL.screen.at);
+root.add(screen);
+const screenPart = { kind: 'screen', mesh: screen, lift: 0 };
+parts.push(screenPart);
+const t0 = performance.now();
+let lastScreen = -1e9;
+const drawScreen = (now) => {
+  if (now - lastScreen < 150) return false;
+  lastScreen = now;
+  const ms = Math.floor(now - t0);
+  OD.recording(fb, 754 + Math.floor(ms / 1000), ms);
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
+    const i = (y * 128 + x) * 4, on = OD.lit(fb, x, y);
+    img.data[i] = on ? 232 : 4; img.data[i + 1] = on ? 244 : 6; img.data[i + 2] = on ? 255 : 8; img.data[i + 3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+  tex.needsUpdate = true;
+  return true;
+};
+
+// Air: two paths from the cool intakes to the warm exhaust, with arrows that travel along them.
+const airGroup = new THREE.Group();
+airGroup.visible = false;
+root.add(airGroup);
+const arrows = [];
+const cool = new THREE.Color('#3FA7D6'), warm = new THREE.Color('#E8873A');
+for (const pts of MODEL.air) {
+  const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)), false, 'centripetal');
+  const tube = new THREE.TubeGeometry(curve, 80, 0.55, 8, false);
+  const cols = [];
+  const rings = 81, around = 9;
+  for (let i = 0; i < rings; i++) for (let j = 0; j < around; j++) { const c = cool.clone().lerp(warm, i / (rings - 1)); cols.push(c.r, c.g, c.b); }
+  tube.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  airGroup.add(new THREE.Mesh(tube, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.75, depthTest: false })));
+  for (let k = 0; k < 3; k++) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 14), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthTest: false }));
+    cone.renderOrder = 3;
+    airGroup.add(cone);
+    arrows.push({ cone, curve, offset: k / 3 });
+  }
+}
+airGroup.children.forEach((c) => { c.renderOrder = 2; });
+
+// Labels: HTML pinned to points on the model, shown when their face looks at the camera.
+const NAMES = { display: 'Screen', deck: 'Grey-smoke acrylic', mic: 'Mic port', camera: 'Camera port, capped', record: 'Start/stop (D1)', reset: 'Reset pinhole', power: 'Battery switch',
+  usb: 'USB-C', exhaust: 'Warm air out', intake: 'Cool air in', floor: 'Air in, underneath' };
+const labelsEl = $('#labels');
+const labels = MODEL.labels.concat([{ id: 'deck', at: [L - 8, W * 0.22, HL], n: [0, 0, 1] }]).map((l) => {
+  const el = document.createElement('div');
+  el.className = 'lbl' + (l.id === 'exhaust' ? ' air' : l.id === 'intake' || l.id === 'floor' ? ' cool' : '');
+  el.innerHTML = `<i></i><span>${NAMES[l.id] || l.id}</span>`;
+  labelsEl.appendChild(el);
+  return { ...l, el, p: new THREE.Vector3(...l.at), n: new THREE.Vector3(...l.n), hid: false, w: 0 };
+});
+// Which labels read to the left of their point, and which win when two collide.
+const LEFT = new Set(['display', 'camera']);
+const RANK = ['display', 'record', 'mic', 'camera', 'deck', 'power', 'reset', 'usb', 'exhaust', 'intake', 'floor'];
+// A label hides when the case stands between it and the camera (the glass doesn't count).
+const ray = new THREE.Raycaster();
+const world = new THREE.Vector3(), dir = new THREE.Vector3();
+
+// Camera: orbit round the model's centre. Drag turns it, wheel and pinch zoom.
+const target = new THREE.Vector3(0, 0, HT * 0.36);
+const VIEWS = { hero: [-48, 24], front: [-90, 10], back: [90, 16], end: [180, 14], top: [-90, 82] };
+const cam = { th: -48, ph: 24, r: 210, tz: HT * 0.36 }, goal = { th: -48, ph: 24, r: 210, tz: HT * 0.36 };
+let baseR = 210;
+const fit = () => {
+  const w = viewerEl.clientWidth, h = viewerEl.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  const need = Math.max(L, W, HT) * 0.78 / Math.tan((camera.fov * Math.PI / 180) / 2) / Math.min(1, camera.aspect * 0.9);
+  baseR = Math.min(420, need);
+  frameFor(true);
+};
+// Taken apart, the parts stand 50 mm taller: step back and look higher.
+const frameFor = (snap) => {
+  const apart = mode === 'explode';
+  goal.r = baseR * (apart ? 1.3 : 1);
+  goal.tz = HT * 0.36 + (apart ? 20 : 0);
+  if (snap) { cam.r = goal.r; cam.tz = goal.tz; }
+};
+const go = ([th, ph]) => { goal.th += ((th - goal.th) % 360 + 540) % 360 - 180; goal.ph = ph; kick(); };
+const place = () => {
+  const th = cam.th * Math.PI / 180, ph = cam.ph * Math.PI / 180;
+  target.z = cam.tz;
+  camera.position.set(target.x + cam.r * Math.cos(ph) * Math.cos(th), target.y + cam.r * Math.cos(ph) * Math.sin(th), target.z + cam.r * Math.sin(ph));
+  camera.lookAt(target);
+};
+let drag = null;
+const pointers = new Map();
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  drag = { x: e.clientX, y: e.clientY, th: goal.th, ph: goal.ph };
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; drag.pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); drag.r = goal.r; }
+  kick();
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 2 && drag?.pinch) {
+    const [a, b] = [...pointers.values()];
+    goal.r = Math.max(90, Math.min(480, drag.r * drag.pinch / Math.max(20, Math.hypot(a[0] - b[0], a[1] - b[1]))));
+  } else if (drag) {
+    goal.th = drag.th - (e.clientX - drag.x) * 0.45;
+    goal.ph = Math.max(-8, Math.min(88, drag.ph + (e.clientY - drag.y) * 0.35));
+  }
+  kick();
+});
+const up = (e) => { pointers.delete(e.pointerId); if (!pointers.size) drag = null; };
+canvas.addEventListener('pointerup', up);
+canvas.addEventListener('pointercancel', up);
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); goal.r = Math.max(90, Math.min(480, goal.r * (1 + Math.sign(e.deltaY) * 0.09))); kick(); }, { passive: false });
+canvas.addEventListener('dblclick', () => go(VIEWS.hero));
+
+// Modes: the case, see inside, taken apart, airflow; and the two colours.
+let mode = 'case', air = false, colour = 'ink';
+const applyColour = () => {
+  for (const p of shells) p.mat.color.copy(lin(COLOURS[colour].shell));
+  platePart.mat.color.copy(lin(COLOURS[colour].plate));
+};
+const applyMode = () => {
+  const see = mode === 'xray' || air;
+  for (const p of [...shells, platePart]) {
+    p.mat.transparent = see;
+    p.mat.opacity = see ? (air ? 0.3 : 0.16) : 1;
+    p.mat.depthWrite = !see;
+    p.mesh.castShadow = !see;
+    p.mat.needsUpdate = true;
+  }
+  deckPart.mat.opacity = see ? 0.25 : KIND.deck.opacity;
+  for (const p of shells) p.lift = mode === 'explode' ? 36 : 0;
+  capPart.lift = mode === 'explode' ? 46 : 0;
+  deckPart.lift = mode === 'explode' ? 50 : 0;
+  for (const p of parts) if (!['shell', 'cap', 'plate', 'deck'].includes(p.kind) && p.name !== 'LiPo cell') p.lift = mode === 'explode' ? 14 : 0;
+  airGroup.visible = air;
+  frameFor(false);
+  kick();
+};
+$$('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+  mode = b.dataset.mode;
+  $$('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  applyMode();
+}));
+$('#airBtn').addEventListener('click', (e) => { air = !air; e.currentTarget.setAttribute('aria-pressed', String(air)); applyMode(); });
+$$('[data-color]').forEach((b) => b.addEventListener('click', () => {
+  colour = b.dataset.color;
+  $$('[data-color]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  applyColour(); kick();
+}));
+$$('[data-view]').forEach((b) => b.addEventListener('click', () => go(VIEWS[b.dataset.view])));
+
+// The loop: runs while the model is on screen and something is moving.
+const tmp = new THREE.Vector3();
+let raf = 0, visible = true, lastMove = performance.now();
+const ease = (a, b, k) => a + (b - a) * k;
+const frame = (now) => {
+  raf = 0;
+  const k = reduced ? 1 : 0.14;
+  const moving = Math.abs(goal.th - cam.th) + Math.abs(goal.ph - cam.ph) + Math.abs(goal.r - cam.r) + Math.abs(goal.tz - cam.tz) > 0.01;
+  cam.th = ease(cam.th, goal.th, k); cam.ph = ease(cam.ph, goal.ph, k); cam.r = ease(cam.r, goal.r, k); cam.tz = ease(cam.tz, goal.tz, k);
+  place();
+  let lifting = false;
+  for (const p of parts) {
+    const z = p.mesh.position.z, base = p.kind === 'screen' ? MODEL.screen.at[2] : 0;
+    const want = base + p.lift;
+    if (Math.abs(z - want) > 0.01) { p.mesh.position.z = ease(z, want, reduced ? 1 : 0.12); lifting = true; }
+  }
+  const ticked = drawScreen(now);
+  if (!(moving || lifting || ticked || dirty || (air && !reduced))) {
+    if (visible && !document.hidden) raf = requestAnimationFrame(frame);
+    return;
+  }
+  dirty = false;
+  if (air && !reduced) for (const a of arrows) {
+    const t = ((now / 2600) + a.offset) % 1;
+    a.curve.getPointAt(t, a.cone.position);
+    const tan = a.curve.getTangentAt(t);
+    a.cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan);
+  }
+  renderer.render(scene, camera);
+  // labels
+  const w = viewerEl.clientWidth, h = viewerEl.clientHeight;
+  const solid = mode !== 'xray' && !air;
+  const occluders = solid ? [...shells.map((p) => p.mesh), platePart.mesh] : [];
+  for (const l of labels) {
+    world.copy(l.p).add(root.position);
+    if (l.id === 'display' && mode === 'explode') world.z = screen.position.z;   // taken apart: on the screen itself
+    else world.z += l.id === 'floor' ? 0 : l.id === 'deck' ? deckPart.mesh.position.z
+      : l.id === 'camera' ? capPart.mesh.position.z : shells[0].mesh.position.z;
+    const toCam = camera.position.clone().sub(world);
+    const facing = toCam.dot(l.n) > 0 || (l.id === 'display' && mode === 'explode');
+    const showAir = l.id === 'exhaust' || l.id === 'intake' || l.id === 'floor';
+    let show = facing && (!showAir || air) && !(mode === 'explode' && !['display', 'mic', 'deck'].includes(l.id))
+      && !(l.id === 'deck' && (air || mode === 'xray'));
+    if (show && solid && (moving || lifting || dirtyLabels)) {
+      const dist = toCam.length();
+      ray.set(world, dir.copy(toCam).normalize());
+      ray.near = 0.8; ray.far = dist;
+      l.hid = ray.intersectObjects(occluders, false).length > 0;
+    }
+    if (!solid) l.hid = false;
+    show = show && !l.hid;
+    tmp.copy(world).project(camera);
+    l.x = (tmp.x + 1) / 2 * w; l.y = (1 - tmp.y) / 2 * h;
+    if (!l.w) l.w = l.el.offsetWidth || 120;
+    l.flip = LEFT.has(l.id) ? l.x - l.w > 8 : l.x + l.w > w - 8;
+    l.show = show;
+  }
+  // Labels whose boxes would overlap: the more important one stays.
+  const shown = [];
+  for (const l of [...labels].sort((a, b) => RANK.indexOf(a.id) - RANK.indexOf(b.id))) {
+    const x0 = l.flip ? l.x - l.w + 6 : l.x - 6, x1 = x0 + l.w;
+    if (l.show && shown.some((o) => x0 < o.x1 && o.x0 < x1 && Math.abs(l.y - o.y) < 25)) l.show = false;
+    if (l.show) shown.push({ x0, x1, y: l.y });
+    l.el.classList.toggle('flip', l.flip);
+    l.el.style.opacity = l.show ? 1 : 0;
+    l.el.style.transform = l.flip ? `translate(${(l.x - l.w + 6).toFixed(1)}px, ${l.y.toFixed(1)}px) translate(0, -50%)`
+      : `translate(${l.x.toFixed(1)}px, ${l.y.toFixed(1)}px) translate(-6px, -50%)`;
+  }
+  dirtyLabels = false;
+  if (moving || lifting) lastMove = now;
+  if (visible && !document.hidden) raf = requestAnimationFrame(frame);
+};
+let dirty = true, dirtyLabels = true;
+const kick = () => { dirty = true; dirtyLabels = true; if (!raf && visible) raf = requestAnimationFrame(frame); };
+new IntersectionObserver((es) => { visible = es[0].isIntersecting; kick(); }).observe(viewerEl);
+document.addEventListener('visibilitychange', kick);
+new ResizeObserver(() => { fit(); kick(); }).observe(viewerEl);
+fit(); applyColour(); applyMode(); place(); kick();
+})();
+</script>

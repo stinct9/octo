@@ -1,0 +1,44 @@
+[project]
+name = "octo-bench"
+version = "0.1.0"
+description = "Local bench tests and UI for the XIAO ESP32S3 Sense conversation recorder"
+requires-python = ">=3.12"
+dependencies = [
+    "pyserial>=3.5",
+    "esptool>=5.3",  # flashing the recorder without the Arduino toolchain (open-source plan I5)
+    "faster-whisper>=1.2",
+    "numpy>=2",  # WAV samples straight to Whisper (bench.audio._whisper_input)
+    "mlx-whisper>=0.4.3",  # language detection (conversation lab)
+    "mlx-qwen3-asr>=0.4.4",  # English transcription: beat Whisper 7-3 in the owner's blind test (2 Oct 2026)
+    "silero-vad>=6.2",  # finds speech in continuous recordings
+    "pyannote.audio>=4.0",  # who spoke when (gated models; telemetry disabled in octo/__init__)
+    "onnxruntime>=1.20",  # voiceprints: WeSpeaker ResNet293 ONNX with CoreML (2 Oct 2026)
+    "soundfile>=0.12",  # recordings stored as FLAC (octo/audio.py)
+    "manifold3d>=3.5",  # builds the recorder case page the lab serves at /case (hardware/case)
+    "anthropic>=1.11,<2",  # the review on an owner's own Anthropic key (octo/providers.py, 7 Oct 2026)
+    "segno>=1.6",  # the QR code on the Phone page that connects the app (octo/phone_api.py, 8 Oct 2026)
+    "livekit>=1.1.21",  # WebRTC's echo canceller (AEC3) for calls recorded on speakers, on the Mac (B19, 20 Oct 2026)
+    "python-dateutil>=2.8",  # recurring calendar events (octo/events.py, B23); already there through pandas
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
+[project.scripts]
+bench = "bench.cli:main"
+octo = "octo.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",  # FastAPI TestClient
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["bench", "octo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

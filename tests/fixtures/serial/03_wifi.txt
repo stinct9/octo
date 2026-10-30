@@ -1,0 +1,16 @@
+@@ {"v":1,"sketch":"03_wifi"}
+Scanning...
+31 networks visible; ours visible
+Connecting.....
+Connected in 1251 ms, IP 192.168.0.20
+rssi -50 dBm
+rssi -55 dBm
+rssi -55 dBm
+rssi -55 dBm
+rssi -55 dBm
+rssi -51 dBm
+rssi -51 dBm
+rssi -49 dBm
+rssi -49 dBm
+rssi -49 dBm
+@@ {"v":1,"sketch":"03_wifi","networks_visible":31,"own_visible":true,"channel":6,"scan_rssi":-50,"others_on_channel":6,"connected":true,"connect_ms":1251,"rssi_min":-55,"rssi_max":-49,"rssi_mean":-51.9}

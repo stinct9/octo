@@ -1,0 +1,63 @@
+{
+  "about": "Scripted transcripts with known answers, for checking insight models (octo evalinsight). Written by Claude as test material, not by the owner: they test whether a model finds moments that are there and stays quiet where none are. 'expect' maps principle number to true (a clear moment of the owner's own conduct) or false (nothing bears on it, even if the topic is related). Principles not listed are ambiguous and not scored.",
+  "transcripts": [
+    {
+      "name": "sofa budget",
+      "speakers": {"A": "Nisha", "B": "Sam"},
+      "jay": "B",
+      "lines": [
+        ["A", "We need to decide on the sofa this week. The one at Home Centre is forty thousand."],
+        ["B", "Forty? That's fine, let's just order it."],
+        ["A", "But we said we'd keep the living room under thirty."],
+        ["B", "I already said it's fine. Why do we have to go over this again?"],
+        ["A", "Because last time you said the same about the dining table and we went over by twenty."],
+        ["B", "Can you just let me finish for once? You always bring up the dining table."],
+        ["A", "I'm only asking that we look at two more shops."],
+        ["B", "Fine. Whatever you want. Do what you like."],
+        ["A", "That's not fair. I'm trying to plan properly."],
+        ["B", "Okay. Sorry, that came out wrong. Let's look at two more shops on Saturday."],
+        ["A", "Honestly, you never plan anything, you just decide on the spot."],
+        ["B", "Maybe that's true sometimes. Let's make a list tonight of what we actually need."],
+        ["A", "Okay. I'll check Pepperfry for anything under thirty."],
+        ["B", "And I'll call the carpenter about fixing the old one, just in case."]
+      ],
+      "expect": {"7": true, "12": true, "8": true, "1": false, "4": false, "6": false, "9": false}
+    },
+    {
+      "name": "Sunday logistics",
+      "speakers": {"A": "Nisha", "B": "Sam"},
+      "jay": "B",
+      "lines": [
+        ["A", "Did you get the milk?"],
+        ["B", "Yes, and the curry leaves. I didn't forget this time."],
+        ["A", "Good. Amma called, she wants to come on Sunday."],
+        ["B", "Sunday works. I'll pick her up from Jayanagar around eleven."],
+        ["A", "Traffic will be bad near Lalbagh, maybe leave by ten thirty."],
+        ["B", "Okay, ten thirty. Should I book a cab or take the car?"],
+        ["A", "Take the car, she has that big bag of vegetables for us."],
+        ["B", "Right. I'll clean the back seat tomorrow."],
+        ["A", "And remind me to call the plumber, the kitchen tap is dripping again."],
+        ["B", "I'll call him in the morning before I leave."]
+      ],
+      "expect": {"1": false, "4": false, "6": false, "7": false, "8": false, "9": false, "12": false}
+    },
+    {
+      "name": "credit at work",
+      "speakers": {"A": "Nisha", "B": "Sam"},
+      "jay": "B",
+      "lines": [
+        ["A", "How was the review meeting?"],
+        ["B", "Ravi presented the dashboard as if he built it alone. My team did most of that work."],
+        ["A", "That must have been annoying."],
+        ["B", "It was. But he's the director, and in the meeting I didn't say anything against him. He's been at the bank twenty years, I respect that."],
+        ["A", "Are you going to talk to him?"],
+        ["B", "I'll talk to him privately tomorrow. I'm not holding it against him, but next time I'll send the update myself before the meeting."],
+        ["A", "That's sensible. Don't let it eat you up."],
+        ["B", "Honestly, part of me was happy when his other project got delayed last month. That's not a nice thing to feel."],
+        ["A", "At least you admit it."],
+        ["B", "Yeah. I should drop it. The work matters more than who gets the credit."]
+      ],
+      "expect": {"6": true, "9": true, "12": true, "4": false}
+    }
+  ]
+}

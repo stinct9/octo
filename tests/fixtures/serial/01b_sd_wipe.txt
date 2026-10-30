@@ -1,0 +1,5 @@
+@@ {"v":1,"sketch":"01b_sd_wipe"}
+Card claims 61440000 sectors = 30000 MB
+@@ {"v":1,"sketch":"01b_sd_wipe","confirm":"WIPE","claimed_sectors":61440000}
+Not confirmed -- card untouched
+@@ {"v":1,"sketch":"01b_sd_wipe","claimed_sectors":61440000,"wiped":false,"error":"not_confirmed"}

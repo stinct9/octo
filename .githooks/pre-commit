@@ -1,0 +1,33 @@
+#!/bin/sh
+# Refuse commits that would leak secrets or private audio.
+# Enabled per clone with:  git config core.hooksPath .githooks
+#
+# Why: on 2026-09-30 a commit swept in arduino-cli build output, and the 03_wifi binaries
+# had the Wi-Fi password compiled in. It had to be force-pushed out of GitHub.
+
+fail=0
+
+# 1. Paths that must never be committed.
+bad_paths=$(git diff --cached --name-only --diff-filter=ACMR |
+  grep -E '(^|/)\.?build/|\.(bin|elf|map|wav|mp3|m4a|flac)$|(^|/)secrets\.h$|(^|/)octo_filler_model\.h$|\.(db|db-wal|db-shm|sqlite|npz|key)$|(^|/)(device\.json|local\.xcconfig|recorder-decryption-key\.txt|\.octo-home)$' || true)
+if [ -n "$bad_paths" ]; then
+  echo "pre-commit: refusing to commit build output, binaries, recordings, a database, voiceprints or keys:" >&2
+  echo "$bad_paths" | sed 's/^/  /' >&2
+  fail=1
+fi
+
+# 2. Values from any local secrets.h appearing anywhere in the staged changes (text or binary).
+for f in $(git ls-files --others --ignored --exclude-standard | grep -E '(^|/)secrets\.h$'); do
+  grep -oE '"[^"]{4,}"' "$f" | tr -d '"' | while IFS= read -r value; do
+    case "$value" in your-network|your-password|your-key) continue ;; esac
+    if git diff --cached --binary -a | grep -q -a -F -- "$value"; then
+      echo "pre-commit: staged changes contain a value from $f -- not committing." >&2
+      exit 1
+    fi
+  done || fail=1
+done
+
+if [ $fail -ne 0 ]; then
+  echo "Unstage the files above (git restore --staged <path>) or fix .gitignore." >&2
+  exit 1
+fi

@@ -1,0 +1,258 @@
+"""Two discussions in one conversation: suggesting where to split, and splitting.
+
+find_conversations only splits at 3 minutes of silence. Back-to-back discussions with different
+people (one meeting ending and another starting a minute later) end up as one conversation. The
+signal is that the people change: around a pause, almost nobody who was talking before is talking
+after. The owner themselves is left out of the comparison: they're in every conversation.
+
+A split is stored per recording (`splits`) and fed to find_conversations as an input, so it
+survives any re-run. The owner splits by hand; since 9 Oct the lab also splits by itself when the change is
+clear (`auto`, people plan 4.5), and either can be joined back (`join_back`, one cut at a time). The owner can cut at
+several points at once (`split_at`, 22 Oct). The first part keeps the session (and its labels); each later one
+becomes a new conversation and goes through the pipeline on its own -- which also separates its
+speakers on their own, the better for it.
+"""
+
+from __future__ import annotations
+
+import re
+import time
+
+# A split goes in a pause, never mid-speech. 20 s until 17 Oct: the owner's 16 Oct 20:16 was three calls back to
+# back, 12.7 s and 8.6 s apart with nobody in common, and wasn't offered. At 8 s, across all 36 conversations,
+# those two are the only new suggestions (at 5 s, three more, two of them with shared talk).
+MIN_PAUSE_S = 8.0
+WINDOW_S = 600.0      # who talks in the 10 minutes before and after
+MIN_PART_S = 180.0    # both parts at least 3 minutes
+MAX_OVERLAP = 0.2     # at most a fifth of the talk on either side by people from the other side
+MAJOR_SHARE = 0.1     # "was in the discussion": at least a tenth of that side's talk
+# The lab splits by itself only when the people change this clearly (in the 10 minutes around the pause and
+# over the whole conversation) and the first meeting visibly ended: the others silent for a minute (the owner
+# talking in between doesn't count), or a goodbye just before and a hello just after. 9 Oct: the owner said 8 Oct
+# 15:14 (85 s pause, 0% shared) and 20:32 (72 s, 1%) were two conversations each and 1 Oct 19:58 (28 s, 3%)
+# was one. 17 Oct: 16 Oct 20:16 was three calls back to back, 12.7 s apart (with a goodbye and a hello)
+# and 8.6 s apart (the others silent 77 s); a pause of at least 60 s, the bar until then, caught neither.
+AUTO_MIN_GAP_S = 60.0
+AUTO_MAX_OVERLAP = 0.05
+EDGE_S = 90.0  # where a goodbye or hello is looked for, before and after
+# shortcut: English only, from 16 Oct's calls; add Hindi words once a Hindi meeting switch is seen.
+GOODBYE = re.compile(r"\b(bye|goodbye|see you|talk (to you )?later|thanks everyone|thank you (all|everyone|so much)"
+                     r"|have a good|take care|cheers)\b")
+HELLO = re.compile(r"\b(hi|hello|hey|good (morning|afternoon|evening)|can you hear|can you see my screen|how are you)\b")
+
+
+def _talk(turns: list[dict], a: float, b: float, ignore: set[str]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for t in turns:
+        if t["speaker"] in ignore:
+            continue
+        o = min(t["end"], b) - max(t["start"], a)
+        if o > 0:
+            out[t["speaker"]] = out.get(t["speaker"], 0.0) + o
+    return out
+
+
+def _carry(frm: dict[str, float], to: dict[str, float]) -> float:
+    """Share of `to`'s talk by people who were really in `frm`."""
+    total_from, total_to = sum(frm.values()), sum(to.values())
+    major = {s for s, v in frm.items() if v >= MAJOR_SHARE * total_from}
+    return sum(v for s, v in to.items() if s in major) / total_to
+
+
+def _candidates(turns: list[dict], ignore: set[str]) -> list[dict]:
+    """Every pause where the people change: [{"at", "pause_s", "gap_s", "before", "after", "overlap"}].
+    `gap_s` is how long the others were silent around it (the owner left out); `overlap` the more shared of
+    the 10 minutes on each side and the whole conversation on each side."""
+    turns = sorted(turns, key=lambda t: t["start"])
+    if len(turns) < 2:
+        return []
+    first, last = turns[0]["start"], max(t["end"] for t in turns)
+    found = []
+    end_so_far = turns[0]["end"]
+    for t in turns[1:]:
+        pause = t["start"] - end_so_far
+        if pause >= MIN_PAUSE_S:
+            at = round((end_so_far + t["start"]) / 2, 1)
+            if at - first >= MIN_PART_S and last - at >= MIN_PART_S:
+                before = _talk(turns, at - WINDOW_S, at, ignore)
+                after = _talk(turns, at, at + WINDOW_S, ignore)
+                if sum(before.values()) >= 30 and sum(after.values()) >= 30:
+                    whole_b, whole_a = _talk(turns, first, at, ignore), _talk(turns, at, last, ignore)
+                    overlap = max(_carry(before, after), _carry(after, before),
+                                  _carry(whole_b, whole_a), _carry(whole_a, whole_b))
+                    if overlap <= MAX_OVERLAP:
+                        others = [x for x in turns if x["speaker"] not in ignore]
+                        gap = (min(x["start"] for x in others if x["start"] >= at)
+                               - max(x["end"] for x in others if x["end"] <= at))
+                        found.append({"at": at, "pause_s": round(pause, 1), "gap_s": round(gap, 1),
+                                      "overlap": round(overlap, 2),
+                                      "before": sorted(before, key=lambda s: -before[s]),
+                                      "after": sorted(after, key=lambda s: -after[s])})
+        end_so_far = max(end_so_far, t["end"])
+    return found
+
+
+def suggest(turns: list[dict], ignore: set[str] = frozenset()) -> list[dict]:
+    """Places where the people change, best first (see `_candidates`). `at` is seconds into the
+    conversation; `before`/`after` are the speakers on each side."""
+    found = sorted(_candidates(turns, set(ignore)), key=lambda f: (f["overlap"], -f["pause_s"]))
+    # One suggestion per change: the clearest within each stretch of nearby candidates.
+    kept: list[dict] = []
+    for f in found:
+        if all(abs(f["at"] - k["at"]) >= MIN_PART_S for k in kept):
+            kept.append(f)
+    return kept
+
+
+def ended(lines: list[dict], at: float) -> bool:
+    """A goodbye in the 90 s before `at` and a hello in the 90 s after: one meeting ending, the next beginning."""
+    def said(a: float, b: float) -> str:
+        return " ".join(ln.get("text", "") for ln in lines if a <= ln["start"] < b).lower()
+    return bool(GOODBYE.search(said(at - EDGE_S, at)) and HELLO.search(said(at, at + EDGE_S)))
+
+
+def apply(conversations: list[dict], splits: list[float], min_speech_s: float) -> list[dict]:
+    """find_conversations' output, cut at the owner's split points (recording time)."""
+    out = []
+    for c in conversations:
+        cuts = [s for s in sorted(splits) if c["start"] < s < c["end"]]
+        edges = [c["start"], *cuts, c["end"]]
+        for a, b in zip(edges, edges[1:]):
+            speech = [[max(x, a), min(y, b)] for x, y in c["speech"] if min(y, b) > max(x, a)]
+            speech_s = round(sum(y - x for x, y in speech), 1)
+            if cuts and speech_s < min_speech_s:
+                continue
+            out.append({**c, "start": round(a, 2), "end": round(b, 2), "speech": speech, "speech_s": speech_s})
+    return out
+
+
+def split_now(conn, session: dict, at_s: float, by: str = "jay") -> str:
+    """One cut (the lab's, and the owner's single split): see `split_at`. Returns the second part's id."""
+    return split_at(conn, session, [at_s], by)[0]
+
+
+def split_at(conn, session: dict, cuts: list[float], by: str = "jay") -> list[str]:
+    """Record the splits (recording time, inside the session) and apply them to the sessions at once, rather
+    than when find_conversations next runs: the owner sees the new conversations straight away. N cuts make
+    N+1 parts: the first keeps the session (and its labels), each later one is a new session. Returns the
+    later parts' ids, in order. The re-run that the new splits trigger produces the same boundaries
+    (sessions are keyed on their start)."""
+    import json
+
+    from .db import new_id, row
+
+    for at in cuts:
+        add(conn, session["recording_id"], at, by)
+    fc = row(conn, "SELECT output FROM stage_runs WHERE target=? AND stage='find_conversations' AND is_current=1",
+             session["recording_id"])
+    conv = next((c for c in json.loads(fc["output"])["conversations"] if abs(c["start"] - session["start_s"]) < 0.01),
+                None) if fc else None
+    conv = conv or {"start": session["start_s"], "end": session["end_s"], "speech_s": session["speech_s"], "speech": []}
+    first, *later = apply([{**conv, "end": session["end_s"]}], cuts, 0.0)
+    conn.execute("UPDATE sessions SET end_s=?, speech_s=? WHERE id=?", (first["end"], first["speech_s"], session["id"]))
+    ids = []
+    for part in later:
+        conn.execute("INSERT INTO sessions (id, recording_id, start_s, end_s, speech_s, created_at) VALUES (?, ?, ?, ?, ?, ?) "
+                     "ON CONFLICT (recording_id, start_s) DO UPDATE SET end_s=excluded.end_s, speech_s=excluded.speech_s, "
+                     "status='active'", (new_id("ses"), session["recording_id"], part["start"], part["end"], part["speech_s"],
+                                         time.time()))
+        ids.append(row(conn, "SELECT id FROM sessions WHERE recording_id=? AND start_s=?", session["recording_id"],
+                       part["start"])["id"])
+    return ids
+
+
+def for_recording(conn, recording_id: str) -> list[float]:
+    return [r[0] for r in conn.execute("SELECT at_s FROM splits WHERE recording_id=? AND undone_at IS NULL "
+                                       "ORDER BY at_s", (recording_id,))]
+
+
+def add(conn, recording_id: str, at_s: float, by: str = "jay") -> None:
+    """A split there, by the owner or the lab. The owner splitting where one was joined back splits it again."""
+    conn.execute("INSERT INTO splits (recording_id, at_s, created_at, by) VALUES (?, ?, ?, ?) "
+                 "ON CONFLICT (recording_id, at_s) DO UPDATE SET undone_at=NULL, by=excluded.by",
+                 (recording_id, round(at_s, 2), time.time(), by))
+
+
+def auto(conn, session_id: str) -> str | None:
+    """Split by the lab, once identify has found the owner (they're in both parts and are left out of the
+    comparison), where the people change clearly. Before speakers are asked about and before the review,
+    so nothing is spent on a blend. Not once the owner has answered or rated its review, nor where a split was
+    joined back. Returns the second part's session id, or None."""
+    from . import sessions as SV
+    from .db import row
+    from .planning import pinned_review
+
+    sess = row(conn, "SELECT * FROM sessions WHERE id=?", session_id)
+    if not sess or sess["status"] != "active" or sess["reviewed_at"] or pinned_review(conn, session_id):
+        return None
+    _, out, _ = SV.diarized(conn, session_id)
+    me = {sp["letter"] for sp in SV.speakers(conn, session_id) if sp["self"]}
+    if not out or not me:
+        return None
+    undone = [r[0] for r in conn.execute("SELECT at_s FROM splits WHERE recording_id=? AND undone_at IS NOT NULL",
+                                         (sess["recording_id"],))]
+    # Every candidate, clearest first: a nearby clearer one that doesn't qualify mustn't hide one that does.
+    for f in sorted(_candidates(out["turns"], me), key=lambda f: f["overlap"]):
+        at = sess["start_s"] + f["at"]
+        if (f["overlap"] <= AUTO_MAX_OVERLAP and (f["gap_s"] >= AUTO_MIN_GAP_S or ended(out["lines"], f["at"]))
+                and all(abs(at - u) >= MIN_PART_S for u in undone)):
+            return split_now(conn, sess, at, by="lab")
+    return None
+
+
+def _neighbours(conn, sess: dict) -> tuple[dict | None, dict | None]:
+    """The split at this conversation's start and at its end, if any (rows of `splits`)."""
+    from .db import rows
+
+    out: list[dict | None] = [None, None]
+    for r in rows(conn, "SELECT * FROM splits WHERE recording_id=? AND undone_at IS NULL", sess["recording_id"]):
+        if abs(r["at_s"] - sess["start_s"]) < 0.01:
+            out[0] = r
+        elif abs(r["at_s"] - sess["end_s"]) < 0.01:
+            out[1] = r
+    return out[0], out[1]
+
+
+def here(conn, sess: dict) -> dict | None:
+    """For the page: this conversation was split from the one before or after it, by whom, and that
+    one's id (for Join back). The split at its start counts first: that's how this one began."""
+    from .db import row
+
+    start, end = _neighbours(conn, sess)
+    for r, side in ((start, "before"), (end, "after")):
+        if not r:
+            continue
+        other = row(conn, "SELECT id FROM sessions WHERE recording_id=? AND status='active' AND " +
+                    ("abs(end_s - ?) < 0.01" if side == "before" else "abs(start_s - ?) < 0.01"),
+                    sess["recording_id"], r["at_s"])
+        return {"by": r["by"], "side": side, "other": other["id"] if other else None,
+                "at": round(r["at_s"] - sess["start_s"], 1)}
+    return None
+
+
+def join_back(conn, session_id: str) -> str:
+    """Undo the split at this conversation's start (else its end): the two become one again, kept in the
+    first's session. The split row stays, marked undone, so the lab doesn't split there again. Answers
+    given in the second part go with it (it's superseded, kept); the whole is worked out again.
+    Returns the joined session's id. KeyError if there's no split to undo."""
+    from .db import row
+
+    sess = row(conn, "SELECT * FROM sessions WHERE id=? AND status='active'", session_id)
+    if not sess:
+        raise KeyError(session_id)
+    start, end = _neighbours(conn, sess)
+    r = start or end
+    if not r:
+        raise KeyError(session_id)
+    first = row(conn, "SELECT * FROM sessions WHERE recording_id=? AND status='active' AND abs(end_s - ?) < 0.01",
+                sess["recording_id"], r["at_s"]) if r is start else sess
+    second = sess if r is start else row(conn, "SELECT * FROM sessions WHERE recording_id=? AND status='active' "
+                                               "AND abs(start_s - ?) < 0.01", sess["recording_id"], r["at_s"])
+    conn.execute("UPDATE splits SET undone_at=? WHERE recording_id=? AND at_s=?", (time.time(), r["recording_id"], r["at_s"]))
+    if not first or not second:  # the other part isn't a conversation (too little speech): finding redoes it
+        return (first or second)["id"]
+    # At once, as split_now does, rather than when find_conversations next runs; that re-run agrees.
+    conn.execute("UPDATE sessions SET end_s=?, speech_s=? WHERE id=?",
+                 (second["end_s"], round(first["speech_s"] + second["speech_s"], 1), first["id"]))
+    conn.execute("UPDATE sessions SET status='superseded' WHERE id=?", (second["id"],))
+    return first["id"]

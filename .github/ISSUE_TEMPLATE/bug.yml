@@ -1,0 +1,25 @@
+name: Something's wrong
+description: The lab, the apps or the recorder did something it shouldn't.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste a transcript, a recording, a name or anything that identifies someone you recorded.
+  - type: textarea
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: How to make it happen again
+  - type: textarea
+    attributes:
+      label: octo doctor
+      description: The output of `~/Octo/.venv/bin/octo doctor --json` (it holds no conversations, but read it before pasting).
+      render: json
+  - type: input
+    attributes:
+      label: Mac and macOS
+      placeholder: e.g. MacBook Air M2, 16 GB, macOS 15.1

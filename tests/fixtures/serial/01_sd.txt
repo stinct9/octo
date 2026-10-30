@@ -1,0 +1,6 @@
+@@ {"v":1,"sketch":"01_sd"}
+Mounted on attempt 1
+Card: SDHC, 30000 MB, FS 29996 MB total, 0 MB used
+Write: 2048 KB in 4775 ms (worst 4 KB chunk: 15 ms)
+Read:  2048 KB in 4706 ms, data verified
+@@ {"v":1,"sketch":"01_sd","boot":"usb","mount_attempts":1,"card_type":"SDHC","card_bytes":31457280000,"fs_total_bytes":31453380608,"fs_used_bytes":32768,"leftover_test_file":false,"test_bytes":2097152,"write_ms":4775,"worst_chunk_ms":15,"chunk_bytes":4096,"read_ms":4706,"verified":true}

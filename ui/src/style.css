@@ -1,0 +1,178 @@
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+/* Colours from the approved mockup (docs/bench-ui-plan.md, M3). Status is always shown as
+   icon + word + colour, never colour alone. */
+:root {
+  color-scheme: light;
+  --ground: #F4F2ED;
+  --surface: #FFFFFF;
+  --line: #E2DED5;
+  --line-strong: #D6D1C6;
+  --ink: #1B1A17;
+  --ink-2: #3E3B35;
+  --muted: #5B574F;
+  --faint: #B9B3A8;
+  --accent: #1D4F7A;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E4ECF4;
+  --pass: #1B6E46;
+  --pass-soft: #E3F1E8;
+  --warn: #9A5200;
+  --warn-soft: #FBEFDD;
+  --fail: #A8261B;
+  --fail-soft: #FBE6E3;
+  --fail-ink: #3E1A15;
+  --log-bg: #1B1A17;
+  --log-ink: #E8E4DA;
+  --log-muted: #B9B3A8;
+  --log-err: #E8B0A8;
+  --log-ok: #8FC4A5;
+  --stage: #14222F;
+  --stage-ink: #F4F2ED;
+  --stage-muted: #B9CBDA;
+  --stage-track: #24384A;
+  --stage-fill: #7FB3E0;
+  --chart-quiet: #E9E5DC;
+  --chart-bar: #8C877D;
+  /* Speakers (conversation lab): the owner is always the accent; others differ in lightness too. */
+  --me: var(--accent); --me-soft: var(--accent-soft);
+  --s1: #9A4E12; --s1-soft: #F7E9DC;
+  --s2: #6B4A8C; --s2-soft: #EEE7F5;
+  --s3: #4F6B1F; --s3-soft: #EDF2E0;
+  --s4: #8C3A5B; --s4-soft: #F6E6EC;
+  --s5: #1F6B6B; --s5-soft: #E0F0EF;
+  --s6: #6B5040; --s6-soft: #F1E9E3;
+  --s7: #7A6312; --s7-soft: #F4EED9;
+  --s8: #8C2F44; --s8-soft: #F6E3E7;
+  --chip: #EFECE5;
+  --quote: #F8F6F1;
+  --font: 'IBM Plex Sans', 'Noto Sans Kannada', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ground: #151412;
+    --surface: #1E1D1A;
+    --line: #34322D;
+    --line-strong: #45423B;
+    --ink: #EDEAE3;
+    --ink-2: #D2CEC5;
+    --muted: #A8A399;
+    --faint: #6E6A62;
+    --accent: #6FA8D8;
+    --accent-ink: #0E1A26;
+    --accent-soft: #1C2A38;
+    --pass: #6CC495;
+    --pass-soft: #16281E;
+    --warn: #E3A456;
+    --warn-soft: #2E2214;
+    --fail: #EE8A7E;
+    --fail-soft: #33191A;
+    --fail-ink: #F6D6D1;
+    --danger-ink: #2A0F0B;  /* white on #EE8A7E was 2.4:1 */
+    --log-bg: #0E0D0C;
+    --chart-quiet: #2A2824;
+    --chart-bar: #7A756C;
+    --s1: #E3A06A; --s1-soft: #33241A;
+    --s2: #B79AD6; --s2-soft: #2A2233;
+    --s3: #A9C46A; --s3-soft: #222A17;
+    --s4: #E29BB8; --s4-soft: #33202A;
+    --s5: #6CC6C2; --s5-soft: #18292A;
+    --s6: #C7A48C; --s6-soft: #2C231D;
+    --s7: #D6BC5E; --s7-soft: #2C2716;
+    --s8: #E7909F; --s8-soft: #331C22;
+    --chip: #2A2824;
+    --quote: #23221F;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body {
+  margin: 0;
+  font: 15px/1.5 var(--font);
+  color: var(--ink);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+/* Links in the accent, not the browser's own blue (lavender in dark); a link styled as a button keeps the button's look. */
+a { color: var(--accent); text-underline-offset: 2px; }
+a.btn { text-decoration: none; }
+a.btn:not(.btn-primary):not(.btn-danger) { color: var(--ink); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* iOS zooms the page in on a form field whose text is under 16px, and in the phone app's Lab tab the zoom
+   stays after the field closes: the page is left wider than the screen (13 Oct, naming a speaker).
+   On a touch screen every field's text is at least 16px, which iOS leaves alone. */
+@media (pointer: coarse) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea { font-size: max(16px, 1em) !important; }
+  /* A finger needs 44 px (UX review, 21 Oct): small buttons grow; a back link's tap area grows, its line doesn't. */
+  .btn-small { height: auto; min-height: 44px; }
+  .back { display: inline-block; padding: 12px 0; margin: -12px 0; }
+}
+/* Increase contrast (macOS and iOS): outlines of buttons and fields strong enough to see as controls. */
+@media (prefers-contrast: more) {
+  :root { --line: var(--chart-bar); --line-strong: var(--muted); }
+}
+.mono { font-family: var(--mono); }
+.eyebrow {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted);
+}
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+
+.btn {
+  height: 44px; padding: 0 20px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); font-weight: 500; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn-small { height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+.btn-danger { background: var(--fail); border-color: var(--fail); color: var(--danger-ink, #FFFFFF); font-weight: 600; }
+
+/* A speaker's colour (format.ts speakerColors): components use var(--c) and var(--c-soft). */
+.me { --c: var(--me); --c-soft: var(--me-soft); }
+.s1 { --c: var(--s1); --c-soft: var(--s1-soft); }
+.s2 { --c: var(--s2); --c-soft: var(--s2-soft); }
+.s3 { --c: var(--s3); --c-soft: var(--s3-soft); }
+.s4 { --c: var(--s4); --c-soft: var(--s4-soft); }
+.s5 { --c: var(--s5); --c-soft: var(--s5-soft); }
+.s6 { --c: var(--s6); --c-soft: var(--s6-soft); }
+.s7 { --c: var(--s7); --c-soft: var(--s7-soft); }
+.s8 { --c: var(--s8); --c-soft: var(--s8-soft); }
+.sx { --c: var(--muted); --c-soft: var(--chip); }
+
+.pass { color: var(--pass); }
+.warn { color: var(--warn); }
+.fail { color: var(--fail); }
+
+/* Waiting, said plainly (Jay, 28 Oct: "no loading spinners and hard to understand if I need to wait"). A spinner
+   beside every "Loading…", and a bar across the top while something you did is being saved or worked out. Both
+   wait a moment before showing, so a quick answer doesn't flash. */
+.loading { display: flex; align-items: center; gap: 10px; }
+.loading::before {
+  content: ''; width: 14px; height: 14px; flex: none; border-radius: 50%;
+  border: 2px solid var(--line-strong); border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite, appear 0s 0.2s both;
+}
+.busy-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 100; overflow: hidden; pointer-events: none;
+  animation: appear 0s 0.3s both;
+}
+.busy-bar::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 35%; background: var(--accent);
+  animation: sweep 1.1s ease-in-out infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes appear { from { visibility: hidden; } to { visibility: visible; } }
+@keyframes sweep { from { left: -35%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .loading::before { animation: spin 2.4s linear infinite, appear 0s 0.2s both; }
+  .busy-bar::after { animation: none; left: 0; width: 100%; opacity: 0.6; }
+}

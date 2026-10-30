@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key><string>online.octolab.Octo</string>
+	<key>CFBundleName</key><string>Octo</string>
+	<key>CFBundleDisplayName</key><string>Octo</string>
+	<key>CFBundleExecutable</key><string>Octo</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>1</string>
+	<key>CFBundleVersion</key><string>SOURCE</string>
+	<key>LSMinimumSystemVersion</key><string>14.0</string>
+	<key>LSUIElement</key><true/>
+	<key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+	<key>NSMicrophoneUsageDescription</key><string>To record a call you choose to record: your side, from the mic. It stays on this Mac.</string>
+	<key>NSAudioCaptureUsageDescription</key><string>To record a call you choose to record: the others, from the call app's sound. It stays on this Mac.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key><string>To see who you're meeting: your events' names, times and invitees, two days back and ahead, read only. They stay on this Mac.</string>
+	<key>NSHumanReadableCopyright</key><string>Built on this Mac from Octo's source.</string>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSSupportsAutomaticTermination</key><false/>
+	<key>OctoSource</key><string>SOURCE</string>
+</dict>
+</plist>

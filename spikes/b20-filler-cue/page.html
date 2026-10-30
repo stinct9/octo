@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filler check</title>
+<style>
+  :root { --bg: #fff; --fg: #1d1d1f; --dim: #6e6e73; --line: #e5e5ea; --on: #0a84ff; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --fg: #f5f5f7; --dim: #98989d; --line: #3a3a3c; } }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.4 -apple-system, system-ui, sans-serif; margin: 0 auto; max-width: 640px; padding: 16px; }
+  p { color: var(--dim); }
+  .clip { border-top: 1px solid var(--line); padding: 10px 0; display: grid; grid-template-columns: 3em 1fr; gap: 6px 10px; align-items: center; }
+  .clip.cur { background: color-mix(in srgb, var(--on) 10%, transparent); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .row span { color: var(--dim); width: 4.5em; }
+  button { font: inherit; border: 1px solid var(--line); background: none; color: var(--fg); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  button.on { background: var(--on); border-color: var(--on); color: #fff; }
+  .n { color: var(--dim); }
+  #count { position: sticky; top: 0; background: var(--bg); padding: 6px 0; font-weight: 600; }
+</style>
+<h1>Your "you know"s, by ear</h1>
+<p>Each clip is about 2 seconds where something flagged a "you know". Play it, then answer:
+did you hear "you know" (whole, cut off, or not there), and who said it? Answers save as you click.<br>
+Keys: <b>space</b> play again · <b>y</b> / <b>c</b> / <b>n</b> heard: yes / cut off / no · <b>m</b> / <b>o</b> / <b>u</b> who: me / someone else / can't tell · moves on when both are answered.</p>
+<div id="count"></div>
+<div id="list"></div>
+<script>
+const Q = { heard: [["yes", "Yes"], ["cut", "Cut off"], ["no", "Not there"]], who: [["me", "Me"], ["other", "Someone else"], ["unsure", "Can't tell"]] };
+const KEYS = { y: ["heard", "yes"], c: ["heard", "cut"], n: ["heard", "no"], m: ["who", "me"], o: ["who", "other"], u: ["who", "unsure"] };
+let clips = [], labels = {}, cur = 0;
+const audio = new Audio();
+
+function save() { fetch("labels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(labels) }); }
+function done(id) { const l = labels[id] || {}; return l.heard && (l.heard === "no" || l.who); }
+function play(i) { cur = i; audio.src = `clips/${clips[i].id}.wav`; audio.play(); render(); }
+function answer(i, q, v) {
+  const id = clips[i].id;
+  labels[id] = { ...(labels[id] || {}), [q]: v };
+  save();
+  if (done(id) && i === cur && i + 1 < clips.length) { play(i + 1); document.getElementById(clips[i + 1].id).scrollIntoView({ block: "center", behavior: "smooth" }); }
+  else render();
+}
+function render() {
+  document.getElementById("count").textContent = `${clips.filter(c => done(c.id)).length} of ${clips.length} answered`;
+  document.getElementById("list").innerHTML = clips.map((c, i) => `
+    <div class="clip${i === cur ? " cur" : ""}" id="${c.id}">
+      <button onclick="play(${i})" aria-label="Play clip ${i + 1}">▶</button>
+      <div class="n">${i + 1}</div>
+      ${Object.entries(Q).map(([q, opts]) => `<div></div><div class="row"><span>${q === "heard" ? "Heard" : "Who"}</span>${opts.map(([v, t]) =>
+        `<button class="${(labels[c.id] || {})[q] === v ? "on" : ""}" onclick="answer(${i}, '${q}', '${v}')">${t}</button>`).join("")}</div>`).join("")}
+    </div>`).join("");
+}
+document.addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey) return;
+  if (e.key === " ") { e.preventDefault(); play(cur); }
+  else if (KEYS[e.key]) answer(cur, ...KEYS[e.key]);
+});
+(async () => {
+  clips = await (await fetch("sample.json")).json();
+  try { labels = await (await fetch("labels.json")).json(); } catch { labels = {}; }
+  cur = Math.max(0, clips.findIndex(c => !done(c.id)));
+  render();
+})();
+</script>

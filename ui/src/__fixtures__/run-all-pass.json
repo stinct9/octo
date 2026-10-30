@@ -1,0 +1,1452 @@
+[
+{
+"seq": 1,
+"run_id": "20260930-144400",
+"t": 1790759641.026617,
+"type": "run.started",
+"step": null,
+"data": {
+"steps": [
+{
+"id": "board",
+"title": "Board, memory, USB",
+"needs_user": false
+},
+{
+"id": "mic",
+"title": "Microphone",
+"needs_user": true
+},
+{
+"id": "sd",
+"title": "SD card",
+"needs_user": false
+},
+{
+"id": "wifi",
+"title": "Wi-Fi",
+"needs_user": false
+},
+{
+"id": "transcribe",
+"title": "Transcription",
+"needs_user": false
+}
+],
+"env": {
+"git_sha": "fixture",
+"python": "3.12"
+}
+}
+},
+{
+"seq": 2,
+"run_id": "20260930-144400",
+"t": 1790759641.0271602,
+"type": "run.state",
+"step": null,
+"data": {
+"state": "running"
+}
+},
+{
+"seq": 3,
+"run_id": "20260930-144400",
+"t": 1790759641.027683,
+"type": "step.progress",
+"step": "board",
+"data": {
+"phase": "compile"
+}
+},
+{
+"seq": 6,
+"run_id": "20260930-144400",
+"t": 1790759651.512715,
+"type": "step.progress",
+"step": "mic",
+"data": {
+"phase": "compile"
+}
+},
+{
+"seq": 9,
+"run_id": "20260930-144400",
+"t": 1790759662.0035892,
+"type": "step.progress",
+"step": "sd",
+"data": {
+"phase": "compile"
+}
+},
+{
+"seq": 12,
+"run_id": "20260930-144400",
+"t": 1790759672.477364,
+"type": "step.progress",
+"step": "wifi",
+"data": {
+"phase": "compile"
+}
+},
+{
+"seq": 15,
+"run_id": "20260930-144400",
+"t": 1790759684.9669728,
+"type": "step.started",
+"step": "board",
+"data": {
+"title": "Board, memory, USB"
+}
+},
+{
+"seq": 16,
+"run_id": "20260930-144400",
+"t": 1790759684.967316,
+"type": "step.progress",
+"step": "board",
+"data": {
+"phase": "upload",
+"pct": 0,
+"detail": null
+}
+},
+{
+"seq": 41,
+"run_id": "20260930-144400",
+"t": 1790759690.344456,
+"type": "step.progress",
+"step": "board",
+"data": {
+"phase": "upload",
+"pct": 100.0,
+"detail": null
+}
+},
+{
+"seq": 50,
+"run_id": "20260930-144400",
+"t": 1790759692.6497731,
+"type": "step.progress",
+"step": "board",
+"data": {
+"phase": "upload",
+"pct": 100.0,
+"detail": null
+}
+},
+{
+"seq": 56,
+"run_id": "20260930-144400",
+"t": 1790759694.548335,
+"type": "step.progress",
+"step": "board",
+"data": {
+"phase": "upload",
+"pct": 100,
+"detail": null
+}
+},
+{
+"seq": 57,
+"run_id": "20260930-144400",
+"t": 1790759694.548853,
+"type": "step.progress",
+"step": "board",
+"data": {
+"phase": "connect",
+"pct": null,
+"detail": null
+}
+},
+{
+"seq": 58,
+"run_id": "20260930-144400",
+"t": 1790759695.411177,
+"type": "step.log",
+"step": "board",
+"data": {
+"line": "Chip:  ESP32-S3 rev 2, 2 cores @ 240 MHz",
+"stream": "device"
+}
+},
+{
+"seq": 59,
+"run_id": "20260930-144400",
+"t": 1790759695.412813,
+"type": "step.log",
+"step": "board",
+"data": {
+"line": "Flash: 8 MB",
+"stream": "device"
+}
+},
+{
+"seq": 60,
+"run_id": "20260930-144400",
+"t": 1790759695.413449,
+"type": "step.log",
+"step": "board",
+"data": {
+"line": "PSRAM: 8192 KB",
+"stream": "device"
+}
+},
+{
+"seq": 61,
+"run_id": "20260930-144400",
+"t": 1790759695.413801,
+"type": "step.log",
+"step": "board",
+"data": {
+"line": "MAC:   68:EE:8F:00:A1:B2",
+"stream": "device"
+}
+},
+{
+"seq": 62,
+"run_id": "20260930-144400",
+"t": 1790759695.415741,
+"type": "step.metric",
+"step": "board",
+"data": {
+"key": "chip",
+"label": "Chip",
+"value": "ESP32-S3 rev 2",
+"unit": null,
+"verdict": "pass",
+"previous": "ESP32-S3 rev 2"
+}
+},
+{
+"seq": 63,
+"run_id": "20260930-144400",
+"t": 1790759695.41607,
+"type": "step.metric",
+"step": "board",
+"data": {
+"key": "cpu_mhz",
+"label": "CPU",
+"value": 240,
+"unit": "MHz",
+"verdict": null,
+"previous": 240
+}
+},
+{
+"seq": 64,
+"run_id": "20260930-144400",
+"t": 1790759695.4163232,
+"type": "step.metric",
+"step": "board",
+"data": {
+"key": "flash_mb",
+"label": "Flash",
+"value": 8,
+"unit": "MB",
+"verdict": "pass",
+"previous": 8
+}
+},
+{
+"seq": 65,
+"run_id": "20260930-144400",
+"t": 1790759695.416506,
+"type": "step.metric",
+"step": "board",
+"data": {
+"key": "psram_mb",
+"label": "PSRAM",
+"value": 8,
+"unit": "MB",
+"verdict": "pass",
+"previous": 8
+}
+},
+{
+"seq": 66,
+"run_id": "20260930-144400",
+"t": 1790759695.416675,
+"type": "step.metric",
+"step": "board",
+"data": {
+"key": "mac",
+"label": "MAC",
+"value": "68:EE:8F:00:A1:B2",
+"unit": null,
+"verdict": null,
+"previous": "68:EE:8F:00:A1:B2"
+}
+},
+{
+"seq": 67,
+"run_id": "20260930-144400",
+"t": 1790759695.416865,
+"type": "step.finished",
+"step": "board",
+"data": {
+"status": "pass",
+"summary": "ESP32-S3, 8 MB flash, 8 MB PSRAM",
+"hint": null,
+"duration_s": 10.4,
+"metrics": {
+"chip": "ESP32-S3 rev 2",
+"cpu_mhz": 240,
+"flash_mb": 8,
+"psram_mb": 8,
+"mac": "68:EE:8F:00:A1:B2"
+}
+}
+},
+{
+"seq": 68,
+"run_id": "20260930-144400",
+"t": 1790759695.417191,
+"type": "step.started",
+"step": "mic",
+"data": {
+"title": "Microphone"
+}
+},
+{
+"seq": 69,
+"run_id": "20260930-144400",
+"t": 1790759695.4173691,
+"type": "step.progress",
+"step": "mic",
+"data": {
+"phase": "upload",
+"pct": 0,
+"detail": null
+}
+},
+{
+"seq": 94,
+"run_id": "20260930-144400",
+"t": 1790759701.548993,
+"type": "step.progress",
+"step": "mic",
+"data": {
+"phase": "upload",
+"pct": 100.0,
+"detail": null
+}
+},
+{
+"seq": 103,
+"run_id": "20260930-144400",
+"t": 1790759704.356483,
+"type": "step.progress",
+"step": "mic",
+"data": {
+"phase": "upload",
+"pct": 100.0,
+"detail": null
+}
+},
+{
+"seq": 109,
+"run_id": "20260930-144400",
+"t": 1790759706.386682,
+"type": "step.progress",
+"step": "mic",
+"data": {
+"phase": "upload",
+"pct": 100,
+"detail": null
+}
+},
+{
+"seq": 110,
+"run_id": "20260930-144400",
+"t": 1790759706.38708,
+"type": "step.progress",
+"step": "mic",
+"data": {
+"phase": "connect",
+"pct": null,
+"detail": null
+}
+},
+{
+"seq": 111,
+"run_id": "20260930-144400",
+"t": 1790759709.329761,
+"type": "step.log",
+"step": "mic",
+"data": {
+"line": "Self-test: 32000 samples, level -72.6..-55.3 dBFS, peak 114",
+"stream": "device"
+}
+},
+{
+"seq": 113,
+"run_id": "20260930-144400",
+"t": 1790759709.332458,
+"type": "run.state",
+"step": null,
+"data": {
+"state": "waiting_for_user"
+}
+},
+{
+"seq": 114,
+"run_id": "20260930-144400",
+"t": 1790759709.332685,
+"type": "step.prompt",
+"step": "mic",
+"data": {
+"phase": "ready",
+"message": "Sit about 1 m away. Press Ready, stay silent until the Glass sound (3 s), then talk normally until the Hero sound."
+}
+},
+{
+"seq": 129,
+"run_id": "20260930-144400",
+"t": 1790759710.9860501,
+"type": "run.state",
+"step": null,
+"data": {
+"state": "running"
+}
+},
+{
+"seq": 130,
+"run_id": "20260930-144400",
+"t": 1790759711.818412,
+"type": "step.prompt",
+"step": "mic",
+"data": {
+"phase": "silent",
+"t": 0.0
+}
+},
+{
+"seq": 131,
+"run_id": "20260930-144400",
+"t": 1790759714.829453,
+"type": "step.prompt",
+"step": "mic",
+"data": {
+"phase": "speak",
+"t": 3.01
+}
+},
+{
+"seq": 132,
+"run_id": "20260930-144400",
+"t": 1790759721.818395,
+"type": "step.prompt",
+"step": "mic",
+"data": {
+"phase": "transfer",
+"t": 10.0
+}
+},
+{
+"seq": 133,
+"run_id": "20260930-144400",
+"t": 1790759721.824162,
+"type": "step.prompt",
+"step": "mic",
+"data": {
+"phase": "done",
+"t": 10.01
+}
+},
+{
+"seq": 134,
+"run_id": "20260930-144400",
+"t": 1790759722.4771378,
+"type": "step.artifact",
+"step": "mic",
+"data": {
+"kind": "recording",
+"file": "bench_20260930-144400.wav"
+}
+},
+{
+"seq": 135,
+"run_id": "20260930-144400",
+"t": 1790759722.477505,
+"type": "step.artifact",
+"step": "mic",
+"data": {
+"kind": "levels",
+"levels": [
+-70.2,
+-54.6,
+-70.1,
+-72.5,
+-72.7,
+-71.5,
+-67.2,
+-72.1,
+-68.9,
+-70.7,
+-68.9,
+-70.5,
+-64.3,
+-50.1,
+-61.4,
+-71.6,
+-69.5,
+-67.0,
+-66.2,
+-62.6,
+-45.7,
+-43.9,
+-45.4,
+-43.8,
+-46.5,
+-47.0,
+-44.8,
+-46.0,
+-43.6,
+-48.1,
+-46.6,
+-54.9,
+-73.1,
+-73.5,
+-77.6,
+-75.5,
+-74.4,
+-72.3,
+-71.8,
+-71.9
+],
+"window_s": 0.25,
+"quiet_window": [
+0.75,
+2.75
+],
+"speech_window": [
+3.75,
+10.0
+],
+"cue_at": 3.2,
+"seconds": 10.0
+}
+},
+{
+"seq": 136,
+"run_id": "20260930-144400",
+"t": 1790759722.478509,
+"type": "step.metric",
+"step": "mic",
+"data": {
+"key": "snr_db",
+"label": "Speech above background",
+"value": 24.1,
+"unit": "dB",
+"verdict": "pass",
+"previous": 17.4
+}
+},
+{
+"seq": 137,
+"run_id": "20260930-144400",
+"t": 1790759722.478606,
+"type": "step.metric",
+"step": "mic",
+"data": {
+"key": "speech_db",
+"label": "Speech level",
+"value": -46.0,
+"unit": "dBFS",
+"verdict": null,
+"previous": -45.6
+}
+},
+{
+"seq": 138,
+"run_id": "20260930-144400",
+"t": 1790759722.478671,
+"type": "step.metric",
+"step": "mic",
+"data": {
+"key": "quiet_db",
+"label": "Background level",
+"value": -70.1,
+"unit": "dBFS",
+"verdict": null,
+"previous": -63.0
+}
+},
+{
+"seq": 139,
+"run_id": "20260930-144400",
+"t": 1790759722.478732,
+"type": "step.metric",
+"step": "mic",
+"data": {
+"key": "peak_dbfs",
+"label": "Peak",
+"value": -30.8,
+"unit": "dBFS",
+"verdict": null,
+"previous": -32.1
+}
+},
+{
+"seq": 140,
+"run_id": "20260930-144400",
+"t": 1790759722.4787898,
+"type": "step.metric",
+"step": "mic",
+"data": {
+"key": "clipped",
+"label": "Clipped samples",
+"value": 0,
+"unit": null,
+"verdict": "pass",
+"previous": 0
+}
+},
+{
+"seq": 141,
+"run_id": "20260930-144400",
+"t": 1790759722.478849,
+"type": "step.metric",
+"step": "mic",
+"data": {
+"key": "longest_flat_ms",
+"label": "Longest dropout",
+"value": 0.6,
+"unit": "ms",
+"verdict": "pass",
+"previous": 0.6
+}
+},
+{
+"seq": 142,
+"run_id": "20260930-144400",
+"t": 1790759722.4789062,
+"type": "step.metric",
+"step": "mic",
+"data": {
+"key": "cue_at",
+"label": "Speak cue heard at",
+"value": 3.2,
+"unit": "s",
+"verdict": "pass",
+"previous": 3.2
+}
+},
+{
+"seq": 143,
+"run_id": "20260930-144400",
+"t": 1790759722.478957,
+"type": "step.metric",
+"step": "mic",
+"data": {
+"key": "record_ms",
+"label": "Recording duration",
+"value": 9989,
+"unit": "ms",
+"verdict": "pass",
+"previous": 9989
+}
+},
+{
+"seq": 144,
+"run_id": "20260930-144400",
+"t": 1790759722.4790149,
+"type": "step.finished",
+"step": "mic",
+"data": {
+"status": "pass",
+"summary": "SNR 24.1 dB",
+"hint": null,
+"duration_s": 27.1,
+"metrics": {
+"snr_db": 24.1,
+"speech_db": -46.0,
+"quiet_db": -70.1,
+"peak_dbfs": -30.8,
+"clipped": 0,
+"longest_flat_ms": 0.6,
+"cue_at": 3.2,
+"record_ms": 9989
+}
+}
+},
+{
+"seq": 145,
+"run_id": "20260930-144400",
+"t": 1790759722.479085,
+"type": "step.started",
+"step": "sd",
+"data": {
+"title": "SD card"
+}
+},
+{
+"seq": 146,
+"run_id": "20260930-144400",
+"t": 1790759722.4791548,
+"type": "step.progress",
+"step": "sd",
+"data": {
+"phase": "upload",
+"pct": 0,
+"detail": null
+}
+},
+{
+"seq": 171,
+"run_id": "20260930-144400",
+"t": 1790759727.771273,
+"type": "step.progress",
+"step": "sd",
+"data": {
+"phase": "upload",
+"pct": 100.0,
+"detail": null
+}
+},
+{
+"seq": 180,
+"run_id": "20260930-144400",
+"t": 1790759730.691212,
+"type": "step.progress",
+"step": "sd",
+"data": {
+"phase": "upload",
+"pct": 100.0,
+"detail": null
+}
+},
+{
+"seq": 186,
+"run_id": "20260930-144400",
+"t": 1790759732.505228,
+"type": "step.progress",
+"step": "sd",
+"data": {
+"phase": "upload",
+"pct": 100,
+"detail": null
+}
+},
+{
+"seq": 187,
+"run_id": "20260930-144400",
+"t": 1790759732.506113,
+"type": "step.progress",
+"step": "sd",
+"data": {
+"phase": "connect",
+"pct": null,
+"detail": null
+}
+},
+{
+"seq": 188,
+"run_id": "20260930-144400",
+"t": 1790759733.357205,
+"type": "step.log",
+"step": "sd",
+"data": {
+"line": "Mounted on attempt 1",
+"stream": "device"
+}
+},
+{
+"seq": 189,
+"run_id": "20260930-144400",
+"t": 1790759733.358623,
+"type": "step.log",
+"step": "sd",
+"data": {
+"line": "Card: SDHC, 30000 MB, FS 29996 MB total, 0 MB used",
+"stream": "device"
+}
+},
+{
+"seq": 190,
+"run_id": "20260930-144400",
+"t": 1790759738.161515,
+"type": "step.log",
+"step": "sd",
+"data": {
+"line": "Write: 2048 KB in 4758 ms (worst 4 KB chunk: 15 ms)",
+"stream": "device"
+}
+},
+{
+"seq": 191,
+"run_id": "20260930-144400",
+"t": 1790759742.75107,
+"type": "step.log",
+"step": "sd",
+"data": {
+"line": "Read:  2048 KB in 4683 ms, data verified",
+"stream": "device"
+}
+},
+{
+"seq": 192,
+"run_id": "20260930-144400",
+"t": 1790759742.7572238,
+"type": "step.metric",
+"step": "sd",
+"data": {
+"key": "mount_attempts",
+"label": "Mount attempts",
+"value": 1,
+"unit": null,
+"verdict": "pass",
+"previous": 1
+}
+},
+{
+"seq": 193,
+"run_id": "20260930-144400",
+"t": 1790759742.757799,
+"type": "step.metric",
+"step": "sd",
+"data": {
+"key": "write_kbs",
+"label": "Write speed",
+"value": 430,
+"unit": "KB/s",
+"verdict": null,
+"previous": 431
+}
+},
+{
+"seq": 194,
+"run_id": "20260930-144400",
+"t": 1790759742.758027,
+"type": "step.metric",
+"step": "sd",
+"data": {
+"key": "read_kbs",
+"label": "Read speed",
+"value": 437,
+"unit": "KB/s",
+"verdict": null,
+"previous": 437
+}
+},
+{
+"seq": 195,
+"run_id": "20260930-144400",
+"t": 1790759742.7581902,
+"type": "step.metric",
+"step": "sd",
+"data": {
+"key": "headroom",
+"label": "Headroom vs audio",
+"value": 13.8,
+"unit": "x",
+"verdict": "pass",
+"previous": 13.8
+}
+},
+{
+"seq": 196,
+"run_id": "20260930-144400",
+"t": 1790759742.758354,
+"type": "step.metric",
+"step": "sd",
+"data": {
+"key": "worst_chunk_ms",
+"label": "Worst stall (budget 128 ms)",
+"value": 15,
+"unit": "ms",
+"verdict": "pass",
+"previous": 15
+}
+},
+{
+"seq": 197,
+"run_id": "20260930-144400",
+"t": 1790759742.7584991,
+"type": "step.metric",
+"step": "sd",
+"data": {
+"key": "card_gb",
+"label": "Card size",
+"value": 31.5,
+"unit": "GB",
+"verdict": null,
+"previous": 31.5
+}
+},
+{
+"seq": 198,
+"run_id": "20260930-144400",
+"t": 1790759742.758811,
+"type": "step.metric",
+"step": "sd",
+"data": {
+"key": "fs_used_mb",
+"label": "Used",
+"value": 0,
+"unit": "MB",
+"verdict": null,
+"previous": 0
+}
+},
+{
+"seq": 199,
+"run_id": "20260930-144400",
+"t": 1790759742.759188,
+"type": "step.metric",
+"step": "sd",
+"data": {
+"key": "verified",
+"label": "Read-back verified",
+"value": true,
+"unit": null,
+"verdict": "pass",
+"previous": true
+}
+},
+{
+"seq": 200,
+"run_id": "20260930-144400",
+"t": 1790759742.759694,
+"type": "step.finished",
+"step": "sd",
+"data": {
+"status": "pass",
+"summary": "430 KB/s write, 14x audio rate, verified",
+"hint": null,
+"duration_s": 20.3,
+"metrics": {
+"mount_attempts": 1,
+"write_kbs": 430,
+"read_kbs": 437,
+"headroom": 13.8,
+"worst_chunk_ms": 15,
+"card_gb": 31.5,
+"fs_used_mb": 0,
+"verified": true
+}
+}
+},
+{
+"seq": 201,
+"run_id": "20260930-144400",
+"t": 1790759742.7599401,
+"type": "step.started",
+"step": "wifi",
+"data": {
+"title": "Wi-Fi"
+}
+},
+{
+"seq": 202,
+"run_id": "20260930-144400",
+"t": 1790759742.760331,
+"type": "step.progress",
+"step": "wifi",
+"data": {
+"phase": "upload",
+"pct": 0,
+"detail": null
+}
+},
+{
+"seq": 227,
+"run_id": "20260930-144400",
+"t": 1790759748.249305,
+"type": "step.progress",
+"step": "wifi",
+"data": {
+"phase": "upload",
+"pct": 100.0,
+"detail": null
+}
+},
+{
+"seq": 236,
+"run_id": "20260930-144400",
+"t": 1790759755.5574489,
+"type": "step.progress",
+"step": "wifi",
+"data": {
+"phase": "upload",
+"pct": 100.0,
+"detail": null
+}
+},
+{
+"seq": 242,
+"run_id": "20260930-144400",
+"t": 1790759758.262611,
+"type": "step.progress",
+"step": "wifi",
+"data": {
+"phase": "upload",
+"pct": 100,
+"detail": null
+}
+},
+{
+"seq": 243,
+"run_id": "20260930-144400",
+"t": 1790759758.2633421,
+"type": "step.progress",
+"step": "wifi",
+"data": {
+"phase": "connect",
+"pct": null,
+"detail": null
+}
+},
+{
+"seq": 244,
+"run_id": "20260930-144400",
+"t": 1790759759.107436,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "Scanning...",
+"stream": "device"
+}
+},
+{
+"seq": 245,
+"run_id": "20260930-144400",
+"t": 1790759763.065235,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "33 networks visible; ours visible",
+"stream": "device"
+}
+},
+{
+"seq": 246,
+"run_id": "20260930-144400",
+"t": 1790759764.31036,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "Connecting.....",
+"stream": "device"
+}
+},
+{
+"seq": 247,
+"run_id": "20260930-144400",
+"t": 1790759764.311172,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "Connected in 1250 ms, IP 192.168.0.20",
+"stream": "device"
+}
+},
+{
+"seq": 248,
+"run_id": "20260930-144400",
+"t": 1790759764.3114629,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -55 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 249,
+"run_id": "20260930-144400",
+"t": 1790759764.730916,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -55 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 250,
+"run_id": "20260930-144400",
+"t": 1790759765.363474,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -55 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 251,
+"run_id": "20260930-144400",
+"t": 1790759765.785634,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -53 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 252,
+"run_id": "20260930-144400",
+"t": 1790759766.203669,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -53 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 253,
+"run_id": "20260930-144400",
+"t": 1790759766.82733,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -55 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 254,
+"run_id": "20260930-144400",
+"t": 1790759767.2461681,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -51 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 255,
+"run_id": "20260930-144400",
+"t": 1790759767.86864,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -51 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 256,
+"run_id": "20260930-144400",
+"t": 1790759768.282443,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -51 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 257,
+"run_id": "20260930-144400",
+"t": 1790759768.9047098,
+"type": "step.log",
+"step": "wifi",
+"data": {
+"line": "rssi -51 dBm",
+"stream": "device"
+}
+},
+{
+"seq": 258,
+"run_id": "20260930-144400",
+"t": 1790759769.3247502,
+"type": "step.metric",
+"step": "wifi",
+"data": {
+"key": "networks_visible",
+"label": "Networks visible",
+"value": 33,
+"unit": null,
+"verdict": null,
+"previous": 32
+}
+},
+{
+"seq": 259,
+"run_id": "20260930-144400",
+"t": 1790759769.3255098,
+"type": "step.metric",
+"step": "wifi",
+"data": {
+"key": "channel",
+"label": "Channel",
+"value": 6,
+"unit": null,
+"verdict": null,
+"previous": 6
+}
+},
+{
+"seq": 260,
+"run_id": "20260930-144400",
+"t": 1790759769.325768,
+"type": "step.metric",
+"step": "wifi",
+"data": {
+"key": "others_on_channel",
+"label": "Other networks on channel",
+"value": 7,
+"unit": null,
+"verdict": null,
+"previous": 7
+}
+},
+{
+"seq": 261,
+"run_id": "20260930-144400",
+"t": 1790759769.325988,
+"type": "step.metric",
+"step": "wifi",
+"data": {
+"key": "rssi_mean",
+"label": "Signal",
+"value": -53,
+"unit": "dBm",
+"verdict": "pass",
+"previous": -53
+}
+},
+{
+"seq": 262,
+"run_id": "20260930-144400",
+"t": 1790759769.3261828,
+"type": "step.metric",
+"step": "wifi",
+"data": {
+"key": "rssi_range",
+"label": "Signal range",
+"value": "-55 to -51",
+"unit": "dBm",
+"verdict": null,
+"previous": "-56 to -48"
+}
+},
+{
+"seq": 263,
+"run_id": "20260930-144400",
+"t": 1790759769.3263721,
+"type": "step.metric",
+"step": "wifi",
+"data": {
+"key": "connect_ms",
+"label": "Connect time",
+"value": 1250,
+"unit": "ms",
+"verdict": null,
+"previous": 1250
+}
+},
+{
+"seq": 264,
+"run_id": "20260930-144400",
+"t": 1790759769.326565,
+"type": "step.finished",
+"step": "wifi",
+"data": {
+"status": "pass",
+"summary": "connected, -53 dBm",
+"hint": null,
+"duration_s": 26.6,
+"metrics": {
+"networks_visible": 33,
+"channel": 6,
+"others_on_channel": 7,
+"rssi_mean": -53,
+"rssi_range": "-55 to -51",
+"connect_ms": 1250
+}
+}
+},
+{
+"seq": 265,
+"run_id": "20260930-144400",
+"t": 1790759769.3268218,
+"type": "step.started",
+"step": "transcribe",
+"data": {
+"title": "Transcription"
+}
+},
+{
+"seq": 266,
+"run_id": "20260930-144400",
+"t": 1790759769.3272278,
+"type": "step.progress",
+"step": "transcribe",
+"data": {
+"phase": "transcribe",
+"pct": null,
+"detail": "forced English"
+}
+},
+{
+"seq": 267,
+"run_id": "20260930-144400",
+"t": 1790759773.347902,
+"type": "step.progress",
+"step": "transcribe",
+"data": {
+"phase": "transcribe",
+"pct": null,
+"detail": "auto-detect"
+}
+},
+{
+"seq": 268,
+"run_id": "20260930-144400",
+"t": 1790759780.154165,
+"type": "step.artifact",
+"step": "transcribe",
+"data": {
+"kind": "transcript",
+"file": "bench_20260930-144400.wav",
+"results": [
+{
+"mode": "en",
+"language": "en",
+"language_p": 1,
+"seconds": 4.0,
+"text": "Seven green bottles are standing on the wall of the bench.",
+"mean_logprob": -0.21,
+"segments": [
+{
+"start": 0.0,
+"end": 7.8,
+"text": "Seven green bottles are standing on the wall of the bench.",
+"logprob": -0.21,
+"no_speech": 0.38
+}
+]
+},
+{
+"mode": "auto",
+"language": "en",
+"language_p": 0.71,
+"seconds": 6.8,
+"text": "Seven green bottles are standing on the wall of the bench.",
+"mean_logprob": -0.21,
+"segments": [
+{
+"start": 0.0,
+"end": 7.8,
+"text": "Seven green bottles are standing on the wall of the bench.",
+"logprob": -0.21,
+"no_speech": 0.38
+}
+]
+}
+]
+}
+},
+{
+"seq": 269,
+"run_id": "20260930-144400",
+"t": 1790759780.154513,
+"type": "step.metric",
+"step": "transcribe",
+"data": {
+"key": "text",
+"label": "Transcript",
+"value": "Seven green bottles are standing on the wall of the bench.",
+"unit": null,
+"verdict": null,
+"previous": null
+}
+},
+{
+"seq": 270,
+"run_id": "20260930-144400",
+"t": 1790759780.154596,
+"type": "step.metric",
+"step": "transcribe",
+"data": {
+"key": "mean_logprob",
+"label": "Confidence (log-prob)",
+"value": -0.21,
+"unit": null,
+"verdict": "pass",
+"previous": null
+}
+},
+{
+"seq": 271,
+"run_id": "20260930-144400",
+"t": 1790759780.154668,
+"type": "step.metric",
+"step": "transcribe",
+"data": {
+"key": "auto_language",
+"label": "Auto-detected language",
+"value": "en (p=0.71)",
+"unit": null,
+"verdict": "pass",
+"previous": null
+}
+},
+{
+"seq": 272,
+"run_id": "20260930-144400",
+"t": 1790759780.154738,
+"type": "step.metric",
+"step": "transcribe",
+"data": {
+"key": "seconds_en",
+"label": "Transcription time",
+"value": 4.0,
+"unit": "s",
+"verdict": null,
+"previous": null
+}
+},
+{
+"seq": 273,
+"run_id": "20260930-144400",
+"t": 1790759780.1547992,
+"type": "step.metric",
+"step": "transcribe",
+"data": {
+"key": "model",
+"label": "Model",
+"value": "large-v3",
+"unit": null,
+"verdict": null,
+"previous": null
+}
+},
+{
+"seq": 274,
+"run_id": "20260930-144400",
+"t": 1790759780.154899,
+"type": "step.finished",
+"step": "transcribe",
+"data": {
+"status": "pass",
+"summary": "\u201cSeven green bottles are standing on the wall of the bench.\u201d",
+"hint": null,
+"duration_s": 10.8,
+"metrics": {
+"text": "Seven green bottles are standing on the wall of the bench.",
+"mean_logprob": -0.21,
+"auto_language": "en (p=0.71)",
+"seconds_en": 4.0,
+"model": "large-v3"
+}
+}
+},
+{
+"seq": 275,
+"run_id": "20260930-144400",
+"t": 1790759780.155021,
+"type": "run.finished",
+"step": null,
+"data": {
+"status": "pass"
+}
+}
+]

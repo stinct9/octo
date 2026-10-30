@@ -1,0 +1,6 @@
+@@ {"v":1,"sketch":"00_hello"}
+Chip:  ESP32-S3 rev 2, 2 cores @ 240 MHz
+Flash: 8 MB
+PSRAM: 8192 KB
+MAC:   68:EE:8F:00:A1:B2
+@@ {"v":1,"sketch":"00_hello","chip":"ESP32-S3","rev":2,"cores":2,"cpu_mhz":240,"flash_bytes":8388608,"psram_bytes":8388608,"mac":"68:EE:8F:00:A1:B2"}

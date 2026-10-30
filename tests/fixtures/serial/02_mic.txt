@@ -1,0 +1,9 @@
+@@ {"v":1,"sketch":"02_mic"}
+Self-test: 32000 samples, level -75.3..-58.2 dBFS, peak 92
+@@ {"v":1,"sketch":"02_mic","rate":16000,"samples":32000,"empty_blocks":0,"dbfs_min":-75.3,"dbfs_max":-58.2,"dbfs_mean":-65.3,"peak":92,"longest_run":8}
+# --- m stream sample ---
+@@ {"v":1,"sketch":"02_mic","level":{"dbfs":-70.8,"peak":25,"dc":-179}}
+@@ {"v":1,"sketch":"02_mic","level":{"dbfs":-72.0,"peak":19,"dc":-169}}
+@@ {"v":1,"sketch":"02_mic","level":{"dbfs":-69.4,"peak":23,"dc":-180}}
+@@ {"v":1,"sketch":"02_mic","level":{"dbfs":-72.0,"peak":26,"dc":-161}}
+@@ {"v":1,"sketch":"02_mic","level":{"dbfs":-73.0,"peak":19,"dc":-165}}

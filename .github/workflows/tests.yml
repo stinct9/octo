@@ -1,0 +1,36 @@
+# The lab's tests and the pages' tests on an Apple Silicon runner. The speech models aren't needed: the unit tests
+# never download or run them.
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lab:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python 3.12 .venv
+      - run: uv pip install --python .venv/bin/python -r requirements.lock && uv pip install --python .venv/bin/python --no-deps -e .
+      - run: .venv/bin/python -m pytest -q
+        env:
+          HF_HUB_OFFLINE: "1"
+  pages:
+    runs-on: macos-14
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        dir: [ui, mobile]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+        working-directory: ${{ matrix.dir }}
+      - run: npm test
+        working-directory: ${{ matrix.dir }}

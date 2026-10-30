@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key><string>online.octolab.CallTapSpike</string>
+	<key>CFBundleName</key><string>CallTap spike</string>
+	<key>CFBundleExecutable</key><string>CallTap</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>0</string>
+	<key>CFBundleVersion</key><string>0</string>
+	<key>LSMinimumSystemVersion</key><string>14.4</string>
+	<key>LSUIElement</key><true/>
+	<key>NSAudioCaptureUsageDescription</key><string>Octo spike: record one app's sound to test call recording. Nothing leaves the Mac.</string>
+	<key>NSMicrophoneUsageDescription</key><string>Octo spike: record the mic beside the app's sound. Nothing leaves the Mac.</string>
+</dict>
+</plist>

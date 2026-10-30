@@ -1,0 +1,50 @@
+# Wi-Fi credentials
+secrets.h
+# The owner's filler model (B20): trained on their voice, copied in from the lab's data by `octo device flash`
+octo_filler_model.h
+
+# Recordings and anything derived from them -- never commit other people's voices
+audio/
+transcripts/
+notes/
+
+.venv/
+.node/
+.venv-*/
+__pycache__/
+.DS_Store
+
+# arduino-cli build output -- 03_wifi binaries contain the Wi-Fi password
+build/
+
+# bench: compiled firmware cache and run logs (runs may include local IPs, recordings metadata)
+.build/
+runs/
+
+# ui: dependencies and build output (bench serve hosts ui/dist; rebuild with npm run build)
+ui/node_modules/
+ui/dist/
+
+# conversation lab: database (transcripts, voiceprints later) -- never commit
+data/
+
+# the live copy's pointer to the lab's folder (octo/__init__.py), and anything that is a lab's data or a key
+# wherever it turns up (14 Oct)
+.octo-home
+.octo-deploying
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.npz
+*.key
+device.json
+recorder-decryption-key.txt
+mobile/ios/local.xcconfig
+
+# landing page: built from docs/landing/src with build.py
+docs/landing/dist/
+hardware/case/out/
+
+# a release's prebuilt recorder firmware (scripts/release.sh); never committed
+firmware/recorder/release/

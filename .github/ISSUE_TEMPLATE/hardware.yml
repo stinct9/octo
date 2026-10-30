@@ -1,0 +1,17 @@
+name: The recorder or its case
+description: Building, flashing, pairing or printing.
+labels: [hardware]
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Firmware
+      placeholder: e.g. rec-27 (shown on Setup → Hardware)
+  - type: textarea
+    attributes:
+      label: Boards, card and battery
+      placeholder: XIAO ESP32S3 Sense on the expansion board, 32 GB card, 603040 battery…

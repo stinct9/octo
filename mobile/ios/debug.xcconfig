@@ -1,0 +1,4 @@
+CAPACITOR_DEBUG = true
+
+// Your Apple team for signing (DEVELOPMENT_TEAM = ...), kept out of git: mobile/ios/local.xcconfig.
+#include? "local.xcconfig"

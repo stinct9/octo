@@ -1,0 +1,10 @@
+name: An idea
+description: Something Octo could do, or do better.
+labels: [idea]
+body:
+  - type: textarea
+    attributes:
+      label: What you're trying to do
+      description: The problem first, in your own words; then, if you have one, how Octo could help.
+    validations:
+      required: true
