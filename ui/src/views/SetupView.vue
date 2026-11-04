@@ -12,7 +12,7 @@ import type { PipelineStep } from '../lab/types'
 
 interface Profile { name?: string; pronoun?: string; about?: string; principles_from?: string; never?: string }
 interface Sections { principles: string; rules: string; parsed: { n: number; title: string }[]; file: string; examples?: { text: string; why: string }[] }
-interface Step { id: string; done: boolean; skipped?: boolean; optional?: boolean; why?: Check[]; do?: string; link?: string | null }
+interface Step { id: string; done: boolean; skipped?: boolean; optional?: boolean; why?: Check[]; do?: string; link?: string | null; note?: string | null }
 interface Setup { steps: Step[]; complete: boolean; empty?: boolean }
 interface Check { mark: '✓' | '!' | '✗'; what: string; detail: string; fix: string }
 interface Model { repo: string; state: 'ready' | 'downloading' | 'waiting' | 'needs_access' | 'failed'; gated: boolean; error: string | null; size_gb: number | null; have_gb: number | null }
@@ -390,7 +390,7 @@ onMounted(async () => {
           </div>
     </SetupStep>
 
-    <SetupStep :n="nOf('iphone')" title="The Octo app on your iPhone" :state="stateOf('iphone')" optional @skip="(on) => skip('iphone', on)">
+    <SetupStep :n="nOf('iphone')" title="The Octo app on your iPhone" :state="stateOf('iphone')" :note="step('iphone')?.note" optional @skip="(on) => skip('iphone', on)">
       <IphoneSetup @changed="loadSetup" />
     </SetupStep>
 
@@ -402,7 +402,7 @@ onMounted(async () => {
         <span class="mark" aria-hidden="true">✗</span><span><b>{{ c.what }}</b>: {{ c.detail }}<span class="fix">{{ c.fix }}</span></span></li></ul>
     </SetupStep>
 
-    <SetupStep :n="nOf('away')" title="Your lab away from home" :state="stateOf('away')" optional @skip="(on) => skip('away', on)">
+    <SetupStep :n="nOf('away')" title="Your lab away from home" :state="stateOf('away')" :note="step('away')?.note" optional @skip="(on) => skip('away', on)">
       <p class="muted">Tailscale is a free app that links your iPhone to this Mac privately when you're not on the same Wi-Fi.
         Only needed to see your lab when you're out.</p>
       <p v-if="step('away')?.do"><b>Next:</b> {{ step('away')?.do }}

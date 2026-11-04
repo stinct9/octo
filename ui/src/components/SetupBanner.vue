@@ -6,7 +6,8 @@ import { href } from '../lab/router'
 import { onMac } from '../lab/where'
 import FoldToggle from './FoldToggle.vue'
 
-interface Setup { steps: { id: string; done: boolean; skipped?: boolean }[]; complete: boolean }
+// A step's `note`: done, but its evidence went stale (the app stopped opening, Tailscale off): the card stays to say so.
+interface Setup { steps: { id: string; done: boolean; skipped?: boolean; note?: string | null }[]; complete: boolean }
 const LABELS: Record<string, string> = {
   mac: 'Finish what this Mac needs', models: 'Get the speech models', you: 'Say who you are', principles: 'Write your principles',
   model: 'Choose a model for reviews', iphone: 'Put the Octo app on your iPhone', pair: 'Connect the app to this Mac',
@@ -21,7 +22,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section v-if="setup && !setup.complete" class="card setup" aria-labelledby="setup-h">
+  <section v-if="setup && (!setup.complete || setup.steps.some((s) => s.note))" class="card setup" aria-labelledby="setup-h">
     <div class="head">
       <h2 id="setup-h">Set up Octo</h2>
       <span class="muted small">{{ setup.steps.filter((s) => s.done).length }} of {{ setup.steps.length }} done</span>
@@ -29,7 +30,8 @@ onMounted(() => {
     </div>
     <template v-if="open">
     <ol>
-      <li v-for="s in setup.steps" :key="s.id" :class="{ done: s.done || s.skipped }">{{ LABELS[s.id] ?? s.id }}</li>
+      <li v-for="s in setup.steps" :key="s.id"><span :class="{ done: s.done || s.skipped }">{{ LABELS[s.id] ?? s.id }}</span>
+        <span v-if="s.note" class="note small">{{ s.note }}</span></li>
     </ol>
     <div><a class="btn btn-primary btn-small" :href="href.setup">Continue setting up</a></div>
     </template>
@@ -41,7 +43,8 @@ onMounted(() => {
 .head { display: flex; align-items: baseline; gap: 12px; }
 h2 { margin: 0; font-size: 17px; font-weight: 600; flex: 1; }
 ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
-li.done { color: var(--muted); text-decoration: line-through; }
+.done { color: var(--muted); text-decoration: line-through; }
+.note { display: block; color: var(--warn); }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 </style>

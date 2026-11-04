@@ -351,3 +351,21 @@ def test_a_phone_reaching_the_lab_over_tailscale_is_kept(clients, tmp_path, monk
     st = mac.get("/api/octo/phone").json()
     assert st["devices"][0]["away_at"] > time.time() - 5
     assert st["away"]["step"] in ("install_mac", "open_mac")  # this test's Tailscale: none asked (conftest)
+
+
+def test_step_eight_is_done_once_reached_through_tailscale_and_says_when_that_way_is_off():
+    running = PH.tailscale_status(ask=lambda cli: (0, _status("Running")), exists=lambda p: True, ips=[])
+    stopped = PH.tailscale_status(ask=lambda cli: (0, _status("Stopped")), exists=lambda p: True, ips=[])
+    phone = [{"id": "dev_1", "paired_at": 100.0, "away_at": None}]
+    got = PH.away_setup(running, True, phone, None)
+    assert not got["done"] and got["do"].startswith("Try it")
+    reached = [{**phone[0], "away_at": 300.0}]
+    assert PH.away_setup(running, True, reached, None) == {"done": True, "do": None, "link": None, "note": None,
+                                                           "seen": 300.0}
+    # Reached through Tailscale before, Tailscale turned off now: still done, and the note says what to do.
+    off = PH.away_setup(stopped, True, reached, None)
+    assert off["done"] and off["note"].startswith("Not reachable away from home right now. Turn Tailscale on")
+    # The lab started at login can't ask Tailscale's command line; with no address it reads as not open.
+    unasked = PH.tailscale_status(ask=lambda cli: (1, ""), exists=lambda p: True, ips=[])
+    assert "Connect" in PH.away_setup(unasked, True, reached, None)["note"]
+    assert "Allow my phone" in PH.away_setup(running, False, reached, None)["note"]

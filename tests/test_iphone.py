@@ -125,3 +125,21 @@ def test_renewed_two_days_before_it_stops_opening_and_reminded_when_it_cant(mac,
     assert posted and "within a day" in posted[0] and len(started) == 2
     IP.renew(job, now + 2.6 * 86400)
     assert len(posted) == 1  # once a day
+
+
+def test_step_six_is_done_from_evidence_however_the_app_got_there():
+    now = 10 * 86400.0
+    assert IP.setup_step(None, [], now) == {"done": False, "note": None}
+    # Installed by hand from Xcode: the lab has no record of it, but the paired app reached the lab today.
+    by_hand = [{"id": "dev_1", "paired_at": now - 3 * 86400, "last_used_at": now - 3600}]
+    assert IP.setup_step(None, by_hand, now) == {"done": True, "note": None}
+    # Installed by the lab and opened once: done before it's even paired.
+    have = {"phone": "Her iPhone", "trusted": True, "expires": now + 5 * 86400}
+    assert IP.setup_step(have, [], now) == {"done": True, "note": None}
+    # Stale evidence stays ticked and says why, in plain words.
+    gone = IP.setup_step({**have, "expires": now - 86400}, [], now)
+    assert gone["done"] and "stopped opening" in gone["note"]
+    quiet = IP.setup_step(None, [{"id": "dev_1", "paired_at": 0.0, "last_used_at": 86400.0}], now)
+    assert quiet["done"] and "hasn't reached this lab since" in quiet["note"]
+    # An expired lab install, but the app (put on again by hand) reached the lab since: fresh.
+    assert IP.setup_step({**have, "expires": now - 86400}, by_hand, now)["note"] is None

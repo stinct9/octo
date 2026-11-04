@@ -66,7 +66,6 @@ def add(router: APIRouter, lab: Lab) -> None:
         if N._app_mode == "off":  # the Octo app says the owner turned its banners off: worth knowing, never blocking
             mac.append(DR.Check(DR.WARN, "Notifications", "turned off for Octo, so it can't tell you when a review is ready",
                                 "System Settings → Notifications → Octo → turn on Allow Notifications"))
-        have = IP.installed() or {}
         devices = PH.devices(conn)
         steps = [
             {"id": "mac", "done": not [c for c in mac if c.mark == DR.FAIL], "why": [c.__dict__ for c in mac]},
@@ -74,8 +73,7 @@ def add(router: APIRouter, lab: Lab) -> None:
             {"id": "you", "done": bool(O.load(conn).get("name"))},
             {"id": "principles", "done": bool(RB.sections()["parsed"])},
             {"id": "model", "done": ST.review_blocked(conn) is None},
-            {"id": "iphone", "done": bool(have.get("trusted") and (have.get("expires") or 0) > time.time()),
-             "optional": True},
+            {"id": "iphone", "optional": True, **IP.setup_step(IP.installed(), devices)},
             {"id": "pair", "done": bool(devices), "optional": True,
              "why": [c.__dict__ for c in DR.firewall(PH.enabled()) if c.mark == DR.FAIL]},  # the Mac refusing the phone
             {"id": "away", "optional": True, **away(devices)},
@@ -88,14 +86,13 @@ def add(router: APIRouter, lab: Lab) -> None:
                 "empty": row(conn, "SELECT 1 FROM recordings LIMIT 1") is None}
 
     def away(devices: list[dict]) -> dict:
-        """Away from home: done once the app has reached the lab over Tailscale; else the next single thing to do."""
+        """Away from home (`phone.away_setup`): done once the app has reached the lab over Tailscale; else the next thing."""
         from .. import phone as PH
         if not devices:  # it comes after pairing; and asking Tailscale takes about 2 s, so not before it's needed
-            return {"done": False, "do": None, "link": None}
+            return {"done": False, "do": None, "link": None, "note": None}
         if time.time() - _ts["at"] > 30:
             _ts.update(at=time.time(), status=PH.tailscale_status())
-        nxt = PH.away_step(_ts["status"], PH.enabled(), devices, PH._settings().get("ca_renewed_at"))
-        return {"done": nxt["step"] == "ready", "do": nxt["do"], "link": nxt["link"]}
+        return PH.away_setup(_ts["status"], PH.enabled(), devices, PH._settings().get("ca_renewed_at"))
 
     @router.post("/settings/setup/skip", dependencies=[Depends(same_origin)])
     def setup_skip(body: Skip) -> dict:

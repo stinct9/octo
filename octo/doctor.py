@@ -166,15 +166,15 @@ def lab(conn) -> list[Check]:
     from . import settings as ST
     out = []
     name = O.load(conn).get("name")
-    out.append(Check(OK if name else FAIL, "You", name or "not set", "" if name else f"{LAB}/#/setup, step 1"))
+    out.append(Check(OK if name else FAIL, "You", name or "not set", "" if name else f"{LAB}/#/setup, step 3"))
     n = len(RB.sections()["parsed"])
     out.append(Check(OK if n else FAIL, "Your principles", f"{n} in {RB.sections()['file']}" if n else "none written",
-                     "" if n else f"{LAB}/#/setup, step 2"))
+                     "" if n else f"{LAB}/#/setup, step 4"))
     blocked = ST.review_blocked(conn)
     choice = ST.selected(conn, ST.BY_STAGE["insight"])
     why = ST.unavailable(choice) if choice else None
     out.append(Check(FAIL if blocked or why else OK, "A model for reviews", choice.label if choice else "not chosen",
-                     f"{LAB}/#/setup, step 3" if blocked else (why or "")))
+                     f"{LAB}/#/setup, step 5" if blocked else (why or "")))
     if (ST.reader(conn) or {}).get("kind") == "claude-code":
         from .claude_code import status
         cc = status()
@@ -183,12 +183,14 @@ def lab(conn) -> list[Check]:
                          f"{cc['version']}, logged in{plan}" if not cc["fix"] else cc["version"] or "not found",
                          cc["fix"] or ""))
     from . import iphone as IP  # optional, like the recorder: the Setup page walks through it
+    from . import phone as PH
     have = IP.installed() or {}
+    app = IP.setup_step(have, PH.devices(conn))  # the Setup page's own rule, so both say the same
     left = (have.get("expires") or 0) - time.time()
-    out.append(Check(OK if left > 0 and have.get("trusted") else WARN, "The Octo app on your iPhone",
-                     f"on {have['phone']}, opens until " + time.strftime("%-d %b", time.localtime(have["expires"]))
-                     if left > 0 else "stopped opening: renewed when the iPhone is near this Mac" if have else "not yet",
-                     "" if left > 0 and have.get("trusted") else f"optional: {LAB}/#/setup, step 6"))
+    detail = (app["note"] or (f"on {have['phone']}, opens until " + time.strftime("%-d %b", time.localtime(have["expires"]))
+              if left > 0 and have.get("trusted") else "paired with this lab")) if app["done"] else "not yet"
+    out.append(Check(OK if app["done"] and not app["note"] else WARN, "The Octo app on your iPhone", detail,
+                     "" if app["done"] and not app["note"] else f"optional: {LAB}/#/setup, step 6"))
     me = conn.execute("SELECT 1 FROM people WHERE is_self=1").fetchone()
     out.append(Check(OK if me else WARN, "Your voice", "known" if me else "not yet",
                      "" if me else "add a conversation you're in and answer \"Is this you?\" on your speaker"))
@@ -308,10 +310,13 @@ def away(phone_on: bool, conn, ts=None) -> list[Check]:
     ts = PH.tailscale_status() if ts is None else ts
     devices = PH.devices(conn)
     nxt = PH.away_step(ts, phone_on, devices, PH._settings().get("ca_renewed_at"))
-    seen = max((d.get("away_at") or 0 for d in devices), default=0)
-    if nxt["step"] == "ready":
-        return [Check(OK, "Away from home (Tailscale)", f"{ts['ips'][0]}, last reached "
-                      + time.strftime("%-d %b %H:%M", time.localtime(seen)))]
+    got = PH.away_setup(ts, phone_on, devices, PH._settings().get("ca_renewed_at"))  # the Setup page's own rule
+    if got["done"]:
+        when = time.strftime("%-d %b %H:%M", time.localtime(got["seen"]))
+        if got["note"]:
+            return [Check(WARN, "Away from home (Tailscale)", f"reached {when}, not now",
+                          got["note"] + (f" ({got['link']})" if got["link"] else ""))]
+        return [Check(OK, "Away from home (Tailscale)", f"{ts['ips'][0]}, last reached {when}")]
     if nxt["step"] == "try_away":
         return [Check(OK, "Away from home (Tailscale)", f"{ts['ips'][0]}, not tried away yet")]
     return [Check(WARN, "Away from home (Tailscale)", "not set up" if nxt["step"] == "install_mac" else "not yet",

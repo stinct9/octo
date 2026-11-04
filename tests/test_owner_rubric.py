@@ -208,3 +208,16 @@ def test_only_a_new_lab_is_offered_the_example_principles(client, new_lab_files,
     got = client.get("/api/octo/settings/rubric").json()
     assert [e["text"] for e in got["examples"]] == ["Let others finish before I speak.", "Do what I said I would do."]
     assert got["principles"] == ""  # shown, never filled in
+
+
+def test_an_app_put_on_the_iphone_by_hand_counts_once_it_is_paired(client, tmp_path, monkeypatch):
+    from octo import iphone as IP
+    from octo import phone as PH
+    monkeypatch.setattr(PH, "DIR", tmp_path / "phone")
+    monkeypatch.setattr(IP, "INSTALLED", tmp_path / "iphone.json")  # the lab never installed it: from Xcode by hand
+    monkeypatch.setattr(PH, "tailscale_status", lambda: {"installed": False, "running": False, "ips": [], "phones": []})
+    steps = lambda: {s["id"]: s for s in client.get("/api/octo/settings/setup").json()["steps"]}
+    assert not steps()["iphone"]["done"]
+    PH.add_device(connect(tmp_path / "t.db"), "iPhone")
+    st = steps()
+    assert st["iphone"]["done"] and st["pair"]["done"] and not st["away"]["done"]

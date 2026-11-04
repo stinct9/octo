@@ -235,7 +235,9 @@ def away_step(ts: dict, enabled: bool, devices: list[dict], ca_renewed_at: float
         return step("install_mac", "Install Tailscale on this Mac from tailscale.com, open it and sign in. It's free "
                     "for personal use; sign in with Google, Apple, Microsoft or GitHub.", TAILSCALE_GET["mac"])
     if not ts.get("running"):
-        return step("open_mac", "Open Tailscale on this Mac (it's in Applications), so its icon shows in the menu bar.")
+        # Also what a launchd-started lab sees with the app open but disconnected (4 Nov): its CLI isn't answered then
+        return step("open_mac", "Open Tailscale on this Mac (it's in Applications) and turn it on: click its icon in the "
+                    "menu bar, then Connect.")
     if state in ("NeedsLogin", "NoState", "InUseOtherUser"):
         return step("sign_in", "Sign in to Tailscale on this Mac: click its icon in the menu bar, then Log in. Use the "
                     "account you'll use on your iPhone.")
@@ -262,6 +264,18 @@ def away_step(ts: dict, enabled: bool, devices: list[dict], ca_renewed_at: float
         return step("try_away", "Try it: on your iPhone, turn Wi-Fi off, check Tailscale is on, and open Lab in the "
                     "Octo app. This page shows when it got through.")
     return step("ready", "Ready: the Octo app reaches this Mac away from home, while the Mac is awake.")
+
+
+def away_setup(ts: dict, enabled: bool, devices: list[dict], ca_renewed_at: float | None) -> dict:
+    """Set up Octo's step 8, for the Setup page, home's card and `octo doctor` alike (Jay, 4 Nov): done once a paired
+    phone has reached the lab through Tailscale, and it stays done; while that way is off or broken now, `note` says
+    what to do rather than the tick going. Not yet done: `do` is the next single thing."""
+    nxt = away_step(ts, enabled, devices, ca_renewed_at)
+    seen = max((d.get("away_at") or 0 for d in devices), default=0)
+    if not seen:
+        return {"done": False, "do": nxt["do"], "link": nxt["link"], "note": None, "seen": None}
+    return {"done": True, "do": None, "link": nxt["link"] if nxt["step"] != "ready" else None, "seen": seen,
+            "note": None if nxt["step"] == "ready" else f"Not reachable away from home right now. {nxt['do']}"}
 
 
 _away_written: dict[str, float] = {}

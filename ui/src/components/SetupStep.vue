@@ -3,7 +3,8 @@
 // Done is the lab's check, never a box ticked here; optional steps can be skipped and taken back.
 import { ref, watch } from 'vue'
 
-const props = defineProps<{ n: number; title: string; state: 'done' | 'now' | 'later' | 'skipped'; optional?: boolean }>()
+// note: done, but what showed it went stale; shown folded too, so the tick never goes silently
+const props = defineProps<{ n: number; title: string; state: 'done' | 'now' | 'later' | 'skipped'; optional?: boolean; note?: string | null }>()
 const emit = defineEmits<{ skip: [boolean] }>()
 const open = ref(props.state === 'now')
 watch(() => props.state, (s) => { open.value = s === 'now' })
@@ -18,6 +19,7 @@ const label = { done: 'Done', now: 'Now', later: 'Later', skipped: 'Skipped' }
         <button v-if="state !== 'now'" type="button" class="btn btn-small link" :aria-expanded="open" @click="open = !open">
           {{ open ? 'Hide' : 'Show' }}</button></span>
     </div>
+    <p v-if="note" class="small note">{{ note }}</p>
     <template v-if="open">
       <slot />
       <div v-if="optional && state === 'now'" class="line"><button type="button" class="btn btn-small" @click="emit('skip', true)">Skip for now</button></div>
@@ -35,6 +37,7 @@ h2 { margin: 0; font-size: 17px; font-weight: 600; display: flex; align-items: c
 .small { font-size: 13px; }
 .tag { color: var(--muted); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .link { background: none; border: none; color: var(--accent); padding: 0 4px; }
+.note { margin: 0; color: var(--warn); }
 .line { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .is-now { border-color: var(--accent); }
 .is-done .n { color: var(--pass); border-color: var(--pass); }

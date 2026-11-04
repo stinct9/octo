@@ -328,3 +328,27 @@ def renew(job: Job, now: float | None = None) -> bool:
         return False
     INSTALLED.write_text(json.dumps({**have, "tried_at": now}))
     return job.start(device=have["device"], team=have["team"]["id"], bundle=have["app_id"])
+
+
+def _day(t: float) -> str:
+    return time.strftime("%-d %b", time.localtime(t))
+
+
+def setup_step(have: dict | None, devices: list[dict], now: float | None = None) -> dict:
+    """Set up Octo's step 6, for the Setup page, home's card and `octo doctor` alike (Jay, 4 Nov): done once there's
+    evidence the app is on the phone, however it got there: this lab installed it and it was opened, or a phone is
+    paired (only the app pairs: its QR code; the Safari code has had no button since phone v2), so an install from
+    Xcode by hand counts. Evidence that went stale stays ticked and says so in `note`."""
+    now = now or time.time()
+    lab = bool(have and have.get("trusted"))
+    used = max((d.get("last_used_at") or d.get("paired_at") or 0 for d in devices), default=0)
+    if not lab and not devices:
+        return {"done": False, "note": None}
+    expires = (have or {}).get("expires") or 0
+    if (lab and expires > now) or used > now - 7 * 86400:  # a free Apple ID's install opens for 7 days
+        return {"done": True, "note": None}
+    if lab and expires and expires >= used:
+        return {"done": True, "note": f"It stopped opening on {_day(expires)}: plug the iPhone into this Mac, or bring it "
+                                      "onto the same Wi-Fi, and Octo installs it again."}
+    return {"done": True, "note": f"The app hasn't reached this lab since {_day(used)}. If it no longer opens on your "
+                                  "iPhone, put it on again here."}
