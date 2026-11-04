@@ -69,7 +69,7 @@ def lines(segments: list[dict], a: float, b: float, unsure: bool) -> list[str]:
 
 SYSTEM = """You turn two automatic transcripts of the same recording into the best reading of what was said.
 
-The recording is a family or work conversation in Bengaluru, mostly Hindi with English words and
+The recording is a family or work conversation in India, mostly Hindi with English words and
 sentences mixed in. It was recorded across a room, so both transcripts are poor: words misheard as
 similar-sounding words, words dropped, and nonsense in noisy places. You cannot hear the audio; the
 two transcripts are all you have.
@@ -81,7 +81,7 @@ two transcripts are all you have.
 Write what was said in the TARGET stretch only; the lines around it are context.
 
 Rules:
-- Hindi in Devanagari, English words in Latin script, as people in Bengaluru would write it.
+- Hindi in Devanagari, English words in Latin script, as Indian speakers who mix Hindi and English would write it.
 - Prefer a reading at least one draft supports. You may correct a word to a similar-sounding one
   when the drafts and the context make it clear.
 - Never add content neither draft has. Where the drafts disagree and neither makes sense, or both

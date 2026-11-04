@@ -361,7 +361,7 @@ def test_the_review_on_any_model_is_checked_like_jays(monkeypatch):
     assert "principles she wrote herself from the Gita" in sent["system"]
     assert "Read the whole conversation first." in sent["system"]  # the owner's rules, as written
     assert "Sam's principles, in her words" in sent["prompt"]
-    assert "product manager" not in sent["system"] and "Bengaluru" not in sent["system"]
+    assert "product manager" not in sent["system"]
     # The same checks as the owner's review: an invented quote and a one-line "pattern" are dropped.
     assert [r["headline"] for r in out["reading"]] == ["Sets standards from examples"]
     assert [b["headline"] for b in out["between"]] == ["The disagreement stayed open"]

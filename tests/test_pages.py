@@ -36,7 +36,7 @@ def test_about_is_the_landing_page_built_now(client):
     # three principles shown, their titles straight from the rubric; never the full text, its sources or
     # its author (9 Oct: the page is public-facing)
     assert page.count('<ol class="featured">') == 1 and page.count("<q>") >= 3
-    for word in ("Sam", "Bengaluru", "principle-1"):
+    for word in ("Sam", "principle-1"):
         assert word not in page, word
     # the words that must never be public (public-copy.json, which the public copy itself doesn't carry)
     config = Path(__file__).resolve().parents[1] / "public-copy.json"

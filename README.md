@@ -25,22 +25,38 @@ your Mac, and when: [PRIVACY.md](PRIVACY.md).
 
 ## Install
 
-You need an Apple Silicon Mac (M1 or later) with 16 GB of memory, macOS 14 or later and about 20 GB free, a free
-Hugging Face account, and a model for the reviews (Claude Code with your Claude plan, your own API key, or a model on
-your Mac). Nothing else first:
-the installer gets Python, and Node if the Mac has none. In Terminal:
+**What you need:** a Mac with Apple's M chip (M1 or later, 2020 on), 16 GB of memory, macOS 14 or later and about
+20 GB free (35 GB with the iPhone app). Set aside an hour; most of it is downloads you can leave running.
 
-```bash
-git clone https://github.com/stinct9/octo.git ~/Octo
-~/Octo/install.sh
-```
+1. Open **Terminal**: press ⌘ Space, type `Terminal`, press Return.
+2. Paste this line and press Return:
 
-It starts the lab when you log in, builds the **Octo** app and opens **Set up Octo**, which walks you through the
-rest while the speech models (about 10 GB) download. Details, updating and uninstalling:
-[docs/install.md](docs/install.md).
+   ```bash
+   curl -fsSL https://github.com/stinct9/octo/releases/latest/download/install.sh | bash
+   ```
 
-**The iPhone app**, built with your own Xcode and Apple ID (a free one works; the install lasts 7 days): plug the
-phone in, then `~/Octo/.venv/bin/octo phone install`. Steps: [mobile/README.md](mobile/README.md). The recorder's
+   It downloads the latest ready-built release (nothing to build: no git, no Node) and installs it.
+3. If a window from Apple asks to install "command line developer tools", click **Install**, then **Agree**. Terminal
+   waits for it.
+4. When Terminal says it's done, the **Octo** app opens on **Set up Octo**. You can close Terminal. Follow the page
+   from top to bottom; it tells you what to do at each step and checks it worked:
+   1. **This Mac**: checked for you.
+   2. **Speech models** (about 10 GB, downloading while you carry on): a free [Hugging Face](https://huggingface.co)
+      account, a token you paste, and two models' conditions to accept. The page shows where to click.
+   3. **You**: your name.
+   4. **Your principles**, in your own words. Octo never writes them; two examples are there if you want to start
+      from one.
+   5. **A model for reviews**: Claude Code on your own Claude Pro or Max plan (the page gives the two lines to paste),
+      or an API key (Anthropic's, billed per use, or any OpenAI-compatible service), or a model on your Mac.
+   6. **The iPhone app** (optional): Xcode from the App Store and your Apple ID (a free one works).
+   7. **Connect the app to this Mac** and **your lab away from home** (both optional).
+   8. **Your voice**: confirm yourself in your first conversation.
+
+**Updates:** when there's a new release, the octopus in the menu bar says **Octo update ready**. Click it; your
+conversations and settings are kept.
+
+More detail (what each step needs, updating, uninstalling, installing from a git clone to change the code):
+[docs/install.md](docs/install.md). The iPhone app by hand: [mobile/README.md](mobile/README.md). The recorder's
 Bluetooth: [docs/recorder-ble.md](docs/recorder-ble.md).
 
 ## In this repository

@@ -25,7 +25,7 @@ export function when(unix: number | null, now = new Date()): string {
   return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}${year}, ${time}`
 }
 
-/** Today as YYYY-MM-DD in local time (toISOString is UTC: wrong before 05:30 in Bengaluru). */
+/** Today as YYYY-MM-DD in local time (toISOString is UTC: wrong before 05:30 at UTC+5:30, for one). */
 export function today(now = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }

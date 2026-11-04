@@ -25,19 +25,19 @@ that leaves is a conversation's text when it's reviewed, sent to the model you c
 
 ## Install
 
-1. Run the one-line installer in Terminal:
+1. Run the one-line installer in Terminal (⌘ Space, `Terminal`, Return):
 
    ```bash
-   curl -fsSL https://octolab.online/install.sh | bash
+   curl -fsSL https://github.com/stinct9/octo/releases/latest/download/install.sh | bash
    ```
 
-   It downloads a release (the code with its pages built) into `~/Library/Application Support/octo/app`,
-   keeps what the lab records beside it in `lab.noindex` (only you can open it), and runs `install.sh` there.
-   The script is readable at that address first, if you'd rather look before you run it.
+   It downloads the latest release from GitHub (the code with its pages built) into
+   `~/Library/Application Support/octo/app`, keeps what the lab records beside it in `lab.noindex` (only you can open
+   it), and runs `install.sh` there. The script is readable at that address first, if you'd rather look before you run
+   it. Updates then come from GitHub's latest release: **Octo update ready** in the octopus menu.
 
-   **In the beta** no release is published at that address yet (the installer says so and stops): paste the line you
-   were sent instead, the same installer pointing at the beta's release (docs/beta-tester.md). Updates then come from
-   there: **Octo update ready** in the octopus menu.
+   **Beta testers** paste the line they were sent instead: the same installer pointing at the beta's release, and
+   updates come from there.
 
    **From a git clone instead** (to change the code): `git clone <the repository's URL> ~/Octo && ~/Octo/install.sh`.
    A clone has no built pages: the installer builds them with the Mac's Node, or fetches a pinned Node (27 MB, checked

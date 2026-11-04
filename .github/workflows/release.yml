@@ -1,0 +1,42 @@
+# A ready-built release on every push to main: scripts/release_files.sh (the same build beta testers get) makes
+# octo.tar.gz (its pages built: no git or Node needed), install.sh and version.txt, and they go up as a GitHub Release.
+# Anyone installs with
+#   curl -fsSL https://github.com/<owner>/<repo>/releases/latest/download/install.sh | bash
+# and their lab offers "Octo update ready" when releases/latest/download/version.txt differs from theirs. A push that
+# changes nothing makes no release. A push to release-check makes a draft instead, to try this without publishing.
+# Only this repository's own token: no secrets.
+name: release
+on:
+  push:
+    branches: [main, release-check]
+permissions:
+  contents: write
+concurrency: release
+jobs:
+  release:
+    runs-on: macos-15  # release.sh is BSD tar and the Mac's tools
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: https://github.com/${{ github.repository }}/releases/latest/download
+        run: |
+          version="$(scripts/release_files.sh .)"
+          tag="octo-$version"
+          # A published release with this tag means nothing changed (a draft doesn't count: it has no tag).
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" >/dev/null 2>&1; then echo "$tag is out already."; exit 0; fi
+          scripts/release_files.sh . "$RUNNER_TEMP/release" "$URL/octo.tar.gz"
+          draft=""
+          [ "$GITHUB_REF" = refs/heads/main ] || draft=--draft
+          gh release create "$tag" $draft --target "$GITHUB_SHA" --title "Octo, $(date -u +'%-d %b %Y') ($version)" \
+            --notes "Install on an Apple Silicon Mac: open Terminal and paste
+          \`\`\`
+          curl -fsSL $URL/install.sh | bash
+          \`\`\`
+          Step by step: the README. A lab installed this way offers this update itself (Octo update ready)." \
+            "$RUNNER_TEMP/release/octo.tar.gz" "$RUNNER_TEMP/release/install.sh" "$RUNNER_TEMP/release/version.txt"

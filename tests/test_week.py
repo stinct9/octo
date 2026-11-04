@@ -19,8 +19,8 @@ from test_coach import _conv, _lab, mark
 
 
 @pytest.fixture(autouse=True)
-def bengaluru(monkeypatch):
-    """Local time is the lab's: IST, where a Monday starts 5½ hours before UTC's."""
+def local_time(monkeypatch):
+    """Local time is the lab's: here UTC+5:30, where a Monday starts 5½ hours before UTC's."""
     monkeypatch.setenv("TZ", "Asia/Kolkata")
     time.tzset()
     yield
