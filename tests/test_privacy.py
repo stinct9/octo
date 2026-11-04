@@ -104,7 +104,7 @@ def test_old_raw_audio_goes_after_the_retention_period_and_is_never_re_listened_
     assert P.plan(conn) == []  # nothing that needs the audio is queued for it
 
 
-# ---- B29: a lab that keeps its recordings (Jay, 23 Oct) --------------------------------------
+# ---- B29: a lab that keeps its recordings (23 Oct) --------------------------------------
 
 def test_a_lab_that_keeps_recordings_keeps_them_past_60_days_and_still_sweeps_the_rest(lab, monkeypatch):
     from octo import labconfig as LC
@@ -138,7 +138,7 @@ def _diarized_with_nisha(conn):
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, output, queued_at) "
                  "VALUES ('dz_s2', 'diarize', 's2', 'h', 'done', 1, ?, 0)",
                  (json.dumps({"lines": lines, "speakers": ["A", "B"], "talk_s": {"A": 2.0, "B": 3.0}, "turns": []}),))
-    conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES ('me', 'Jay', 1, 0)")
+    conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES ('me', 'Sam', 1, 0)")
     conn.execute("INSERT INTO session_speakers (session_id, speaker, person_id, state, diarize_run) VALUES "
                  "('s2', 'A', 'me', 'confirmed', 'dz_s2'), ('s2', 'B', 'g', 'confirmed', 'dz_s2')")
 

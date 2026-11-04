@@ -58,11 +58,11 @@ def test_two_speakers_confirmed_as_one_person_become_one(tmp_path):
     conn = connect(tmp_path / "t.db")
     conn.execute("INSERT INTO recordings (id, source, path, duration_s, created_at) VALUES ('r1', 'phone', 'x', 9, 0)")
     conn.execute("INSERT INTO sessions (id, recording_id, start_s, end_s, speech_s, created_at) VALUES ('s1', 'r1', 0, 9, 5, 0)")
-    for pid in ("jay", "nisha"):
-        conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES (?, ?, ?, 0)", (pid, pid, int(pid == "jay")))
+    for pid in ("sam", "nisha"):
+        conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES (?, ?, ?, 0)", (pid, pid, int(pid == "sam")))
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, upstream, params, output, queued_at) "
                  "VALUES ('dz', 'diarize', 's1', 'h', 'done', 1, '[]', '{}', ?, 0)", (json.dumps(DZ),))
-    people = {"A": "jay", "B": "jay", "C": "nisha"}  # pyannote split the owner into A and B
+    people = {"A": "sam", "B": "sam", "C": "nisha"}  # pyannote split the owner into A and B
     for letter, person in people.items():
         conn.execute("INSERT INTO session_speakers (session_id, speaker, person_id, state, diarize_run) "
                      "VALUES ('s1', ?, ?, 'confirmed', 'dz')", (letter, person))

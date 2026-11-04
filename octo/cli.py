@@ -31,6 +31,7 @@
                                         (waits for running steps unless --now; octo/deploy.py)
   octo ticktick setup [--list NAME]     connect TickTick with your personal API token ("What to do" → TickTick)
   octo ticktick status                  whether it's connected, and to which list
+  octo invite setup|status|remove       the Gmail account that sends beta invitations (Settings → Invite a tester)
   octo doctor [--json]                  is this Mac ready to run the lab, and what to do if not
   octo open [PAGE]                      open the lab in this Mac's browser, letting the browser in once (the Mac's key)
   octo beta results [--out FILE]        the beta's results: counts only, no names or text (read it before sending)
@@ -149,6 +150,33 @@ def render_insights(out: dict) -> list[str]:
         for b in out["beneath"]:
             lines.append(f"- {b['question']} (" + ", ".join(f"`{clock(q['start'])}`" for q in b["quotes"]) + ")")
     return lines
+
+
+def invite_command(args) -> int:
+    """The app password and the install line are typed here (hidden) and kept in data/ only: the page never has them,
+    and Settings shows Invite a tester only once they're kept."""
+    import getpass
+    from . import invite as IV
+    if args.action == "status":
+        st = IV.status()
+        print(f"sends from {st['from']}; {len(st['sent'])} invited" if st["ready"] else "not set up: octo invite setup")
+        return 0
+    if args.action == "remove":
+        IV.remove()
+        print("Removed (revoke the app password in the Google account too)")
+        return 0
+    print("The Gmail account invitations come from needs an app password: in that Google account, Security →")
+    print("2-Step Verification (turn it on) → App passwords → make one named Octo. Leave a line blank to keep what's kept.")
+    try:
+        st = IV.setup(input("Sign in as (the Gmail address): "), getpass.getpass("App password (hidden): "),
+                      getpass.getpass("The install line testers paste, from beta_release.sh (hidden): "),
+                      input("Send as (an alias in that Gmail's Settings → Accounts → Send mail as; blank: "
+                            f"{IV.load().get('as') or 'the same address'}): "))
+    except IV.InviteError as e:
+        print(e)
+        return 1
+    print(f"Gmail accepted it. Settings → Invite a tester now sends from {st['from']}. Kept in {IV.CONFIG} (only you can read it).")
+    return 0
 
 
 def ticktick_command(args) -> int:
@@ -610,6 +638,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("ticktick")
     p.add_argument("action", choices=["setup", "status", "remove"])
     p.add_argument("--list", help="setup: the TickTick list for tasks (default: Inbox)")
+    p = sub.add_parser("invite", help="the Gmail account that sends beta invitations")
+    p.add_argument("action", choices=["setup", "status", "remove"])
     p = sub.add_parser("beta", help="the beta's results file: counts only")
     p.add_argument("action", choices=["results"])
     p.add_argument("--out", type=Path)
@@ -862,6 +892,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "ticktick":
         return ticktick_command(args)
 
+    if args.cmd == "invite":
+        return invite_command(args)
+
     if args.cmd == "login-item":
         from . import login_item as L
         if args.action == "status":
@@ -993,7 +1026,7 @@ def compare(conn, args) -> int:
     if secrets.randbelow(2):
         models.reverse()
     names = {s["speaker"]: s["name"] for s in speakers}
-    jay = {s["speaker"] for s in speakers if s["self"]}
+    me = {s["speaker"] for s in speakers if s["self"]}
     from .owner import load
     params = {"min_jay_speech_s": 20.0, "max_ctx": 32768, "owner": load(conn)}  # who a Claude review is about
     doc = [f"# Blind comparison: {args.session}", "",
@@ -1001,7 +1034,7 @@ def compare(conn, args) -> int:
            f"Then: `octo compare {args.session} --reveal`.", ""]
     for label, model in zip("AB", models):
         print(f"model {label}…", flush=True)
-        out = I.run(load_json(dz["output"]), names, jay, {**params, "model": model},
+        out = I.run(load_json(dz["output"]), names, me, {**params, "model": model},
                     on_progress=lambda m: print(f"  {m}", flush=True))
         doc += ["", f"## Model {label}", f"_{clock(out['seconds'])}_"] + render_insights(out)
     NOTES.mkdir(exist_ok=True)

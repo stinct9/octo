@@ -73,6 +73,61 @@ def test_the_list_says_why_and_that_it_will_try_again(lab):  # noqa: F811
     assert t["kind"] == "failed" and t["auto_retry"] and t["hint"].startswith("Claude's usage limit was reached · tries again after")
 
 
+
+def test_the_weekly_limit_is_a_limit_and_its_date_is_read():
+    weekly = "Claude Code: You've hit your weekly limit · resets Nov 3 at 2:30am (Asia/Calcutta)"  # 31 Oct
+    assert P.limit_reset(weekly, ist(16, 34, day=31)) == datetime(2026, 11, 3, 2, 31, tzinfo=IST).timestamp()
+    assert P.limit_reset("You've hit your weekly limit · resets Jan 2 at 9am (Asia/Calcutta)", ist(9, day=31)) \
+        == datetime(2027, 1, 2, 9, 1, tzinfo=IST).timestamp()  # past this year's: next year's
+    assert P.limit_reset("You've hit your weekly limit · resets Feb 31 at 9am", ist(9)) == ist(10)  # no such day: an hour
+
+
+# ---- 4 Nov: Claude Code signed out on the Mac --------------------------------------------------
+
+SIGNED_OUT = ("RuntimeError: Claude Code: Failed to authenticate: OAuth session expired and could not be refreshed "
+              "-- run `claude` in a terminal and log in with /login")  # as 3 Nov's were kept
+
+
+def test_signed_out_is_not_an_attempt_and_holds_claude_steps_until_signed_in(tmp_path, monkeypatch):
+    conn = connect(tmp_path / "q.db")
+    signed = {"in": False}
+    monkeypatch.setattr(P, "signed_in", lambda now=None: signed["in"])
+    claude = json.dumps({"model": "claude-opus-5-5"})
+    for i, at in enumerate((ist(1), ist(2), ist(3), ist(4))):
+        _failed(conn, f"f{i}", "insight", "s1", at, error=SIGNED_OUT, params=claude)
+    assert P.due_at(conn, "insight", "s1", "h") < float("inf")  # never given up: Try again couldn't fix it
+    assert P.claude_signed_out(conn, ist(5)) == ist(4)
+    assert P.claude_waits(conn, ist(5)) == P.SIGN_IN
+    assert P.next_due(conn, now=ist(5)) == ist(5) + P.SIGN_IN_CHECK_S  # the server looks again soon
+    conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, params, queued_at) "
+                 "VALUES ('review', 'insight', 's2', 'q', 'queued', ?, 1)", (claude,))
+    conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, params, queued_at) "
+                 "VALUES ('voices', 'identify', 's2', 'q', 'queued', '{}', 1)")
+    assert P.next_run(conn, now=ist(5))["id"] == "voices"  # no new failures piling up: it waits, the rest carry on
+    signed["in"] = True
+    assert P.claude_signed_out(conn, ist(5)) is None and P.claude_waits(conn, ist(5)) is None
+    assert P.next_run(conn, now=ist(5))["id"] == "review"  # signed in: it goes by itself
+    # A local review failing tells nothing about Claude Code; a later Claude review that worked ends it too.
+    signed["in"] = False
+    conn.execute("UPDATE stage_runs SET status='done', finished_at=? WHERE id='review'", (ist(6),))
+    assert P.claude_signed_out(conn, ist(7)) is None
+
+
+def test_the_list_says_to_sign_in_and_the_mac_is_told_once(lab):  # noqa: F811
+    from octo import notify as N
+    conn = lab["conn"]
+    lab["mp"].setattr(P, "signed_in", lambda now=None: False)
+    P.add_recording(conn, lab["wav"], "bench")
+    lab["run"]()
+    sid = rows(conn, "SELECT id FROM sessions ORDER BY start_s")[0]["id"]
+    _failed(conn, "f1", "insight", sid, time.time(), error=SIGNED_OUT, params=json.dumps({"model": "claude-opus-5-5"}))
+    t = SV.todo(conn, sid)
+    assert t["kind"] == "failed" and t["auto_retry"] and t["hint"] == P.SIGN_IN
+    keys = N.waiting(conn)
+    assert any(k.startswith("signin:") for k in keys) and not any(k.startswith("failed:") for k in keys)
+    assert N.message(keys).startswith("Claude Code is signed out")
+    assert N.menu(keys)[0]["text"] == "Claude Code is signed out: reviews wait"
+
 # ---- M10: a Claude review goes first ---------------------------------------------------------
 
 def test_a_claude_review_runs_before_queued_transcription_but_a_local_one_waits(tmp_path):

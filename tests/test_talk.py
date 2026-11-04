@@ -149,7 +149,7 @@ def test_replies_still_count_in_the_day_once_their_thread_is_gone(lab):  # audit
     assert P.claude_calls_since(lab.conn, today) == before
 
 
-def test_its_effort_is_a_setting(lab):  # Jay 29 Oct: high took a minute or two
+def test_its_effort_is_a_setting(lab):  # 29 Oct: high took a minute or two
     c = lab.client
     assert c.get("/api/octo/settings/talk").json() == {"effort": "medium", "efforts": ["low", "medium", "high"]}
     assert c.post("/api/octo/settings/talk", json={"effort": "max"}).status_code == 422

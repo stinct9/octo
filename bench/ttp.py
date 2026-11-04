@@ -122,7 +122,7 @@ def run() -> None:
         out, mine, _, tr = FL.load(conn, m["id"])
         lines = [ln for ln in out["lines"] if ln["speaker"] in mine]
         words = [w for seg in tr["segments"] for w in seg.get("words") or []]
-        name = "Jay"
+        name = "You"
         f = OUT / f"{m['id']}.json"
         cached = json.loads(f.read_text()) if f.exists() else None
         prompt = transcript(lines, {k: name for k in mine})

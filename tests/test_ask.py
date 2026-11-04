@@ -28,7 +28,7 @@ def model(monkeypatch):
 def _lab(tmp_path):
     from octo.db import connect
     conn = connect(tmp_path / "t.db")
-    conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES ('me', 'Jay', 1, 0), ('ravi', 'Ravi Kumar', 0, 0), "
+    conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES ('me', 'Sam', 1, 0), ('ravi', 'Ravi Kumar', 0, 0), "
                  "('priya', 'Priya', 0, 0)")
     _conv(conn, "ses_ravi", NOW - 3 * DAY, [L(0, "A", 0, "How are things?"), L(1, "B", 4, "Honestly my plate is too full."),
                                             L(2, "A", 9, "Let's look at it."), L(3, "B", 12, "The deadlines keep moving.")],

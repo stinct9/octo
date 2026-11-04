@@ -39,7 +39,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => ro?.disconnect())
 
-// Once the lab answers, its own header is the only one (Jay, 22 Oct): this one, and its pill, show only until then
+// Once the lab answers, its own header is the only one (22 Oct): this one, and its pill, show only until then
 // or when something's wrong. Pull down on the lab's page to reload it.
 const pill = computed(() => {
   if (s.phase === 'reaching') return { cls: 'trying', text: 'Reaching your Mac…' }

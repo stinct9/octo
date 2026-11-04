@@ -1,4 +1,4 @@
-"""What Settings and `octo doctor` show for Claude Code on this Mac (Jay, 31 Oct): found, version, logged in, and the
+"""What Settings and `octo doctor` show for Claude Code on this Mac (31 Oct): found, version, logged in, and the
 command that fixes each. A fake `claude` script stands in; nothing reaches Claude."""
 
 import json

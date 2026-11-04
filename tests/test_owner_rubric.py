@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from octo import labconfig as LC
+from octo import models as MD
 from octo import insight as I
 from octo import owner as O
 from octo import review_any as RA
@@ -132,7 +133,7 @@ def test_a_new_lab_is_walked_through_setup(client, new_lab_files, monkeypatch):
 
 def test_jays_lab_is_the_first_lab(tmp_path, client):
     conn = connect(tmp_path / "t.db")
-    conn.execute("""INSERT OR REPLACE INTO app_config (key, value, updated_at) VALUES ('lab_origin', '"jay"', 0)""")  # as migrated: it had reviews before 7 Oct (octo/labconfig.py)
+    conn.execute("""INSERT OR REPLACE INTO app_config (key, value, updated_at) VALUES ('lab_origin', '"first"', 0)""")  # as migrated: it had reviews before 7 Oct (octo/labconfig.py)
     assert client.get("/api/octo/progress").json()["first_lab"] is True  # no tester's card in the owner's own lab
 
 
@@ -186,3 +187,24 @@ def test_principles_as_people_paste_them_and_the_preview_agrees_with_the_save(ne
     assert [(p["n"], p["text"]) for p in I.principles(RB.text())] == [(p["n"], p["text"]) for p in shown]
     assert "### At work" in out["principles"] and I.review_rules(RB.text()) == "### Look closely."
 
+
+
+def test_once_every_gated_model_is_accepted_checking_starts_the_download(client, monkeypatch):
+    started = []
+    monkeypatch.setattr(MD.Fetcher, "start", lambda self: started.append(1) or True)
+    answers = iter([{"name": "sam", "access": {"pyannote/a": "ok", "pyannote/b": "accept"}},
+                    {"name": "sam", "access": {"pyannote/a": "ok", "pyannote/b": "ok"}}, {"name": None}])
+    monkeypatch.setattr(MD, "account", lambda token="": next(answers))
+    for _ in range(3):
+        client.get("/api/octo/settings/huggingface")
+    assert started == [1]  # only the check where both were accepted
+
+
+def test_only_a_new_lab_is_offered_the_example_principles(client, new_lab_files, monkeypatch):
+    # 31 Oct: two examples, used only when the owner taps Use this; the first lab never sees them.
+    monkeypatch.setattr(LC, "origin", lambda conn: LC.FIRST)
+    assert "examples" not in client.get("/api/octo/settings/rubric").json()
+    monkeypatch.setattr(LC, "origin", lambda conn: LC.PRODUCT)
+    got = client.get("/api/octo/settings/rubric").json()
+    assert [e["text"] for e in got["examples"]] == ["Let others finish before I speak.", "Do what I said I would do."]
+    assert got["principles"] == ""  # shown, never filled in

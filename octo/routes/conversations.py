@@ -15,6 +15,7 @@ from .. import aside as AS
 from .. import audio as A
 from .. import review as R
 from .. import parts as PT
+from .. import pipeline as P
 from .. import sessions as SV
 from .. import settings as ST
 from ..db import row, rows
@@ -132,7 +133,7 @@ def add(router: APIRouter, lab: Lab) -> None:
         out["drills"] = drill_line(conn)  # B18: its own line, never in the counts above
         # A buyer's lab shows the beta's card; the first lab is the owner's own, not a tester's.
         from .. import labconfig
-        out["first_lab"] = labconfig.origin(conn) == labconfig.JAY
+        out["first_lab"] = labconfig.origin(conn) == labconfig.FIRST
         return out
 
     @router.post("/recordings", dependencies=[Depends(upload_origin)])
@@ -167,7 +168,7 @@ def add(router: APIRouter, lab: Lab) -> None:
         for rec in rows(conn, "SELECT * FROM recordings WHERE created_at > ? ORDER BY created_at DESC", time.time() - 3 * 86400):
             active = row(conn, "SELECT count(*) n FROM sessions WHERE recording_id=? AND status='active'", rec["id"])["n"]
             dropped = rows(conn, "SELECT id, start_s, end_s, note FROM sessions WHERE recording_id=? AND status='discarded' "
-                                 "AND note LIKE 'Jay''s voice not heard%'", rec["id"])
+                                 "AND note LIKE 'Your voice not heard%'", rec["id"])
             fc = current(conn, rec["id"], "find_conversations")
             pending = row(conn, "SELECT status FROM stage_runs WHERE target=? AND status IN ('queued','running')", rec["id"])
             if pending or not fc:
@@ -202,4 +203,5 @@ def add(router: APIRouter, lab: Lab) -> None:
                 "code_changed": code_changed(), "free_gb": free_gb(), "cant_save": None,
                 "queue_empty_at": E.cached(conn)["queue_empty_at"] if (running or queued) else None,
                 "queue_steps": E.cached(conn)["steps"] if (running or queued) else 0,  # with the ones still to be queued
-                "privacy": ST.privacy(conn)}  # what the privacy line on Conversations names (22 Oct)
+                "privacy": ST.privacy(conn),  # what the privacy line on Conversations names (22 Oct)
+                "claude_signed_out": P.claude_signed_out(conn) is not None}  # reviews wait for a sign-in (4 Nov)

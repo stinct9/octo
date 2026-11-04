@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from .. import labconfig as LC
 from .. import settings as ST
 from .common import Lab, same_origin
 
@@ -39,6 +40,11 @@ class OwnerBody(BaseModel):  # who the reviews and the coach are about (octo/own
 class RubricBody(BaseModel):  # the owner's principles and how the review applies them, as typed (octo/rubric.py)
     principles: str
     rules: str = ""
+
+
+class Invite(BaseModel):
+    name: str
+    email: str
 
 
 class TickTickToken(BaseModel):
@@ -92,7 +98,7 @@ def add(router: APIRouter, lab: Lab) -> None:
         from .. import providers as PV
         conn = db()
         sel = ST.selected(conn, ST.BY_STAGE["insight"])
-        # Claude Code on this Mac, apart from the keys (Jay, 31 Oct): found, version, logged in, and what fixes each.
+        # Claude Code on this Mac, apart from the keys (31 Oct): found, version, logged in, and what fixes each.
         return {"connections": PV.listing(), "claude_code": {**CC.status(), "in_use": bool(sel and sel.claude)},
                 "claude_models": [{"id": k, "label": v["label"], "price": v["price"], "why": v["why"]}
                                   for k, v in PV.CLAUDE_MODELS.items()],
@@ -155,10 +161,33 @@ def add(router: APIRouter, lab: Lab) -> None:
             processor.kick()
         return {"profile": profile, "pronouns": list(O.PRONOUNS)}
 
+    # Invite a tester (octo/invite.py): only in a lab whose owner kept a sending account with `octo invite setup`.
+    @router.get("/settings/invite")
+    def invite_status() -> dict:
+        from .. import invite as IV
+        st = IV.status()
+        if not st["ready"]:
+            raise HTTPException(404, "not set up")
+        return st
+
+    @router.post("/settings/invite", dependencies=[Depends(same_origin)])
+    def invite_send(body: Invite) -> dict:
+        from .. import invite as IV
+        from .. import owner as O
+        if not IV.status()["ready"]:
+            raise HTTPException(404, "not set up")
+        try:
+            return IV.send(body.name, body.email, signed=O.load(db()).get("name", ""))
+        except IV.InviteError as e:
+            raise HTTPException(400, str(e)) from None
+
     @router.get("/settings/rubric")
     def rubric_get() -> dict:
         from .. import rubric as RB
-        return RB.sections()
+        out = RB.sections()
+        if LC.origin(db()) != LC.FIRST:  # 31 Oct: a new lab may start from two examples; the first lab never sees them
+            out["examples"] = [{"text": t, "why": w} for t, w in RB.EXAMPLES]
+        return out
 
     @router.post("/settings/rubric/preview", dependencies=[Depends(same_origin)])
     def rubric_preview(body: RubricBody) -> list[dict]:

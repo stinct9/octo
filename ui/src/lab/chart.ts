@@ -46,9 +46,17 @@ export function nearest(xs: number[], x: number): number {
   return best
 }
 
-/** A dot's radius by the owner's words in it: area grows with words, 4 to 9 px (dots stay >= 8 px across). */
-export function radius(words: number, full = 1500): number {
-  return 4 + 5 * Math.sqrt(Math.min(words, full) / full)
+/** Local Mondays from the first day to the last, every 1, 2, 4… weeks to fit `max` labels; days under two weeks. */
+export function weekTicks(from: number, to: number, max: number): number[] {
+  const d = new Date(from * 1000)
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + ((8 - d.getDay()) % 7))  // the first Monday on or after the start
+  const mondays: number[] = []
+  for (; d.getTime() / 1000 <= to; d.setDate(d.getDate() + 7)) mondays.push(d.getTime() / 1000)
+  if (mondays.length < 2) return dayTicks(from, to, max)
+  let every = 1
+  while (Math.ceil(mondays.length / every) > Math.max(1, max)) every *= 2
+  return mondays.filter((_, i) => i % every === 0)
 }
 
 /** The band as one closed path: along the top, back along the bottom. */

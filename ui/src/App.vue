@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { lab, LET_IN, working, type LetIn } from './lab/api'
 import { href, route } from './lab/router'
+import { scrollPlaces } from './lab/scroll'
 import { onMac } from './lab/where'
 import DeviceChip from './components/DeviceChip.vue'
 import BenchView from './views/BenchView.vue'
@@ -42,7 +43,7 @@ const tabs = [
   { name: 'progress', label: 'Progress', href: href.progress },
 ]
 // The Mac-only tools, used rarely, sit under one menu so the bar holds what's used daily; the builder's tools under a
-// Hardware line, and About Octo last (Jay, 22 Oct). On a phone there's no menu: About Octo is at the foot of Conversations.
+// Hardware line, and About Octo last (22 Oct). On a phone there's no menu: About Octo is at the foot of Conversations.
 interface MenuItem { name: string; label: string; hint: string; href: string; external?: boolean; line?: string }
 const setup: MenuItem[] = onMac ? [
   { name: 'setup', label: 'Set up Octo', hint: 'Who the reviews are about, your principles, the model', href: href.setup },
@@ -71,13 +72,33 @@ watch(() => route.current, () => { setupOpen.value = false })
 const restart = ref(false)
 const cantSave = ref<string | null>(null)  // the lab can't save to its folder (octo/watchdog.py, 13 Oct)
 const freeGb = ref<number | null>(null)
-// A page opens at the top, not at the last page's scroll position; the list keeps its place when
-// you come back to it (review 4 Oct, M33).
-const listScroll = ref(0)
-watch(() => route.current, (to, from) => {
-  if (from?.name === 'conversations') listScroll.value = window.scrollY
-  void nextTick(() => window.scrollTo(0, to.name === 'conversations' ? listScroll.value : 0))
+const signedOut = ref(false)  // Claude Code signed out on this Mac: reviews wait (4 Nov)
+// A link opens a page at the top; Back and Forward return to where you were on it (the owner, 4 Nov; it was the list
+// alone, review 4 Oct, M33). The browser's own restoring would move the page before the old one's place is kept.
+const places = scrollPlaces(history, (() => { try { return sessionStorage } catch { return undefined } })())
+history.scrollRestoration = 'manual'
+const shell = ref<HTMLElement | null>(null)
+let stopReturning = () => {}
+// The page draws in steps (a kept copy first, then the refresh): keep going back to `y` as it grows, until the
+// owner scrolls, taps or types, or 3 s have passed.
+function returnTo(y: number) {
+  stopReturning()
+  const go = () => window.scrollTo(0, y)
+  const grows = new ResizeObserver(go)
+  const timer = setTimeout(() => stopReturning(), 3000)
+  const owner = ['wheel', 'touchstart', 'keydown', 'mousedown']
+  stopReturning = () => { grows.disconnect(); clearTimeout(timer); owner.forEach((e) => removeEventListener(e, stopReturning)); stopReturning = () => {} }
+  owner.forEach((e) => addEventListener(e, stopReturning, { passive: true }))
+  if (shell.value) grows.observe(shell.value)
+  go()
+}
+watch(() => route.current, () => {
+  stopReturning()
+  const y = places.moved(window.scrollY)
+  void nextTick(() => (y ? returnTo(y) : window.scrollTo(0, 0)))
 })
+onMounted(() => { const y = places.start(); if (y) returnTo(y) })
+addEventListener('pagehide', () => places.keep(window.scrollY))
 
 // The page keeps the UI it loaded with: after a rebuild, say so (M35). The build writes
 // dist/.src-hash; the first one seen is this page's.
@@ -91,7 +112,7 @@ function checkBuild() {
   }).catch(() => {})
 }
 function checkStatus() {
-  if (onMac) lab.status().then((s) => { restart.value = !!s.code_changed; freeGb.value = s.free_gb ?? null; cantSave.value = s.cant_save ?? null }).catch(() => {})
+  if (onMac) lab.status().then((s) => { restart.value = !!s.code_changed; freeGb.value = s.free_gb ?? null; cantSave.value = s.cant_save ?? null; signedOut.value = !!s.claude_signed_out }).catch(() => {})
   checkBuild()
 }
 const statusTimer = setInterval(checkStatus, 60_000)
@@ -103,7 +124,7 @@ watch(() => route.current, checkStatus, { immediate: true })
 </script>
 
 <template>
-  <div class="shell">
+  <div ref="shell" class="shell">
     <div v-if="working > 0" class="busy-bar" role="progressbar" aria-label="Saving"></div>
     <header class="nav">
       <a class="brand" :href="href.conversations">Octo</a>
@@ -130,6 +151,8 @@ watch(() => route.current, checkStatus, { immediate: true })
         <span v-if="cantSave" class="restart bad" role="status" :title="cantSave === 'denied'
           ? 'Allow Python in System Settings → Privacy & Security → Files and Folders'
           : 'Look for a macOS prompt about files in Downloads and allow it'">Can't save · nothing is processed</span>
+        <span v-if="signedOut" class="restart bad" role="status"
+              title="Run claude auth login in Terminal; reviews carry on by themselves within 5 minutes">Claude signed out · reviews wait</span>
         <span v-if="restart" class="restart" title="The code changed since the server started: launchctl kickstart -k gui/$(id -u)/com.octo.lab">Restart the server</span>
         <span v-if="freeGb !== null && freeGb < 20" class="restart" :class="{ bad: freeGb < 5 }" :title="freeGb < 5 ? 'Under 5 GB: nothing more is pulled from the recorder until there is room' : 'Under 20 GB free'">
           {{ freeGb < 5 ? `Disk full · ${freeGb} GB · recorder not pulled` : `Disk: ${freeGb} GB free` }}</span>

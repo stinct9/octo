@@ -9,7 +9,8 @@ write yourself.
 - **The lab** runs on your Mac (Apple Silicon): it finds the conversations, writes down who said what, and
   reviews each one: how the others acted, what went unsaid, your conduct against your principles, and small
   next steps. A coach reads across your reviews; a page per person helps before you talk to them.
-- **Your principles are your own.** Octo never writes or suggests them: the reviews hold you to your words.
+- **Your principles are your own.** Octo never writes them: setup shows two examples you can start from if you tap
+  them, and the reviews hold you to your words.
 
 ## Privacy
 

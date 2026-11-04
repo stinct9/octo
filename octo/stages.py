@@ -590,10 +590,10 @@ def identify(inputs: dict, params: dict) -> dict:
 
     # D10, with a deliberately low bar for "present" and a high one for "absent".
     sims = [s["self_similarity"] for s in speakers if s["self_similarity"] is not None]
-    jay = jay_presence(sims, any(p["is_self"] for p in prints))
+    me = jay_presence(sims, any(p["is_self"] for p in prints))
     if owner and next(s["speech_s"] for s in speakers if s["speaker"] == owner) > 0:
-        jay = True  # a call: the owner is the one on the mic
-    return {"speakers": speakers, "merges": merges, "diarize_run": inputs["upstream_ids"][0], "jay_present": jay,
+        me = True  # a call: the owner is the one on the mic
+    return {"speakers": speakers, "merges": merges, "diarize_run": inputs["upstream_ids"][0], "jay_present": me,
             "jay_best_similarity": max(sims) if sims else None}
 
 
@@ -649,15 +649,15 @@ def remap_speakers(old_turns: list[dict], new_turns: list[dict]) -> dict[str, st
 def insight(inputs: dict, params: dict) -> dict:
     from . import insight as I
     names = {s["speaker"]: s["name"] for s in params["speakers"]}
-    jay = {s["speaker"] for s in params["speakers"] if s["self"]}
+    me = {s["speaker"] for s in params["speakers"] if s["self"]}
     params = {**params, "started_at": inputs.get("started_at"), "owner": params.get("owner") or inputs.get("owner") or {}}
     from .rubric import text as rubric_text  # the owner's file (octo/rubric.py): the owner's pipeline/rubric.md as before
     progress = inputs.get("progress", lambda m: print(m, flush=True))
     if params.get("reader"):  # on one of the owner's connections (octo/review_any.py, product plan 4.1)
         from . import review_any as RA
-        return RA.run(inputs["upstream"][0], names, jay, params, rubric_text(), on_progress=progress,
+        return RA.run(inputs["upstream"][0], names, me, params, rubric_text(), on_progress=progress,
                       memo=inputs.get("memo"))
-    return I.run(inputs["upstream"][0], names, jay, params, rubric_text=rubric_text(), on_progress=progress,
+    return I.run(inputs["upstream"][0], names, me, params, rubric_text=rubric_text(), on_progress=progress,
                  memo=inputs.get("memo"))
 
 

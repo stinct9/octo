@@ -112,14 +112,14 @@ def test_the_measuring_stick_says_why_a_conversation_is_off_the_line(tmp_path):
         "merged": _conv(conn, 2, T0, long, tr={**QWEN, "language": "hi", "merged": {"calls": 1}}),
         "whisper": _conv(conn, 3, T0, long, tr={**QWEN, "model": "mlx-community/whisper-large-v3-mlx"}),
         "hindi": _conv(conn, 4, T0, long, tr={**QWEN, "language": "hi", "language_votes": {"hi": 0.9}}),
-        "no jay": _conv(conn, 5, T0, long, who={"A": "p_ravi", "B": "p_asha"}),
+        "not you": _conv(conn, 5, T0, long, who={"A": "p_ravi", "B": "p_asha"}),
         "old": _conv(conn, 6, datetime(2024, 3, 1).timestamp(), long),
         "short": _conv(conn, 7, T0, [("A", _words(40, 10))]),
     }
     got = {c["session_id"]: c["reason"] for c in FL.all_conversations(conn)}
     assert got[cases["on"]] is None
     assert "merged" in got[cases["merged"]] and "Whisper" in got[cases["whisper"]]
-    assert got[cases["hindi"]] == "not in English" and got[cases["no jay"]] == "you're not confirmed in it"
+    assert got[cases["hindi"]] == "not in English" and got[cases["not you"]] == "you're not confirmed in it"
     assert got[cases["old"]] == "recorded before the lab began" and got[cases["short"]] == "under 100 of your words"
 
 

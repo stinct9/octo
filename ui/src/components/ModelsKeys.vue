@@ -13,7 +13,7 @@ interface Connection {
   daily_calls?: number
 }
 interface ClaudeModel { id: string; label: string; price: [number, number]; why: string }
-// Claude Code on this Mac (Jay, 31 Oct): the owner's own Claude plan, told apart from an API key billed per use.
+// Claude Code on this Mac (31 Oct): the owner's own Claude plan, told apart from an API key billed per use.
 interface ClaudeCode {
   path: string | null
   version: string | null

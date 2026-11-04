@@ -77,7 +77,7 @@ def run(conn, sessions: list[str]) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     NOTES.mkdir(exist_ok=True)
     for sid in sessions:
-        diarize, names, jay, params = inputs(conn, sid)
+        diarize, names, me, params = inputs(conn, sid)
         memo: dict = {}
         for r in rows(conn, "SELECT output FROM stage_runs WHERE target=? AND stage='insight' AND status='done'", sid):
             memo.update((load_json(r["output"]) or {}).get("memo") or {})
@@ -90,7 +90,7 @@ def run(conn, sessions: list[str]) -> None:
                         f"`python -m bench.reviewcompare rank {sid} X Y Z` (or tell Claude).", ""]
         for letter, reader in zip("ABC", order):
             print(f"{sid} {letter}…", flush=True)
-            out = I.run(diarize, names, jay, {**params, **READERS[reader]}, rubric_text=rubric_text(), memo=memo)
+            out = I.run(diarize, names, me, {**params, **READERS[reader]}, rubric_text=rubric_text(), memo=memo)
             key[letter] = {"reader": reader, "seconds": out["seconds"], "reused": out["reused"], "usage": out.get("usage")}
             doc += ["", "---", "", f"## Review {letter}", ""] + render_insights(out)
         (NOTES / f"reviewcompare_{sid}.md").write_text("\n".join(doc) + "\n")

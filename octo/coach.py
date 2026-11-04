@@ -300,7 +300,7 @@ def _material(conn, now: float | None, profile: dict) -> dict:
                       "reflection": (IN.reflection(conn, s["id"]) or {}).get("text")})
     fs = F.summary(conn)
     last = row(conn, "SELECT * FROM coach_notes WHERE status='done' ORDER BY created_at DESC LIMIT 1")
-    return {"jay": me["name"] if me else (profile.get("name") or "you"), "today": now, "principles": principles(text), "conversations": convs,
+    return {"me": me["name"] if me else (profile.get("name") or "you"), "today": now, "principles": principles(text), "conversations": convs,
             "ids": ids, "left_out": left_out, "focus": fs, "trend": _trend_lines(conn),
             "last": _last_note(conn, last) if last else None,
             "read": {"conversations": len(convs), "answered": sum(1 for c in convs if c["answered"]),
@@ -327,7 +327,7 @@ def _last_note(conn, n: dict) -> dict:
 
 # ---- the prompt -------------------------------------------------------------------------------
 
-def system_prompt(jay: str, owner: dict | None = None, reviewer: str = "Claude") -> str:
+def system_prompt(me: str, owner: dict | None = None, reviewer: str = "Claude") -> str:
     """The coach's instructions, about the lab's owner (octo/owner.py). With the owner's profile, word for word
     what they were before 7 Oct."""
     owner = owner or {}
@@ -335,7 +335,7 @@ def system_prompt(jay: str, owner: dict | None = None, reviewer: str = "Claude")
     they, them, their, themself, s, es = P["they"], P["them"], P["their"], P["themself"], P["s"], P["es"]
     They, Their, hasnt, theyre = P["They"], P["Their"], P["hasnt"], P["theyre"]
     about = (owner.get("about") or "").strip().rstrip(".")
-    who = f"{jay}, {about}" if about else jay
+    who = f"{me}, {about}" if about else me
     source = (owner.get("principles_from") or "").strip().rstrip(".")
     wrote = f"principles {they} wrote {themself}" + (f" from {source}" if source else "")
     never = (owner.get("never") or "").strip().rstrip(".")
@@ -384,18 +384,18 @@ def _item_text(e: dict) -> str:
 
 
 def user_prompt(m: dict) -> str:
-    jay = m["jay"]
+    me = m["me"]
     p = m.get("forms") or O.forms({})
     token = _FORMS.set(p)
     try:
-        return _user_prompt(m, jay, p)
+        return _user_prompt(m, me, p)
     finally:
         _FORMS.reset(token)
 
 
-def _user_prompt(m: dict, jay: str, P: dict) -> str:
+def _user_prompt(m: dict, me: str, P: dict) -> str:
     ps = "\n\n".join(f"{p['n']}. {p['text']}" for p in m["principles"]) or "(none written yet)"
-    parts = [f"Today is {_when(m['today'])}.", f"{jay}'s principles, in {P['their']} words:\n\n{ps}"]
+    parts = [f"Today is {_when(m['today'])}.", f"{me}'s principles, in {P['their']} words:\n\n{ps}"]
 
     fs = m["focus"]
     foc = []
@@ -518,10 +518,8 @@ def why_not(conn, now: float | None = None, n_reviews: int | None = None) -> str
         return "the coach is reading your reviews now"
     if (len(reviews(conn)) if n_reviews is None else n_reviews) < MIN_CONVERSATIONS:
         return f"the coach needs reviews of at least {MIN_CONVERSATIONS} conversations"
-    if (blocked := P.claude_blocked_until(conn, now)) is not None:
-        capped = P.claude_calls_since(conn, P._midnight(now)) >= P.DAILY_CLAUDE_CALLS
-        return (f"today's {P.DAILY_CLAUDE_CALLS} Claude calls are used: after midnight" if capped else
-                f"Claude's usage limit: after {datetime.fromtimestamp(blocked):%H:%M}")
+    if why := P.claude_waits(conn, now):
+        return why
     from .settings import reader
     who = reader(conn)
     if who is None:  # a new lab whose owner hasn't chosen a model yet (product plan 4.1)
@@ -567,7 +565,7 @@ def run(conn, note_id: str, ask=None, now: float | None = None) -> dict:
             conn.executemany("INSERT OR IGNORE INTO coach_sources (note_id, session_id) VALUES (?, ?)",
                              [(note_id, c["session_id"]) for c in m["conversations"]])
             conn.execute("UPDATE coach_notes SET read=? WHERE id=?", (json.dumps(m["read"]), note_id))
-        raw, usage = ask(MODEL, EFFORT, system_prompt(m["jay"], m.get("owner"), reviewer), user_prompt(m), SCHEMA)
+        raw, usage = ask(MODEL, EFFORT, system_prompt(m["me"], m.get("owner"), reviewer), user_prompt(m), SCHEMA)
         out = check(raw, m)
     except Exception as e:
         msg = (f"Claude took longer than {CC.TIMEOUT_S // 60} minutes: ask again" if isinstance(e, subprocess.TimeoutExpired)

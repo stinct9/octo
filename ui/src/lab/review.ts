@@ -15,9 +15,9 @@ export type EntryGroup = 'one' | 'reading' | 'between' | 'principle' | 'try' | '
 /** One thing the review says, as the page and the one question name it. */
 export interface Entry { id: string; group: EntryGroup; eyebrow: string; title: string }
 
-/** Everything in a review, in the order the page shows it: the one thing, the steps, then the full
- *  review (readings, between the lines, principles and their try-next-time, beneath-the-surface
- *  questions). Item ids are the ones `octo/review.py` rates (o, n0, r0, l0, p8, t8, b0). */
+/** Everything in a review: the one thing, the steps, then readings, between the lines, principles and
+ *  their try-next-time, beneath-the-surface questions (the full review lists the steps after the
+ *  principles, as `newToYouEntries` does). Item ids are the ones `octo/review.py` rates (o, n0, r0, l0, p8, t8, b0). */
 export function entries(ins: Insights | null): Entry[] {
   if (!ins || ins.skipped) return []
   const out: Entry[] = []

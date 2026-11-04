@@ -214,13 +214,16 @@ def deploy(now: bool = False, say=print, agents: Path = AGENTS) -> int:
 # ---- an install from a release (the one-line installer; beta testers) --------------------------------------------
 
 RELEASE = ".octo-release"  # the release's URL, written by scripts/bootstrap.sh
+# Cloudflare refuses Python's own User-Agent (403 for "Python-urllib"), so the release is asked for as Octo.
+AGENT = {"User-Agent": "octo-update"}
 KEEP = (".venv", ".node", "ui/node_modules", ".octo-home", RELEASE, PAUSE, "data", "audio", "notes", "runs")
 
 
 def latest(release_url: str, timeout: float = 20) -> str | None:
     """The version beside the release (version.txt), or None when it can't be read (offline, or no beta release)."""
     try:
-        with urllib.request.urlopen(release_url.rsplit("/", 1)[0] + "/version.txt", timeout=timeout) as r:
+        with urllib.request.urlopen(urllib.request.Request(release_url.rsplit("/", 1)[0] + "/version.txt", headers=AGENT),
+                                    timeout=timeout) as r:
             return r.read(200).decode().strip() or None
     except (OSError, ValueError, UnicodeDecodeError):
         return None
@@ -249,7 +252,7 @@ def update_release(repo: Path, now: bool = False, say=print, fetch=None) -> int:
             say("downloading the new version")
             got = Path(tmp) / "octo.tar.gz"
             try:
-                with urllib.request.urlopen(url, timeout=60) as r, open(got, "wb") as f:
+                with urllib.request.urlopen(urllib.request.Request(url, headers=AGENT), timeout=60) as r, open(got, "wb") as f:
                     shutil.copyfileobj(r, f)
             except OSError as e:
                 raise DeployError(f"the download stopped ({e}): check this Mac is online, then try again") from None

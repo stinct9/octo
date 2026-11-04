@@ -31,7 +31,7 @@ def L(i, who, start, text):
 
 def _lab(tmp_path):
     conn = connect(tmp_path / "t.db")
-    conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES ('me', 'Jay', 1, 0), ('ravi', 'Ravi', 0, 0), "
+    conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES ('me', 'Sam', 1, 0), ('ravi', 'Ravi', 0, 0), "
                  "('meera', 'Meera', 0, 0)")
     _conv(conn, "ses_old", 1000, [L(0, "A", 0, "How is your workload this week?"), L(1, "B", 4, "My Workload is heavy, honestly.")],
           {"A": "me", "B": "ravi"},
@@ -47,8 +47,8 @@ def _lab(tmp_path):
 def test_lines_and_review_text_newest_first(tmp_path):
     got = search(_lab(tmp_path), "workload")
     assert [(r["session_id"], r["kind"], r["who"]) for r in got["results"]] == [
-        ("ses_new", "line", "Jay"), ("ses_new", "line", "Meera"), ("ses_new", "line", "Speaker C"),
-        ("ses_old", "line", "Jay"), ("ses_old", "line", "Ravi"),
+        ("ses_new", "line", "Sam"), ("ses_new", "line", "Meera"), ("ses_new", "line", "Speaker C"),
+        ("ses_old", "line", "Sam"), ("ses_old", "line", "Ravi"),
         ("ses_old", "review", "The one thing"), ("ses_old", "review", "Step")]
     assert got["total"] == 7 and got["scanned"] == 2  # the TV recording, set aside, isn't read
     one = got["results"][5]
@@ -61,7 +61,7 @@ def test_filters_a_person_and_you_or_them(tmp_path):
     conn = _lab(tmp_path)
     ravi = search(conn, "workload", person="ravi")["results"]
     assert [(r["who"], r["kind"]) for r in ravi] == [("Ravi", "line"), ("The one thing", "review"), ("Step", "review")]
-    assert [r["who"] for r in search(conn, "workload", who="you")["results"]] == ["Jay", "Jay"]
+    assert [r["who"] for r in search(conn, "workload", who="you")["results"]] == ["Sam", "Sam"]
     assert [r["who"] for r in search(conn, "workload", who="them")["results"]] == ["Meera", "Speaker C", "Ravi"]
 
 

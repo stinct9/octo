@@ -165,6 +165,7 @@ export const lab = {
   device: () => get<Device>('/api/octo/device'),
   split: (id: string, at: number | number[]) =>
     post<{ split_at: number | number[]; new_session: string; new_sessions: string[] }>(`/api/octo/sessions/${id}/split`, { at }),
+  keepWhole: (id: string, at: number) => post<{ kept_whole: number }>(`/api/octo/sessions/${id}/split/keep-whole`, { at }),
   joinBack: (id: string) => post<{ session: string }>(`/api/octo/sessions/${id}/join-back`, {}),
   group: (id: string, side: 'before' | 'after') => post<{ session: string }>(`/api/octo/sessions/${id}/group`, { side }),
   ungroup: (id: string, first: string, second: string) =>

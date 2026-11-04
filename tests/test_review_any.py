@@ -184,7 +184,7 @@ def test_a_login_problem_says_how_to_fix_it(monkeypatch):
 
     monkeypatch.setattr(CC, "claude_bin", lambda: "/bin/claude")
     monkeypatch.setattr(CC.subprocess, "run", lambda *a, **k: Failed())
-    with pytest.raises(RuntimeError, match="/login"):
+    with pytest.raises(RuntimeError, match="claude auth login"):
         CC.ask("claude-opus-5-5", "high", "sys", "text", RA.SCHEMA)
 
 

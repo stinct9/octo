@@ -37,7 +37,7 @@ SAID = ("The answer is yes we ship on Friday. Um the reason is, you know, the te
 def lab(tmp_path, monkeypatch):
     db = lambda: connect(tmp_path / "t.db")
     conn = db()
-    conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES ('me', 'Jay', 1, 0), ('ravi', 'Ravi', 0, 0)")
+    conn.execute("INSERT INTO people (id, name, is_self, created_at) VALUES ('me', 'Sam', 1, 0), ('ravi', 'Ravi', 0, 0)")
     _conv(conn, "ses_talk", time.time() - 86400, [L(0, "A", 0, "How is the release going?"), L(1, "B", 4, "Fine, thanks.")],
           {"A": "me", "B": "ravi"})
     _conv(conn, "ses_memo", 1000, [L(0, "A", 0, "So um the pitch is that, you know, we save time. " * 10)], {"A": "me"})
@@ -186,7 +186,7 @@ def test_where_the_point_came_one_call_its_quote_checked_and_timed(lab, monkeypa
                  "build_up_why": "The answer came first.", "short": "We ship Friday: the tests pass."}, seen)
     before = P.claude_calls_since(lab.conn, 0)
     assert DR.find_points(lab.conn, log=lambda m: None, ask=ask) == 1
-    assert len(seen) == 1 and "[0] 0:00 Jay: The answer is yes" in seen[0]["prompt"] and '"p"' in seen[0]["system"]
+    assert len(seen) == 1 and "[0] 0:00 Sam: The answer is yes" in seen[0]["prompt"] and '"p"' in seen[0]["system"]
     p = DR.detail(lab.conn, did)["point"]
     assert p["state"] == "done" and p["short_words"] == 6 and p["build_up_right"] is False
     assert p["quote"] == {"text": "the reason is, you know, the tests pass", "line": 0, "at": 3.6, "measured": True}  # the 10th word, not the line's start

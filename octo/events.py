@@ -1,6 +1,6 @@
 """The owner's calendar, read only (B23, 27 Oct): one `events` table whatever the source.
 
-Sources (Jay, 21 Oct): this Mac's accounts, read by the Octo app through EventKit and posted to the lab
+Sources (21 Oct): this Mac's accounts, read by the Octo app through EventKit and posted to the lab
 (macapp/Octo.swift: the app holds the Calendars permission, so the launchd Python needs none), and calendar links
 (ICS: Google's secret address, Outlook's published calendar), fetched here every few minutes. Direct sign-in to
 Google and Microsoft is the next step (docs/backlog.md B23).

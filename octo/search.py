@@ -1,4 +1,4 @@
-"""Search across conversations (B12, Jay 19 Oct): the transcript lines and the review text, read at search time.
+"""Search across conversations (B12, 19 Oct): the transcript lines and the review text, read at search time.
 
 No index: an index would be a second copy of every transcript that Delete, Forget, Leave out and the backups
 would all have to reach. Each conversation's current diarize run is read with the owner's corrections applied,

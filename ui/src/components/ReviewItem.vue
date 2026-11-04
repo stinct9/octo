@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // One thing the full review says, headline first: it opens to the text, the quotes to hear, and
 // the optional answers (Not right?, I acted on this, Practise this). Nothing here is required:
-// since 6 Oct the conversation counts once the one question is answered (NewToYou).
+// since 6 Oct the conversation counts once the one question is answered (its tick, `tickable`, beside the headline).
 import { computed } from 'vue'
 import type { FeedbackChange } from '../lab/api'
 import { mss } from '../lab/format'
@@ -30,23 +30,32 @@ const props = defineProps<{
   /** The quote it's heard by from the headline row, without opening it (null: no audio). */
   moment?: Quote | null
   playing?: boolean
+  /** "What here was new to you?": a tick beside the headline while it's being answered; `isNew` once it is. */
+  tickable?: boolean
+  ticked?: boolean
+  isNew?: boolean
+  /** Its answers (Not right?, I acted on this) live where it's shown first: the one thing, a step. */
+  noAnswers?: boolean
 }>()
-const emit = defineEmits<{ toggle: []; play: [seconds: number]; hear: []; practise: []; change: [change: FeedbackChange] }>()
+const emit = defineEmits<{ toggle: []; play: [seconds: number]; hear: []; practise: []; change: [change: FeedbackChange]; tick: [on: boolean] }>()
 
 const flagged = computed(() => props.feedback?.verdict === 'wrong' || props.feedback?.verdict === 'partly')
 </script>
 
 <template>
-  <li :id="`item-${item}`" class="ri" :class="{ open }">
+  <li :id="`item-${item}`" class="ri" :class="{ open, tickable, ticked: tickable && ticked }">
     <div class="head">
+      <label v-if="tickable" class="tick"><input type="checkbox" :checked="ticked" :aria-labelledby="`titles-${item}`"
+             @change="emit('tick', ($event.target as HTMLInputElement).checked)"></label>
       <button type="button" class="toggle" :aria-expanded="open" :aria-controls="`body-${item}`" @click="emit('toggle')">
         <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" /></svg>
-        <span class="titles">
+        <span :id="`titles-${item}`" class="titles">
           <span v-if="eyebrow" class="eyebrow-i">{{ eyebrow }}</span>
           <span class="title">{{ title }}</span>
         </span>
       </button>
       <span class="marks">
+        <span v-if="isNew" class="new">New to you</span>
         <HeldMark v-if="held" :held="held" />
         <span v-if="focused" class="badge">Your focus</span>
         <span v-if="flagged" class="flag">{{ feedback?.verdict === 'wrong' ? 'Not right' : 'Partly right' }}</span>
@@ -68,7 +77,7 @@ const flagged = computed(() => props.feedback?.verdict === 'wrong' || props.feed
       </button>
       <p v-if="footnote" class="small muted">{{ footnote }}</p>
       <p v-if="rated" class="small muted">Rated before 6 Oct: {{ rated }}</p>
-      <div class="actions">
+      <div v-if="!noAnswers" class="actions">
         <button v-if="practise && !focused" type="button" class="practise" @click="emit('practise')">Practise this</button>
         <NotRight :feedback="feedback" acted @change="emit('change', $event)" />
       </div>
@@ -83,6 +92,13 @@ const flagged = computed(() => props.feedback?.verdict === 'wrong' || props.feed
 .toggle { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; text-align: left; border: 0; background: none; color: var(--ink);
   font: inherit; padding: 7px 6px; cursor: pointer; border-radius: 8px; min-height: 44px; }
 .toggle:hover { background: var(--quote); }
+.tick { width: 44px; min-height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; }
+.tick:hover { background: var(--quote); }
+.tick input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.ticked .head { background: var(--accent-soft); border-radius: 8px; }
+.ticked .toggle:hover, .ticked .tick:hover { background: none; }
+.ticked .hear:not(.on) { background: var(--surface); }
+.new { font-size: 12px; font-weight: 500; color: var(--accent); white-space: nowrap; }
 .hear { width: 32px; height: 32px; margin-top: 6px; flex-shrink: 0; border-radius: 50%; border: 0; background: var(--accent-soft); color: var(--accent);
   display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .hear.on { background: var(--accent); color: var(--accent-ink); }
@@ -110,6 +126,7 @@ p { margin: 0; }
 @media (max-width: 640px) {
   .body { padding-left: 8px; }
   .marks { order: 3; flex-basis: 100%; justify-content: flex-start; padding: 0 0 6px 32px; }
+  .tickable .marks { padding-left: 84px; }
   .marks:empty { display: none; }
   .head { flex-wrap: wrap; }
   .hear { width: 44px; height: 44px; margin-top: 0; }

@@ -5,8 +5,10 @@ import { computed, onMounted, ref } from 'vue'
 import { lab } from '../lab/api'
 import { href } from '../lab/router'
 import type { AgendaEvent } from '../lab/types'
+import FoldToggle from './FoldToggle.vue'
 
 const events = ref<AgendaEvent[]>([])
+const open = ref(true)
 onMounted(async () => {
   try { events.value = await lab.agenda() } catch { /* the page works without it */ }
 })
@@ -27,8 +29,10 @@ const hm = (t: number) => new Date(t * 1000).toLocaleTimeString('en-GB', { hour:
 
 <template>
   <section v-if="days.length" class="card agenda" aria-labelledby="agenda-h">
-    <div class="agenda-head"><h2 id="agenda-h" class="eyebrow-a">Your calendar</h2><a class="small" :href="href.calendar">The month →</a></div>
-    <div v-for="d in days" :key="d.label" class="day">
+    <div class="agenda-head"><h2 id="agenda-h" class="eyebrow-a">Your calendar</h2>
+      <span v-if="!open" class="small muted">{{ days.map((d) => `${d.events.length} ${d.label.toLowerCase()}`).join(' · ') }}</span>
+      <a class="small" :href="href.calendar">The month →</a><FoldToggle v-model="open" name="agenda" label="your calendar" /></div>
+    <div v-for="d in open ? days : []" :key="d.label" class="day">
       <h3 class="small muted">{{ d.label }}</h3>
       <ul>
         <li v-for="e in d.events" :key="e.id" :class="{ past: e.end <= now }">
@@ -70,5 +74,6 @@ a { color: var(--accent); }
 .small { font-size: 13px; }
 .muted { color: var(--muted); }
 @media (max-width: 640px) { li { flex-wrap: wrap; gap: 2px 12px; } .what { flex-basis: 100%; order: 1; } }
-.agenda-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.agenda-head { display: flex; align-items: baseline; gap: 12px; }
+.eyebrow-a { flex: 1; }
 </style>

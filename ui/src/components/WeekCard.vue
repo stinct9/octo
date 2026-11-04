@@ -7,11 +7,13 @@ import { day, dueDay } from '../lab/format'
 import { href } from '../lab/router'
 import type { WeekCard } from '../lab/types'
 import { countsLine, focusLine, weekRange } from '../lab/week'
+import FoldToggle from './FoldToggle.vue'
 
 const props = defineProps<{ week?: string }>()
 const c = ref<WeekCard | null>(null)
 const error = ref('')
 const asked = ref(false)
+const open = ref(true)
 onMounted(async () => {
   try { c.value = await lab.week(props.week) } catch { /* the page works without it */ }
 })
@@ -29,8 +31,10 @@ async function ask() {
     <div v-if="!week" class="head">
       <h2 :id="`week-${c.week}`" class="eyebrow-w">Your week · {{ weekRange(c.week) }}</h2>
       <button type="button" class="link small" @click="dismiss">Dismiss</button>
+      <FoldToggle v-model="open" name="week" label="your week" />
     </div>
     <p class="text">{{ countsLine(c.counts) }}</p>
+    <template v-if="open || week">
     <p v-if="c.focus" class="small">Your focus: {{ c.focus.text }}<template v-if="focusLine(c.focus)"><br>
       <span class="muted">{{ focusLine(c.focus) }}</span></template></p>
     <template v-if="!week && c.commitments && (c.commitments.mine || c.commitments.theirs)">
@@ -45,6 +49,7 @@ async function ask() {
     <p v-if="!week && c.coach?.theme" class="small">The coach, {{ day(c.coach.at) }}: <a :href="href.coach">{{ c.coach.theme }}</a>
       · <button v-if="!asked" type="button" class="link small" @click="ask">Ask again</button>
       <span v-else class="muted" role="status">Asked: the coach's card says when it's read them</span></p>
+    </template>
     <p v-if="error" class="error small" role="alert">{{ error }}</p>
   </section>
 </template>

@@ -8,6 +8,7 @@ import { lab } from '../lab/api'
 import { dueDay, today as localToday, when } from '../lab/format'
 import { href } from '../lab/router'
 import type { OpenTask } from '../lab/types'
+import FoldToggle from './FoldToggle.vue'
 
 // On a person's page (6 Oct): only the steps from conversations with them, under their own heading.
 const props = defineProps<{ only?: string[]; title?: string }>()
@@ -18,6 +19,7 @@ const done = ref<Record<string, { note: string; saved: string; error: string }>>
 const letGone = ref<Record<string, boolean>>({})
 const error = ref('')
 const showAll = ref(false)
+const unfolded = ref(true)
 const FOLDED = 5
 
 const key = (t: OpenTask) => `${t.session_id}/${t.item}`
@@ -81,7 +83,9 @@ async function saveNote(t: OpenTask) {
     <div class="head">
       <h2 id="from-reviews">{{ title ?? 'From your reviews' }}</h2>
       <span class="muted small">{{ open }} open · mark what you did</span>
+      <FoldToggle v-if="!only" v-model="unfolded" name="reviews" :label="title ?? 'From your reviews'" />
     </div>
+    <template v-if="unfolded || only">
     <p v-if="error" class="error small" role="alert">{{ error }}</p>
     <ul>
       <li v-for="t in shown" :key="key(t)" :class="{ marked: done[key(t)] || letGone[key(t)] }">
@@ -113,6 +117,7 @@ async function saveNote(t: OpenTask) {
     </ul>
     <button v-if="tasks.length > FOLDED" type="button" class="link small more" @click="showAll = !showAll">
       {{ showAll ? 'Show fewer' : `Show all ${tasks.length}` }}</button>
+    </template>
   </section>
 </template>
 
@@ -120,6 +125,7 @@ async function saveNote(t: OpenTask) {
 .steps { padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; }
 .head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 h2 { margin: 0; font-size: 17px; font-weight: 600; flex-grow: 1; }
+@media (max-width: 640px) { .head > .muted { order: 1; flex-basis: 100%; } }  /* the fold beside the title, the count under it */
 ul { list-style: none; margin: 0; padding: 0; }
 li { padding: 8px 0; border-top: 1px solid var(--line); }
 li:first-child { border-top: 0; }

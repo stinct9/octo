@@ -38,7 +38,7 @@ const where = computed(() => {
   return `They go to ${ls.cfg.mac} as soon as it answers: at home, or anywhere with Tailscale.`
 })
 
-// Stop and send is a hold, as on the Recorder tab (Jay, 22 Oct): a tap only asks, so a stray tap can't end the memo.
+// Stop and send is a hold, as on the Recorder tab (22 Oct): a tap only asks, so a stray tap can't end the memo.
 const confirmStop = ref(false)
 function stop() { confirmStop.value = false; void props.memos.stop() }
 

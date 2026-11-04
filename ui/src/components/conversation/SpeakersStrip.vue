@@ -103,7 +103,7 @@ const numbersLine = computed(() => {
           ³ Per 100 words: um, uh, ah, you know, kind of, sort of, where the transcription kept them; approx.</p>
       </div>
     </template>
-    <div v-if="s.split_suggestions.length" class="strip-row">
+    <div v-if="s.split_suggestions.length && !s.split_suggestions.some((g) => g.strong)" class="strip-row">
       <span class="label">Split?</span>
       <span class="nums muted">This may be more than one conversation: the people change partway.</span>
       <button v-if="canEdit" type="button" class="link" @click="emit('split')">Split…</button>

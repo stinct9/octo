@@ -60,6 +60,9 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .pill { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; font-size: 14px; font-weight: 500; background: var(--chip); white-space: nowrap; }
+/* a long reason (a sign-in, a model to start) wraps rather than running off a phone's screen */
+.pill.fail { white-space: normal; border-radius: 14px; align-items: flex-start; }
+.pill.fail .dot { margin-top: 6px; flex-shrink: 0; }
 .pill.warn { color: var(--warn); background: var(--warn-soft); }
 .pill.accent { color: var(--accent); background: var(--accent-soft); }
 .pill.done { color: var(--pass); }

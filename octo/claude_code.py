@@ -1,6 +1,6 @@
 """Calling Claude through Claude Code (`claude -p`) on the owner's own Claude plan (Pro or Max): the review when the
 owner chooses it (octo/review_any.py through octo/providers.py), and every step that reads text through the review's
-model (the Hindi merge, the coach, Ask, …). Any lab may choose it since 31 Oct (Jay; product plan P5).
+model (the Hindi merge, the coach, Ask, …). Any lab may choose it since 31 Oct (product plan P5).
 
 Until 19 Oct the first lab's review kept its own copy of these three functions in octo/claude_review.py,
 frozen byte for byte while the gate counted (K5; review 4 Oct, M30), so every other Claude step called
@@ -91,7 +91,7 @@ def ask(model: str, effort: str, system: str, prompt: str, schema: dict, timeout
     if d.get("is_error"):
         msg = str(d.get("result") or d.get("subtype") or "unknown error")
         if "authenticate" in msg.lower() or "login" in msg.lower():
-            msg += " -- run `claude` in a terminal and log in with /login"
+            msg += " -- sign in on this Mac: claude auth login"  # pipeline.SIGNED_OUT_WORDS
         raise RuntimeError(f"Claude Code: {msg}")
     answer = d.get("structured_output")
     if answer is None:

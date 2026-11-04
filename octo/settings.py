@@ -47,7 +47,7 @@ class Step:
     tried: tuple[str, ...] = field(default_factory=tuple)
 
 
-# The two ways to Claude (Jay, 31 Oct), told apart wherever they're shown.
+# The two ways to Claude (31 Oct), told apart wherever they're shown.
 CLAUDE_CODE_LABEL = "Claude Opus 5.5 · Claude Code on this Mac: your Claude Pro or Max plan"
 CLAUDE_CODE_WHY = ("Runs claude -p, logged in with your Claude account: the plan's limits, no bill per use, shared with "
                    "your own Claude use, at most 60 calls a day. The plan's terms are yours. The transcript goes to Anthropic.")
@@ -190,7 +190,7 @@ def provider_choices() -> tuple[Choice, ...]:
 
 def choices(conn, step: Step) -> tuple[Choice, ...]:
     """What can be chosen for a step here. The review and commitments add the owner's connections; Claude Code is
-    offered in every lab (P5, Jay 31 Oct)."""
+    offered in every lab (P5, 31 Oct)."""
     if step.stage not in ("insight", "commitments"):
         return step.choices
     return step.choices + provider_choices()
@@ -254,7 +254,7 @@ def reader(conn) -> dict | None:
 
 
 def privacy(conn) -> dict:
-    """What Conversations' privacy line says leaves the Mac (Jay, 22 Oct): the review's model as chosen here (None
+    """What Conversations' privacy line says leaves the Mac (22 Oct): the review's model as chosen here (None
     until one is), whether it runs on the Mac, and what merges Hindi drafts (None where nothing does)."""
     def name(c: Choice) -> str:
         return "Claude Opus 5.5 through Claude Code" if c.claude else c.label

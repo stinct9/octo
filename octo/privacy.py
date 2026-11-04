@@ -21,7 +21,7 @@ from . import files as FL
 from .db import load_json, row, rows
 
 RAW_AUDIO_DAYS = 60  # D5: raw audio kept 60 days (1 Oct 2026; was 14) so newer models can redo recent ones
-# B29 (Jay, 23 Oct): a lab with labconfig's keep_recordings keeps its recordings instead (the filler cue retrains on them);
+# B29 (23 Oct): a lab with labconfig's keep_recordings keeps its recordings instead (the filler cue retrains on them);
 # Forget then silences that person's speech in them, since nothing else would take it away.
 CLIPS = AUDIO / "sessions"  # each conversation's own slice, cut for playback
 CLIP_DAYS = 7  # a clip not played for this long is deleted; it's cut again on the next play (M13)

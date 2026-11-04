@@ -68,7 +68,7 @@ SKIP_SUFFIXES = (".lock", ".log", ".tmp", ".tmp.wav", ".tmp.flac")
 # Kept, named so the guard test knows them: the recorder's keys, the phone's CA, tokens and calendar links (as an
 # owner moving Mac wants them back; the image is encrypted), principles, A/B keys.
 KEPT = {"device.json", "phone", "ticktick.json", "providers.json", "calendar.json", "rubric.md", "compare", "sample-review.json",
-        "notify.json", "tone.json"}
+        "notify.json", "tone.json", "invite.json"}
 README = """This is an export of an Octo lab: its conversations, transcripts, reviews, people, voiceprints, settings
 and keys, made {made}.
 

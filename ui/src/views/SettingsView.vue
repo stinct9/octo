@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import CalendarSettings from '../components/CalendarSettings.vue'
 import ExportImport from '../components/ExportImport.vue'
+import InviteTester from '../components/InviteTester.vue'
 import ModelsKeys from '../components/ModelsKeys.vue'
 import RecorderSettings from '../components/RecorderSettings.vue'
 
@@ -78,6 +79,7 @@ onMounted(async () => { talk.value = await call<{ effort: string; efforts: strin
 
     <ModelsKeys />
     <RecorderSettings />
+    <InviteTester />
 
     <section class="card pad" aria-labelledby="talk">
       <h2 id="talk">Talk it through</h2>

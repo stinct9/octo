@@ -3,7 +3,7 @@
 
 A free Apple ID signs an install for 7 days: run it again within the week. Each Apple ID team needs its own bundle
 ID (Apple keeps one per team), so the app is `app.octo.recorder.<team>` unless --bundle-id says otherwise; the first
-lab's own install is `app.octo.recorder` (Jay's team registered it first).
+lab's own install is `app.octo.recorder` (the first lab's team registered it first).
 
 Steps: Xcode found → the team signed in to Xcode → the iPhone (by cable or on this Wi-Fi, unlocked, Developer Mode on)
 → the pages built and copied in (Capacitor) → xcodebuild signs it, registering the phone with the team if needed →
@@ -313,7 +313,7 @@ def renew_due(have: dict | None, now: float) -> bool:
 
 
 def renew(job: Job, now: float | None = None) -> bool:
-    """The weekly re-signing, so a free Apple ID's install never stops opening (Jay, 31 Oct: the tester does it alone).
+    """The weekly re-signing, so a free Apple ID's install never stops opening (31 Oct: the tester does it alone).
     Hourly from the server; when 2 days are left it installs again on the same phone, if the phone is around (plugged
     in, or on this Mac's Wi-Fi). Nothing else changes on the phone."""
     have, now = installed(), now or time.time()

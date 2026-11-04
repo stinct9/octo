@@ -60,7 +60,7 @@
 // to type on the phone. It advertises for 10 minutes after starting and after a tap of the button.
 //
 // Watchdog (rec-20, 20 Oct): on 19 Oct at 23:07 the loop stopped mid-sync: the screen's time froze and the
-// button did nothing until Jay reset it, though the writer recorded to the end. Nothing watched the loop. Now
+// button did nothing until it was reset by hand, though the writer recorded to the end. Nothing watched the loop. Now
 // the loop and the writer must check in within WATCHDOG_MS or the chip restarts (reset "watchdog"), and
 // recording carries on in the next boot. Where each was last is kept across that restart and goes on the
 // next boot's first lines ("watchdog"), so the next hang says where it was.
@@ -130,7 +130,7 @@ const int BUTTON_PIN = 0;
 const int BUTTON2_PIN = D1;
 const uint32_t HOLD_TOGGLE_MS = 1000;  // hold, then let go: recording on/off (and nothing else: power
                                        // off from the button was taken out in rec-8, see buttonLoop).
-                                       // 2 s until rec-19 (Jay, 19 Oct: "a little long")
+                                       // 2 s until rec-19 (19 Oct: "a little long")
 const uint32_t HOLD_CONFIRM_MS = 2000;  // "Allow …?" (rec-16): rare and deliberate, so it stays at 2 s
 
 const uint32_t CHUNK_SAMPLES = 60 * RATE;      // 60 s, 1.92 MB

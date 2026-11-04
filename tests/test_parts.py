@@ -1,4 +1,4 @@
-"""One discussion in parts (B35, Jay 30 Oct): grouped at the review, never in the audio. The lab's rule (an hour cut
+"""One discussion in parts (B35, 30 Oct): grouped at the review, never in the audio. The lab's rule (an hour cut
 unless the people clearly change; a pause or other recordings at half shared, guesses counted), the owner's word,
 answered parts, one review of the whole, the list and Progress once, delete and Forget."""
 
@@ -110,7 +110,7 @@ def test_the_owners_word_wins_and_the_lab_decides_each_boundary_once(tmp_path):
     assert PT.groups(conn) == [] and PT.auto(conn, "s1") == [] and PT.auto(conn, "s2") == []
     assert PT.group_with(conn, "s2", "before") == "s1"  # by hand, the owner may change their mind
     conn = _hour_cut(tmp_path / "2")
-    S.add(conn, "r1", 1823.0, by="jay")
+    S.add(conn, "r1", 1823.0, by="owner")
     assert PT.auto(conn, "s1") == []  # a split there, the owner's
     conn.execute("UPDATE splits SET undone_at=1")
     assert PT.auto(conn, "s1") == []  # or one that was

@@ -360,12 +360,12 @@ def test_labels_carry_across_rediarization_by_timing():
     assert remap_speakers(old, new) == {"A": "A", "B": "C"}
 
 
-def _identify_run(conn, sid, jay, dz_run="dz1", speakers=None):
+def _identify_run(conn, sid, me, dz_run="dz1", speakers=None):
     out = {"speakers": speakers or [{"speaker": "A", "match": None, "speech_s": 5, "self_similarity": None}],
-           "diarize_run": dz_run, "jay_present": jay}
+           "diarize_run": dz_run, "jay_present": me}
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, output, queued_at) "
-                 "VALUES (?, 'identify', ?, 'h', 'done', ?, 0)", (f"r{jay}{sid}", sid, json.dumps(out)))
-    return row(conn, "SELECT * FROM stage_runs WHERE id=?", f"r{jay}{sid}")
+                 "VALUES (?, 'identify', ?, 'h', 'done', ?, 0)", (f"r{me}{sid}", sid, json.dumps(out)))
+    return row(conn, "SELECT * FROM stage_runs WHERE id=?", f"r{me}{sid}")
 
 
 def test_d10_discards_restores_and_respects_keep(lab, monkeypatch):
@@ -516,14 +516,14 @@ def test_insights_wait_until_jay_is_confirmed_and_no_suggestion_is_pending(lab):
     sid = rows(conn, "SELECT id FROM sessions")[0]["id"]
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, output, queued_at) "
                  "VALUES ('dz1', 'diarize', ?, 'h', 'done', 1, ?, 0)", (sid, json.dumps({"speakers": ["A", "B", "C"]})))
-    jay, nisha = V.ensure_person(conn, "Sam", is_self=True), V.ensure_person(conn, "Nisha")
+    me, nisha = V.ensure_person(conn, "Sam", is_self=True), V.ensure_person(conn, "Nisha")
     put = lambda spk, pid, state: conn.execute("INSERT OR REPLACE INTO session_speakers VALUES (?, ?, ?, ?, NULL, 'dz1')",
                                                (sid, spk, pid, state))
     put("A", nisha["id"], "suggested")
-    put("B", jay["id"], "suggested")
+    put("B", me["id"], "suggested")
     put("C", None, "unknown")
     assert _settled_speakers(conn, sid) is None  # nothing confirmed
-    put("B", jay["id"], "confirmed")
+    put("B", me["id"], "confirmed")
     assert _settled_speakers(conn, sid) is None  # "Nisha?" still waiting for an answer
     put("A", nisha["id"], "confirmed")
     got = _settled_speakers(conn, sid)
@@ -564,9 +564,9 @@ def test_lab_api_lists_conversations_with_what_is_left_to_do(lab, monkeypatch):
                     {"id": 1, "speaker": "B", "start": 6.0, "end": 10.0, "text": "Saturday works.", "uncertain": False}]}
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, output, queued_at) "
                  "VALUES ('dz1', 'diarize', ?, 'h', 'done', 1, ?, 0)", (sid, json.dumps(dz)))
-    jay, nisha = V.ensure_person(conn, "Sam", is_self=True), V.ensure_person(conn, "Nisha")
+    me, nisha = V.ensure_person(conn, "Sam", is_self=True), V.ensure_person(conn, "Nisha")
     conn.execute("INSERT INTO session_speakers VALUES (?, 'A', ?, 'suggested', 0.8, 'dz1')", (sid, nisha["id"]))
-    conn.execute("INSERT INTO session_speakers VALUES (?, 'B', ?, 'confirmed', NULL, 'dz1')", (sid, jay["id"]))
+    conn.execute("INSERT INTO session_speakers VALUES (?, 'B', ?, 'confirmed', NULL, 'dz1')", (sid, me["id"]))
 
     kicks = []
     app = FastAPI()
@@ -590,8 +590,8 @@ def test_lab_api_lists_conversations_with_what_is_left_to_do(lab, monkeypatch):
                                    "dropped": [], "beneath": [], "seconds": 1.0})))
     d = c.get(f"/api/octo/sessions/{sid}").json()
     assert d["todo"] == {"kind": "review"}  # one question waits (since 6 Oct)
-    jay = d["speakers"][1].pop("person_id")
-    assert jay.startswith("per_")  # his page (octo/person.py)
+    me = d["speakers"][1].pop("person_id")
+    assert me.startswith("per_")  # his page (octo/person.py)
     assert d["speakers"][1] == {"letter": "B", "name": "Sam", "state": "confirmed", "self": True, "alternatives": [],
                                 "talk_s": 4.0, "share": 0.4}
     assert len(d["lines"]) == 2 and d["insights"]["conduct"][0]["principle"] == 8
@@ -725,7 +725,7 @@ def test_upload_adds_a_recording_once_and_shows_it_incoming(lab):
     assert st.pop("free_gb") > 0
     assert st.pop("privacy")["review"]  # what the privacy line names (test_providers has the cases)
     assert st == {"processing": False, "current": None, "queued": 0, "code_changed": False, "cant_save": None,
-                  "queue_empty_at": None, "queue_steps": 0}
+                  "queue_empty_at": None, "queue_steps": 0, "claude_signed_out": False}
 
 
 def test_a_run_deleted_while_it_runs_is_dropped_not_a_crash(lab):
@@ -800,9 +800,9 @@ def test_voiceprints_from_another_model_are_never_compared_and_can_be_rebuilt(la
     import numpy as np
     from octo import audio as A
     conn = lab["conn"]
-    jay = V.ensure_person(conn, "Sam", is_self=True)
-    V.add_voiceprint(conn, jay["id"], vec(1, 0, 0), 30.0, "enrol:enrol_jay.wav")
-    V.add_voiceprint(conn, jay["id"], vec(0, 1, 0), 9.0, "label:gone:A")
+    me = V.ensure_person(conn, "Sam", is_self=True)
+    V.add_voiceprint(conn, me["id"], vec(1, 0, 0), 30.0, "enrol:enrol_jay.wav")
+    V.add_voiceprint(conn, me["id"], vec(0, 1, 0), 9.0, "label:gone:A")
     before = V.voiceprints_version(conn)
     monkeypatch.setattr(V, "EMBEDDING_MODEL", "some/newer-model")
     assert V.all_voiceprints(conn) == [] and V.voiceprints_version(conn) != before  # identify re-runs, matches nothing old
@@ -863,8 +863,8 @@ def test_identify_leaves_alone_a_conversation_where_jay_answered_for_everyone(la
     old = {"voiceprints": "old-set", "match": [0.6, 0.15]}
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, upstream, params, queued_at) "
                  "VALUES ('id1', 'identify', 'ses_1', 'h2', 'done', 1, '[\"dz1\"]', ?, 0)", (json.dumps(old),))
-    jay = V.ensure_person(conn, "Sam")
-    conn.execute("INSERT INTO session_speakers VALUES ('ses_1', 'A', ?, 'confirmed', 0.9, 'dz1')", (jay["id"],))
+    me = V.ensure_person(conn, "Sam")
+    conn.execute("INSERT INTO session_speakers VALUES ('ses_1', 'A', ?, 'confirmed', 0.9, 'dz1')", (me["id"],))
     conn.execute("INSERT INTO session_speakers VALUES ('ses_1', 'B', NULL, 'unknown', NULL, 'dz1')")
     assert _voiceprints_version(conn, "ses_1")["voiceprints"] != "old-set"  # B could still be named
     conn.execute("UPDATE recordings SET created_at=? WHERE id='rec_1'", (time.time() - 20 * 86400,))

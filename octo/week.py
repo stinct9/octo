@@ -1,4 +1,4 @@
-"""Your week, and "Octo hasn't heard from…" (B17, Jay 19 Oct; docs/backlog.md).
+"""Your week, and "Octo hasn't heard from…" (B17, 19 Oct; docs/backlog.md).
 
 - **The week's card**, on home from Monday to the next Monday, about the seven days before (local time): conversations
   heard, reviewed and acted on; the focus's number that week against the usual (octo/measures.py); commitments open

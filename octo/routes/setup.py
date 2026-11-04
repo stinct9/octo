@@ -152,8 +152,12 @@ def add(router: APIRouter, lab: Lab) -> None:
 
     @router.get("/settings/huggingface")
     def huggingface() -> dict:
-        """Who this Mac is signed in to Hugging Face as, and whether that account may have each gated model."""
-        return MD.account()
+        """Who this Mac is signed in to Hugging Face as, and whether that account may have each gated model. The Speech
+        models step asks every few seconds while one isn't accepted; once all are, what's missing starts downloading."""
+        got = MD.account()
+        if got.get("name") and all(v == "ok" for v in (got.get("access") or {}).values()):
+            fetcher.start()
+        return got
 
     @router.post("/settings/huggingface", dependencies=[Depends(same_origin)])
     def huggingface_sign_in(body: HuggingFaceToken) -> dict:
@@ -190,7 +194,7 @@ def add(router: APIRouter, lab: Lab) -> None:
         if D.load_config():
             lines.insert(0, {"text": "Recording" if want else "Not recording" if want is False else "Recorder",
                              "page": "/"})
-        # A beta tester's clone (a new lab): newer code on its own remote, offered, never applied by itself (Jay, 31 Oct)
+        # A beta tester's clone (a new lab): newer code on its own remote, offered, never applied by itself (31 Oct)
         if LC.origin(conn) == LC.PRODUCT and DP.update_ready(ROOT):
             lines.append({"text": "Octo update ready", "action": "update"})
         needs = any(x.get("needs") for x in lines)

@@ -8,12 +8,13 @@ Which file:
 - `data/rubric.md`: a buyer's own, created the first time they save. It sits with their other data,
   so an update to the software never touches it.
 - `pipeline/rubric.md`: the first lab's, in the repo, as before (`insight.RUBRIC`). A lab without data/rubric.md
-  reads it; its first save copies it, with the edit, to data/rubric.md, and the repo's file is never written (Jay,
-  30 Oct: a save there blocked `octo deploy`). The landing still takes its titles from the repo's file.
+  reads it; its first save copies it, with the edit, to data/rubric.md, and the repo's file is never written (30 Oct:
+  a save there blocked `octo deploy`). The landing still takes its titles from the repo's file.
 - `pipeline/rubric-template.md`: the empty sections a new lab starts from.
 
-The editor saves the owner's text as they typed it. Nothing here writes, suggests or completes a
-principle (CLAUDE.md, the rubric decision).
+The editor saves the owner's text as they typed it. Nothing here writes or completes a principle (CLAUDE.md, the
+rubric decision). The one exception (31 Oct): a new lab's Set up Octo shows the two EXAMPLES below, which go into
+the box only when the owner taps Use this, and are then their own text; the first lab never shows them.
 """
 
 from __future__ import annotations
@@ -39,6 +40,11 @@ def path() -> Path:
 def text() -> str:
     p = path()
     return p.read_text() if p.exists() else ""
+
+
+# The first owner's wording, approved 31 Oct: (the principle, why someone might pick it).
+EXAMPLES = (("Let others finish before I speak.", "If you interrupt or talk over people."),
+            ("Do what I said I would do.", "If the promises you make in conversations slip."))
 
 
 def sections(t: str | None = None) -> dict:

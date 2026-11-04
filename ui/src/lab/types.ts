@@ -429,7 +429,7 @@ export interface Part {
   duration_s: number
   /** Seconds since the part before ended; null for the first. */
   gap_s: number | null
-  by: 'jay' | 'lab' | null
+  by: 'owner' | 'lab' | null
   /** Why the lab grouped it: the hour cap's cut, a pause, another recording ("joined": an audio join from 29 Oct). */
   kind: 'hour' | 'pause' | 'recordings' | 'joined' | null
   /** The part before it (for Not one discussion). */
@@ -482,7 +482,7 @@ export interface SessionDetail extends Omit<SessionSummary, 'speakers'> {
   audio_deleted: boolean
   split_suggestions: SplitSuggestion[]
   /** Split from the conversation before or after it (octo/split.py `here`): by the owner or by the lab, for Join back. */
-  split: { by: 'jay' | 'lab'; side: 'before' | 'after'; other: string | null; at: number } | null
+  split: { by: 'owner' | 'lab'; side: 'before' | 'after'; other: string | null; at: number } | null
   /** B35: the parts of one discussion it's one of, or the conversations either side to read it with. */
   parts: Parts | null
   /** Letters confirmed as the same name whose voices don't clearly agree: one person, or two? */
@@ -517,8 +517,9 @@ export interface SessionDetail extends Omit<SessionSummary, 'speakers'> {
   questions: SessionQuestions | null
 }
 
-/** Where the people change: seconds into the conversation, speaker letters on each side. */
-export interface SplitSuggestion { at: number; pause_s: number; overlap: number; before: string[]; after: string[] }
+/** Where the people change: seconds into the conversation, speaker letters on each side; `strong`: nobody shared and
+ * the owner barely talking on one side, put first on the page. */
+export interface SplitSuggestion { at: number; pause_s: number; overlap: number; before: string[]; after: string[]; strong: boolean }
 
 export interface FixResult { speakers: Speaker[]; todo: Todo; lines: Line[]; turns: Turn[]; corrections: number; left_out: string[] }
 
@@ -665,6 +666,7 @@ export interface Status {
   code_changed?: boolean
   /** The lab can't save to its folder: macOS is holding it (stuck) or refused (denied). */
   cant_save?: 'stuck' | 'denied' | null
+  claude_signed_out?: boolean  // reviews wait for Claude Code's sign-in on the Mac (4 Nov)
   /** When the queue will be empty (B3), while there's work. */
   queue_empty_at?: number | null
   /** Steps to go, with the ones that will be queued as earlier ones finish. */

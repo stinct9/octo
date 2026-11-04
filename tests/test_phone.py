@@ -153,7 +153,7 @@ def test_anything_but_the_macs_own_socket_gets_the_phones_rules(clients):
     app = mac.app
     assert mac.get("/api/octo/sessions").status_code == 200
     assert mac.get("/api/octo/sessions", headers={"X-Forwarded-For": "100.64.1.2"}).status_code == 401
-    assert mac.get("/api/octo/sessions", headers={"Tailscale-User-Login": "jay@example.com"}).status_code == 401
+    assert mac.get("/api/octo/sessions", headers={"Tailscale-User-Login": "sam@example.com"}).status_code == 401
     assert TestClient(app, base_url="http://mac.tail1234.ts.net").get("/api/octo/sessions").status_code == 401
     assert TestClient(app, base_url="http://100.101.102.103:8765").get("/api/octo/sessions").status_code == 401
     assert TestClient(app, base_url="http://localhost:8765").get("/api/octo/sessions").status_code == 200

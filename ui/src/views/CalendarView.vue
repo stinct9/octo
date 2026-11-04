@@ -23,7 +23,7 @@ async function load() {
 onMounted(load)
 watch(() => [props.month, props.day], load)
 
-// Conversations or fillers (Jay, 30 Oct), remembered on this device only.
+// Conversations or fillers (30 Oct), remembered on this device only.
 const show = ref<Show>((() => { try { return localStorage.getItem('octo.calendar.show') === 'fillers' ? 'fillers' : 'talk' } catch { return 'talk' } })())
 watch(show, (v) => { try { localStorage.setItem('octo.calendar.show', v) } catch { /* private window */ } })
 const weeks = computed(() => (m.value ? grid(m.value, show.value) : []))

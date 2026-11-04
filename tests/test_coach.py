@@ -142,7 +142,7 @@ def test_it_reads_the_reviews_shown_now_newest_first_with_jays_marks_and_never_w
     assert m["ids"]["c1.r0"]["quote"]["who"] == "Tara"  # nobody's own words: the first quote
     assert m["read"]["conversations"] == 3 and m["read"]["left_out"] == 1
 
-    system, prompt = CO.system_prompt(m["jay"], m["owner"]), CO.user_prompt(m)
+    system, prompt = CO.system_prompt(m["me"], m["owner"]), CO.user_prompt(m)
     assert system.startswith("You coach Sam,") and "two different conversations" in system
     assert "Keep your word, even when it costs you." in prompt  # the owner's principles, verbatim
     assert "[c1.o] The one thing: You answered before Kiran finished (3): He hadn't said what worried him." in prompt
@@ -164,7 +164,7 @@ def test_it_reads_his_reflection_beside_the_review(tmp_path):  # B15
     assert [c["reflection"] for c in m["conversations"]] == ["I rushed Tara, I knew it as I did it.", None, None]
     prompt = CO.user_prompt(m)
     assert 'How it went, in his words: "I rushed Tara, I knew it as I did it."' in prompt and prompt.count("How it went, in his words") == 1
-    assert "how he said it went in his own words" in CO.system_prompt(m["jay"], m["owner"])
+    assert "how he said it went in his own words" in CO.system_prompt(m["me"], m["owner"])
 
 
 def test_a_theme_needs_items_from_two_conversations(tmp_path):

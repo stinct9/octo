@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// This Mac (Jay, 22 Oct: split from Set up Octo): what the lab needs from this Mac, its notifications, and calls on it.
+// This Mac (22 Oct: split from Set up Octo): what the lab needs from this Mac, its notifications, and calls on it.
 // Mac only, as Set up Octo. Help → Check This Mac in the Octo app opens it.
 import { computed, onMounted, ref } from 'vue'
 import { href } from '../lab/router'

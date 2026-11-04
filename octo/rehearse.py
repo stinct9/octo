@@ -1,4 +1,4 @@
-"""Rehearse a hard conversation, typed (B26, docs/backlog.md; Jay, 21 Oct: typed now, spoken later).
+"""Rehearse a hard conversation, typed (B26, docs/backlog.md; 21 Oct: typed now, spoken later).
 
 Before a difficult conversation the owner plays it through in text, with the model acting the other person: someone
 from People, or someone they describe ("a report who's upset about a rating"). They say what's hard about it and what
@@ -132,8 +132,6 @@ def _reader_of(who: dict) -> dict:
 
 def why_not(conn, now: float | None = None) -> str | None:
     """Why the model can't be asked right now, or None (the coach's reasons)."""
-    from datetime import datetime
-
     from . import claude_code as CC
     from . import pipeline as P
     from .settings import reader
@@ -144,10 +142,8 @@ def why_not(conn, now: float | None = None) -> str | None:
     if who["kind"] == "claude-code":
         if not CC.claude_bin():
             return "Claude Code isn't installed (the `claude` command)"
-        if (blocked := P.claude_blocked_until(conn, now)) is not None:
-            capped = P.claude_calls_since(conn, P._midnight(now)) >= P.DAILY_CLAUDE_CALLS
-            return (f"today's {P.DAILY_CLAUDE_CALLS} Claude calls are used: after midnight" if capped else
-                    f"Claude's usage limit: after {datetime.fromtimestamp(blocked):%H:%M}")
+        if why := P.claude_waits(conn, now):
+            return why
     elif who.get("connection") and P.budget_blocked_until(conn, who["connection"], now):
         return "today's calls on this model's budget are used: after midnight"
     return None

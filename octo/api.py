@@ -47,6 +47,7 @@
   GET  /api/octo/status                  what the background processor is doing (queue_empty_at: when it's done, B3);
                                          code_changed: restart me;
                                          cant_save: the lab can't save to its folder (octo/watchdog.py)
+                                         claude_signed_out: Claude Code is signed out, reviews wait (4 Nov)
   POST /api/octo/sessions/{id}/speakers/{letter}/merge  {"into"}: they're the same person
   POST /api/octo/sessions/{id}/lines/{line}             {"to"}: someone else said this line
   POST /api/octo/sessions/{id}/corrections/undo         take back the last of those
@@ -55,6 +56,7 @@
   POST /api/octo/sessions/{id}/delete    {"confirm": "delete", "work"?}: the whole conversation
   POST /api/octo/sessions/{id}/join-back  undo the split at its start (or end): one conversation again
   POST /api/octo/sessions/{id}/split     {"at"}: seconds in, or a list of them; each later part becomes a new conversation
+  POST /api/octo/sessions/{id}/split/keep-whole  {"at"}: it's one conversation; that suggestion goes, the lab never cuts near it
   POST /api/octo/sessions/{id}/group     {"side": "before"|"after"}: one discussion in parts with its neighbour (B35, Mac only)
   POST /api/octo/sessions/{id}/ungroup   {"first", "second"}: not one discussion; the lab never groups them again (Mac only)
   GET  /api/octo/device                  the recorder: what it was doing when last seen on the Wi-Fi
@@ -82,6 +84,8 @@
   GET  /api/octo/settings/calendar      calendar links (host and last four only) and this Mac's calendars (B23, Mac only)
   POST /api/octo/settings/calendar/links   {"url"}: fetched once to check, then kept in data/calendar.json
   POST /api/octo/settings/calendar/links/{id}/remove   the link and its events gone
+  GET  /api/octo/settings/invite        Invite a tester: the sending address and who was invited; 404 unless `octo invite setup`
+  POST /api/octo/settings/invite        {"name", "email"}: one invitation from that Gmail account (20 a day)
   GET  /api/octo/settings/talk          Talk it through's effort (B31): low / medium / high, medium until changed
   POST /api/octo/settings/talk          {"effort"}
   POST /api/octo/settings/calendar/mac  {"on"}: the Octo app reads this Mac's calendars (EventKit) and posts them

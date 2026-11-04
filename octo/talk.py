@@ -1,4 +1,4 @@
-"""Talk a conversation through (B31, docs/backlog.md; Jay, 28 Oct): after its review, the owner asks about it in their
+"""Talk a conversation through (B31, docs/backlog.md; 28 Oct): after its review, the owner asks about it in their
 own words ("what did their answer mean?", "how could I have asked that?") and the review's model answers, from the lines.
 
 - **One thread per conversation**, kept (`talks`), continued across visits; Start over clears it. Only once the
@@ -8,7 +8,7 @@ own words ("what did their answer mean?", "how could I have asked that?") and th
   thread. One conversation, only when the owner asks.
 - **Moments checked in code** (insight.verify_quote) against the lines, or dropped and counted.
 - **Calls:** one per message, at the owner's effort for talking (Settings → Talk it through; medium until changed,
-  Jay 29 Oct: high took a minute or two), in a thread the server starts (a minute or two: the phone's web
+  29 Oct: high took a minute or two), in a thread the server starts (a minute or two: the phone's web
   view may not hold a request that long); counted in the day's (pipeline._calls_since); a usage-limit failure is kept
   (error, error_at) so Claude's steps wait for its reset. The state is in the row, so a restart loses nothing: a reply
   still running after STOPPED_AFTER_S reads as stopped and can be asked again.

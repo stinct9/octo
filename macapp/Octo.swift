@@ -24,7 +24,7 @@ let LAB = URL(string: ENV["OCTO_LAB_URL"] ?? "http://127.0.0.1:8765")!
 
 /// Bring Octo to the front, only ever because the owner asked (a click in the Dock, the menu bar, Spotlight, a menu
 /// item). macOS 14's activate() is cooperative, only a request, and the request was refused when Octo had been menu-bar
-/// only a moment before (Jay, 19 Oct: opened from the Dock, the window stayed behind the app in front). The older call
+/// only a moment before (19 Oct: opened from the Dock, the window stayed behind the app in front). The older call
 /// still activates regardless (AppKit's header: "If YES, the app activates regardless").
 func comeForward() { NSApp.activate(ignoringOtherApps: true) }
 
@@ -823,7 +823,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
 
 // MARK: - About Octo
 
-/// Octo → About Octo (Jay, 19 Oct, after Claude for Mac's): the icon, the name, the app's version and when it was built
+/// Octo → About Octo (19 Oct, after Claude for Mac's): the icon, the name, the app's version and when it was built
 /// here, which lab is running and when it was last updated, and two ways on: the page for people who ask what Octo is
 /// (octo/pages.py, no sign-in needed; the header leaves its link out inside this app) and Check This Mac.
 final class AboutWindow: NSObject {  // like LabWindow: AppKit calls it on the main thread

@@ -45,7 +45,7 @@ def add(router: APIRouter, lab: Lab) -> None:
         session_or_404(conn, session_id)
         return TK.clear(conn, session_id)
 
-    # How hard it thinks (Jay 29 Oct): low / medium / high, medium until changed. Mac only, like the rest of /settings.
+    # How hard it thinks (29 Oct): low / medium / high, medium until changed. Mac only, like the rest of /settings.
     @router.get("/settings/talk")
     def talk_settings() -> dict:
         return {"effort": TK.effort(db()), "efforts": list(TK.EFFORTS)}

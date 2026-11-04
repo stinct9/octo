@@ -75,7 +75,7 @@ def test_a_split_takes_effect_at_once_and_a_rerun_agrees(tmp_path):
     assert [(c["start"], c["end"]) for c in S.apply([conv], S.for_recording(conn, "r1"), 2.0)] == [(350.0, 2345.0), (2345.0, 4430.0)]
 
 
-def _lab_with(tmp_path, spans, self_state="auto", lines=()):
+def _lab_with(tmp_path, spans, self_state="auto", lines=(), sid="s1"):
     """A recording with one conversation of these turns, the owner found by identify (`self_state`)."""
     import json
     from octo import voice as V
@@ -86,14 +86,14 @@ def _lab_with(tmp_path, spans, self_state="auto", lines=()):
     conv = {"start": 0.0, "end": end, "speech_s": end, "speech": [[0.0, end]]}
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, output, queued_at) "
                  "VALUES ('fc', 'find_conversations', 'r1', 'h', 'done', 1, ?, 0)", (json.dumps({"conversations": [conv]}),))
-    conn.execute("INSERT INTO sessions (id, recording_id, start_s, end_s, speech_s, created_at) VALUES ('s1', 'r1', 0, ?, ?, 0)", (end, end))
+    conn.execute("INSERT INTO sessions (id, recording_id, start_s, end_s, speech_s, created_at) VALUES (?, 'r1', 0, ?, ?, 0)", (sid, end, end))
     letters = sorted({s for s, _, _ in spans})
     dz = {"speakers": letters, "turns": turns(*spans), "lines": list(lines), "talk_s": {}}
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, output, queued_at) "
-                 "VALUES ('dz', 'diarize', 's1', 'h', 'done', 1, ?, 0)", (json.dumps(dz),))
-    jay = V.ensure_person(conn, "Sam", is_self=True)
+                 "VALUES ('dz', 'diarize', ?, 'h', 'done', 1, ?, 0)", (sid, json.dumps(dz)))
+    me = V.ensure_person(conn, "Sam", is_self=True)
     if self_state:
-        conn.execute("INSERT INTO session_speakers VALUES ('s1', 'J', ?, ?, 0.9, 'dz')", (jay["id"], self_state))
+        conn.execute("INSERT INTO session_speakers VALUES (?, 'J', ?, ?, 0.9, 'dz')", (sid, me["id"], self_state))
     return conn
 
 
@@ -113,7 +113,7 @@ def test_the_lab_splits_a_clear_change_and_join_back_undoes_it_for_good(tmp_path
     assert S.for_recording(conn, "r1") == [] and S.here(conn, row(conn, "SELECT * FROM sessions WHERE id='s1'")) is None
     assert S.auto(conn, "s1") is None  # joined back: the lab leaves it
     S.add(conn, "r1", first["end_s"])  # The owner can still split there themselves
-    assert S.for_recording(conn, "r1") == [first["end_s"]] and row(conn, "SELECT by FROM splits")["by"] == "jay"
+    assert S.for_recording(conn, "r1") == [first["end_s"]] and row(conn, "SELECT by FROM splits")["by"] == "owner"
 
 
 def test_the_lab_leaves_an_unclear_change_and_what_jay_has_answered(tmp_path):
@@ -220,3 +220,36 @@ def test_the_split_route_takes_one_point_or_several(tmp_path, monkeypatch):
     r = c.post(f"/api/octo/sessions/{sid}/split", json={"at": 600.0})  # a single number, as the phone and older pages send
     assert r.status_code == 200 and r.json()["split_at"] == 600.0 and r.json()["new_session"] and kicks == [1, 1]
     assert [x["end_s"] for x in rows(connect(tmp_path / "m.db"), "SELECT end_s FROM sessions ORDER BY start_s")][:2] == [950.0, 1550.0]
+
+
+def test_a_change_with_nobody_shared_and_the_owner_away_on_one_side_is_strong():
+    # 30 Oct 21:29: the owner listening, then in the next one; the lab didn't cut it (an 11 s pause)
+    away = meeting(["B", "D"], 0, 15) + meeting(["G", "J", "K"], 15 * 60 + 11, 15)
+    assert [g["strong"] for g in S.suggest(turns(*away), {"J"})] == [True]
+    assert [g["strong"] for g in S.suggest(turns(*away))] == [False]  # the owner not known: can't tell
+    both = meeting(["B", "J", "D"], 0, 15) + meeting(["G", "J", "K"], 15 * 60 + 11, 15)  # 29 Oct 20:43: one
+    assert [g["strong"] for g in S.suggest(turns(*both), {"J"})] == [False]
+
+
+def test_its_one_hides_the_suggestion_and_the_lab_never_cuts_there(tmp_path, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import octo.api as API
+    from octo.db import connect, row
+    clear = meeting(["B", "D"], 0, 15) + meeting(["G", "J", "K"], 15 * 60 + 85, 15)
+    sid = "ses_20261030_5c1d0e2a"
+    _lab_with(tmp_path, clear, sid=sid).commit()
+    monkeypatch.setattr(API, "DATA", tmp_path / "data")
+    app = FastAPI()
+    app.include_router(API.make_router(lambda: connect(tmp_path / "a.db"), processor=type("P", (), {"kick": lambda self: 0})()))
+    c = TestClient(app)
+    sess = row(connect(tmp_path / "a.db"), "SELECT * FROM sessions")
+    (at,) = [g["at"] for g in S.suggestions(connect(tmp_path / "a.db"), sess, turns(*clear), {"J"})]
+    assert c.post(f"/api/octo/sessions/{sid}/split/keep-whole", json={"at": 99999}).status_code == 422
+    assert c.post(f"/api/octo/sessions/{sid}/split/keep-whole", json={"at": at}).status_code == 200
+    conn = connect(tmp_path / "a.db")
+    assert S.suggestions(conn, sess, turns(*clear), {"J"}) == [] and S.for_recording(conn, "r1") == []
+    assert S.auto(conn, sid) is None  # would have cut here otherwise (85 s, nobody shared)
+    S.add(conn, "r1", at)  # Splitting there by hand still works
+    assert S.for_recording(conn, "r1") == [round(at, 2)]

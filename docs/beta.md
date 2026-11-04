@@ -49,5 +49,5 @@ reviews before it deletes anything.
 ## For the person running the beta
 
 - Testers' results files arrive by email; nothing is collected automatically.
-- No pass mark (Jay, 19 Oct): the beta is for finding where people get stuck and whether it helps them, as open
+- No pass mark (19 Oct): the beta is for finding where people get stuck and whether it helps them, as open
   source projects usually do it, not a gate. Nothing waits on a number from it (docs/gate-plan.md).

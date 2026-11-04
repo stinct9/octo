@@ -169,14 +169,14 @@ CREATE TABLE IF NOT EXISTS splits (            -- "two discussions here" (octo/s
     recording_id TEXT NOT NULL REFERENCES recordings(id),
     at_s         REAL NOT NULL,                 -- recording time
     created_at   REAL NOT NULL,
-    by           TEXT NOT NULL DEFAULT 'jay',   -- jay | lab (people plan 4.5: when the change is clear)
+    by           TEXT NOT NULL DEFAULT 'owner', -- owner | lab (people plan 4.5: when the change is clear)
     undone_at    REAL,                          -- joined back: kept, so the lab doesn't split there again
     PRIMARY KEY (recording_id, at_s)
 );
 CREATE TABLE IF NOT EXISTS parts (             -- one discussion in parts (octo/parts.py, B35): read as one at the review
     first_id     TEXT NOT NULL,                 -- a conversation (sessions.id)
     second_id    TEXT NOT NULL,                 -- the one right after it, recorded apart: an hour cut, a pause, another recording
-    by           TEXT NOT NULL DEFAULT 'jay',   -- jay | lab
+    by           TEXT NOT NULL DEFAULT 'owner', -- owner | lab
     kind         TEXT,                          -- the lab's reason: hour | pause | recordings
     created_at   REAL NOT NULL,
     undone_at    REAL,                          -- "Not one discussion": kept, so the lab never groups them again
@@ -479,7 +479,7 @@ def new_id(prefix: str) -> str:
 # write lock (review 8 Oct, finding 1). Before, every connection ran both, unguarded: the server opens several
 # at once when it starts, and on a new database (or after an upgrade adding a column) one connection's ALTER
 # raced another's ("duplicate column", reproduced 102 times in 30 new databases).
-SCHEMA_VERSION = 20  # 2: lab_origin (8 Oct, finding 8); 3: splits by the lab, joined back (9 Oct); 4: set aside (13 Oct, B5);
+SCHEMA_VERSION = 21  # 2: lab_origin (8 Oct, finding 8); 3: splits by the lab, joined back (9 Oct); 4: set aside (13 Oct, B5);
 # 5: question checks by ear (13 Oct, B4); 6: commitments, and from when they're looked for (20 Oct, B14);
 # 7: intentions and reflections (21 Oct, B15); 8: marks (21 Oct, B16); 9: drills (21 Oct, B18)
 # 10: the owner's check of each commitment (21 Oct, B14)
@@ -493,6 +493,7 @@ SCHEMA_VERSION = 20  # 2: lab_origin (8 Oct, finding 8); 3: splits by the lab, j
 # 18: joins, one discussion in two conversations (29 Oct, B35)
 # 19: plans for the next conversation with someone, and what each read (30 Oct, B36)
 # 20: parts of one discussion, joined at the review; 18's joins carried over and dropped (30 Oct, B35)
+# 21: the first owner's name out of stored values: lab_origin, who split or joined, D10's note (31 Oct, D9)
 
 
 def private() -> None:
@@ -609,11 +610,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     labconfig.decide(conn)
     split_cols = {r["name"] for r in conn.execute("PRAGMA table_info(splits)")}
     if "by" not in split_cols:  # who split there (9 Oct): the owner, or the lab when the people change clearly
-        conn.execute("ALTER TABLE splits ADD COLUMN by TEXT NOT NULL DEFAULT 'jay'")
+        conn.execute("ALTER TABLE splits ADD COLUMN by TEXT NOT NULL DEFAULT 'owner'")
     if "undone_at" not in split_cols:  # joined back; the row stays so the lab doesn't split there again
         conn.execute("ALTER TABLE splits ADD COLUMN undone_at REAL")
     # B14: commitments are looked for in conversations from the 14 days before the step came, and every one since;
-    # older ones are never queued (Jay, 19 Oct). Set once, when this lab first meets the step.
+    # older ones are never queued (19 Oct). Set once, when this lab first meets the step.
     conn.execute("INSERT OR IGNORE INTO app_config (key, value, updated_at) VALUES ('commitments_from', ?, ?)",
                  (json.dumps(round(time.time() - 14 * 86400)), time.time()))
     people_cols = {r["name"] for r in conn.execute("PRAGMA table_info(people)")}
@@ -642,6 +643,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
                          "VALUES (?, ?, ?, 'joined', ?, ?)", (j["session_id"], j["second_id"], j["by"], j["created_at"],
                                                               j["undone_at"]))
         conn.execute("DROP TABLE joins")
+    # D9 (31 Oct): no one's name in what's stored. Matched by what else each can be, so the old name needn't be written here.
+    conn.execute("""UPDATE app_config SET value='"first"' WHERE key='lab_origin' AND value != '"product"'""")
+    conn.execute("UPDATE splits SET by='owner' WHERE by != 'lab'")
+    conn.execute("UPDATE parts SET by='owner' WHERE by != 'lab'")
+    conn.execute("UPDATE sessions SET note='Your voice' || substr(note, instr(note, ' voice not heard') + 6) "
+                 "WHERE note LIKE '%''s voice not heard%'")
 
 
 @contextmanager

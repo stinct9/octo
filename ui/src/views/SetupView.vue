@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Getting started, and editing who you are and what you measure against (product plan 4.2).
-// Nothing on this page writes or suggests principles: the review measures you against your own words.
+// Nothing on this page writes principles: the review measures you against your own words. A new lab is shown two
+// examples (31 Oct) that go into the box only on Use this, and are the owner's own text from then on.
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import IphoneSetup from '../components/IphoneSetup.vue'
 import ModelsKeys from '../components/ModelsKeys.vue'
@@ -10,7 +11,7 @@ import { href } from '../lab/router'
 import type { PipelineStep } from '../lab/types'
 
 interface Profile { name?: string; pronoun?: string; about?: string; principles_from?: string; never?: string }
-interface Sections { principles: string; rules: string; parsed: { n: number; title: string }[]; file: string }
+interface Sections { principles: string; rules: string; parsed: { n: number; title: string }[]; file: string; examples?: { text: string; why: string }[] }
 interface Step { id: string; done: boolean; skipped?: boolean; optional?: boolean; why?: Check[]; do?: string; link?: string | null }
 interface Setup { steps: Step[]; complete: boolean; empty?: boolean }
 interface Check { mark: '✓' | '!' | '✗'; what: string; detail: string; fix: string }
@@ -71,10 +72,17 @@ const hf = ref<HfAccount | null>(null)
 const hfChecking = ref(false)
 const hfToken = ref('')
 const hfError = ref('')
+const accepted = (repo: string) => hf.value?.access?.[repo] === 'ok'
+const toAccept = computed(() => gatedMissing.value.filter((m) => !accepted(m.repo)))
+let hfTimer: number | undefined
 async function checkHf() {
   hfChecking.value = true
   try { hf.value = await call<HfAccount>('GET', '/api/octo/settings/huggingface') } catch { hf.value = { name: null } }
   hfChecking.value = false
+  // Conditions are accepted on Hugging Face's site, not here: ask again until they are (the lab then downloads them).
+  window.clearTimeout(hfTimer)
+  if (hf.value?.name && toAccept.value.length) hfTimer = window.setTimeout(checkHf, 8000)
+  else if (hf.value?.name && gatedMissing.value.length) loadModels()
 }
 async function signInHf() {
   hfError.value = ''
@@ -83,10 +91,11 @@ async function signInHf() {
     hf.value = await call<HfAccount>('POST', '/api/octo/settings/huggingface', { token: hfToken.value.trim() })
     hfToken.value = ''
     loadModels()
+    checkHf()
   } catch (e) { hfError.value = e instanceof Error ? e.message : String(e) }
   hfChecking.value = false
 }
-onUnmounted(() => { window.clearTimeout(poll); window.clearTimeout(setupTimer) })
+onUnmounted(() => { window.clearTimeout(poll); window.clearTimeout(setupTimer); window.clearTimeout(hfTimer) })
 
 // Try it: a review of a made-up conversation, on your model and principles (octo/sample.py)
 interface SampleReview {
@@ -136,6 +145,12 @@ watch(principles, (text) => {
     try { preview.value = text.trim() ? await call<{ n: number; text: string }[]>('POST', '/api/octo/settings/rubric/preview', { principles: text }) : [] } catch { /* the preview waits for the next keystroke */ }
   }, 300)
 })
+const unused = computed(() => (sections.value?.examples ?? []).filter((e) => !principles.value.includes(e.text)))
+function useExample(text: string) {
+  const t = principles.value.trimEnd()
+  const n = t.split('\n').filter((l) => /^\s*(\d+[.)]|[-•])\s/.test(l)).length  // not the preview: it lags 300 ms
+  principles.value = `${t ? `${t}\n` : ''}${n + 1}. ${text}\n`
+}
 async function savePrinciples() {
   prError.value = ''
   prNote.value = ''
@@ -227,30 +242,50 @@ onMounted(async () => {
       </div>
 
       <div v-if="gatedMissing.length" class="hf">
-        <p><b>Two of them need a free Hugging Face account.</b> Their authors share them on the condition that you accept
-          their terms, and approve at once. Octo respects that rather than shipping the files itself.</p>
+        <p><b>Two of them need a free Hugging Face account.</b> Hugging Face is where researchers share models like these.
+          The makers of these two (pyannote: they tell voices apart) share them free, on condition that you accept their
+          terms and say where you work or study. It's approved at once. Octo respects that rather than shipping the files itself.</p>
         <ol class="hf-steps">
-          <li>Sign in or make an account at <a href="https://huggingface.co/join" target="_blank" rel="noopener">huggingface.co</a>.</li>
-          <li>Accept the conditions on each model's page:
-            <template v-for="(m, i) in gatedMissing" :key="m.repo"><a :href="`https://huggingface.co/${m.repo}`" target="_blank" rel="noopener">{{ short(m.repo) }}</a><span v-if="hf?.access?.[m.repo] === 'ok'" class="ok"> (accepted)</span><template v-if="i < gatedMissing.length - 1"> and </template></template>.</li>
-          <li>Make a token: a long code, like a password, that lets this Mac download the two models for you. Open
-            <a href="https://huggingface.co/settings/tokens/new?tokenType=read" target="_blank" rel="noopener">Access Tokens</a>,
-            choose <b>Read</b>, type any name (say "Octo"), click <b>Create token</b>, then <b>Copy</b>, and paste it here.</li>
+          <li :class="{ done: hf?.name }"><b>An account.</b> Make one at
+            <a href="https://huggingface.co/join" target="_blank" rel="noopener">huggingface.co/join</a> (an email and a
+            password, then click the link in the email they send), or sign in if you have one.</li>
+          <li :class="{ done: hf?.name }"><b>A token for this Mac.</b> A long code, like a password, that lets this Mac download the
+            two models for you. Open <a href="https://huggingface.co/settings/tokens/new?tokenType=read" target="_blank" rel="noopener">Access Tokens</a>,
+            choose <b>Read</b>, type any name (say "Octo"), click <b>Create token</b>, then <b>Copy</b>, and paste it here.
+            <form v-if="!hf?.name" class="line" @submit.prevent="signInHf">
+              <label class="field grow">Read token<input v-model="hfToken" type="password" autocomplete="off" spellcheck="false" placeholder="hf_…"></label>
+              <button type="submit" class="btn" :disabled="hfChecking || hfToken.trim().length < 8">{{ hfChecking ? 'Checking…' : 'Sign in' }}</button>
+            </form>
+            <p v-else class="small">Signed in as <b>{{ hf.name }}</b>.</p>
+            <p v-if="hfError" class="error small" role="alert">{{ hfError }}</p>
+          </li>
+          <li :class="{ done: hf?.name && !toAccept.length }"><b>Accept each model's conditions,</b> in the browser where you're signed in to Hugging Face:
+            <ol class="how small">
+              <li>Open the model's page (below). If the page asks you to log in, do that first.</li>
+              <li>Near the top is a box: <i>You need to agree to share your contact information to access this model.</i></li>
+              <li>Fill in <b>Company/university</b> (where you work or study, or "Personal") and <b>Website</b> (your
+                company's site, or any page about you).</li>
+              <li>Click <b>Agree and access repository</b>. The box then says you've been granted access.</li>
+            </ol>
+            <ul class="gated">
+              <li v-for="m in gatedMissing" :key="m.repo">
+                <a :href="`https://huggingface.co/${m.repo}`" target="_blank" rel="noopener">{{ short(m.repo) }}</a>
+                <span v-if="!hf?.name" class="muted small">Octo can tell once your token is in.</span>
+                <span v-else-if="accepted(m.repo)" class="ok small">✓ Accepted</span>
+                <span v-else class="warn small">Not accepted yet</span>
+              </li>
+            </ul>
+            <p class="muted small">pyannote's form says they may email you now and then about their paid services.</p>
+            <p v-if="hf?.name && toAccept.length" class="muted small" aria-live="polite">This page checks again every few
+              seconds{{ hfChecking ? '…' : '.' }} Once both say Accepted, they download by themselves.</p>
+            <p v-else-if="hf?.name && !models?.running" class="small"><button type="button" class="btn btn-small" @click="downloadModels">Download them</button></p>
+          </li>
         </ol>
         <p v-if="hf?.name && hf.role === 'write'" class="warn small">This is a Write token. It works, but a Read token is
           safer: it can't change anything on your Hugging Face account. You can make a Read one and sign in with it instead.</p>
-        <p v-if="hf?.name && hf.role === 'fineGrained' && gatedMissing.some((m) => hf?.access?.[m.repo] !== 'ok')" class="warn small">
+        <p v-if="hf?.name && hf.role === 'fineGrained' && toAccept.length" class="warn small">
           This token is a limited ("fine-grained") one and may not be allowed to download these models. If accepting the
           conditions doesn't help, make a token of type <b>Read</b> and sign in with it.</p>
-        <p v-if="hf?.name" class="small">Signed in as <b>{{ hf.name }}</b>.
-          <template v-if="gatedMissing.some((m) => hf?.access?.[m.repo] !== 'ok')"> Accept the conditions above, then
-            <button type="button" class="btn btn-small" :disabled="hfChecking" @click="checkHf(); loadModels()">Check again</button></template>
-          <template v-else-if="!models?.running"> <button type="button" class="btn btn-small" @click="downloadModels">Download them</button></template></p>
-        <form v-else class="line" @submit.prevent="signInHf">
-          <label class="field grow">Read token<input v-model="hfToken" type="password" autocomplete="off" spellcheck="false" placeholder="hf_…"></label>
-          <button type="submit" class="btn" :disabled="hfChecking || hfToken.trim().length < 8">{{ hfChecking ? 'Checking…' : 'Sign in' }}</button>
-        </form>
-        <p v-if="hfError" class="error small" role="alert">{{ hfError }}</p>
         <p class="muted small">The token stays on this Mac (where Hugging Face's own tools keep it) and is only used to
           download models.</p>
       </div>
@@ -279,10 +314,20 @@ onMounted(async () => {
     <SetupStep :n="nOf('principles')" title="Your principles" :state="stateOf('principles')">
 
       <p class="muted">The review measures how you showed up against these, in your own words. Start each one on its own
-        line with a number ("1.") or a dash; a line right under it belongs to it, and headings between them are fine.
-        Nothing in Octo writes or suggests them.</p>
+        line with a number ("1.") or a dash; a line right under it belongs to it, and headings between them are fine.</p>
       <label class="field">Principles
         <textarea v-model="principles" rows="10" spellcheck="true" placeholder="1. …"></textarea></label>
+      <div v-if="unused.length && !done('principles')" class="examples">
+        <p class="small"><b>Not sure where to start?</b> <span class="muted">Writing your own is best. These are examples: one
+          goes into the box only if you tap Use this, and then it's yours to change.</span></p>
+        <div class="example-cards">
+          <div v-for="e in unused" :key="e.text" class="example">
+            <p>{{ e.text }}</p>
+            <p class="muted small">{{ e.why }}</p>
+            <button type="button" class="btn btn-small" @click="useExample(e.text)">Use this</button>
+          </div>
+        </div>
+      </div>
       <div v-if="preview.length" class="small">
         <span class="muted">The review will read {{ preview.length }} principle{{ preview.length === 1 ? '' : 's' }}:</span>
         <ol class="preview"><li v-for="p in preview" :key="p.n" :value="p.n">{{ p.text }}</li></ol>
@@ -407,8 +452,19 @@ p { margin: 0; }
 .checks .fix { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
 details summary { cursor: pointer; }
 details .checks { margin-top: 8px; }
+.examples { display: flex; flex-direction: column; gap: 8px; }
+.examples p { margin: 0; }
+.example-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.example { border: 1px dashed var(--line-strong); border-radius: 8px; padding: 12px; display: flex; flex-direction: column;
+  gap: 6px; align-items: flex-start; }
+.example .btn { margin-top: auto; }
 .hf { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); }
-.hf-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.hf-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+.hf-steps > li > * + * { margin-top: 6px; }
+.hf-steps > li.done::marker { color: var(--pass); }
+.how { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 2px; }
+.gated { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.gated li { display: flex; gap: 12px; align-items: baseline; }
 .sample { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
 .one { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 8px; background: var(--quote); }
 .one .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }

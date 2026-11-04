@@ -35,6 +35,12 @@ MAJOR_SHARE = 0.1     # "was in the discussion": at least a tenth of that side's
 AUTO_MIN_GAP_S = 60.0
 AUTO_MAX_OVERLAP = 0.05
 EDGE_S = 90.0  # where a goodbye or hello is looked for, before and after
+# A suggestion the page puts first (31 Oct, the owner chose "suggest, don't cut"): nobody shared and the owner barely
+# talking on one side. Replayed over 78 conversations: 30 Oct 21:29 (0.00 shared, the owner 0% before and 60% after,
+# an 11 s pause) was two conversations and the lab didn't cut it; 1 Oct 19:58 (0.03) and 29 Oct 20:43 (0.02, the
+# owner on both sides) were one; 22 Oct 21:31 (0.00, the owner 29% then 0%) the owner wasn't sure.
+STRONG_MAX_OVERLAP = 0.01
+STRONG_OWN_SHARE = 0.05
 # shortcut: English only, from 16 Oct's calls; add Hindi words once a Hindi meeting switch is seen.
 GOODBYE = re.compile(r"\b(bye|goodbye|see you|talk (to you )?later|thanks everyone|thank you (all|everyone|so much)"
                      r"|have a good|take care|cheers)\b")
@@ -52,6 +58,11 @@ def _talk(turns: list[dict], a: float, b: float, ignore: set[str]) -> dict[str, 
     return out
 
 
+def _own_share(turns: list[dict], a: float, b: float, me: set[str]) -> float:
+    talk = _talk(turns, a, b, set())
+    return sum(v for s, v in talk.items() if s in me) / (sum(talk.values()) or 1)
+
+
 def _carry(frm: dict[str, float], to: dict[str, float]) -> float:
     """Share of `to`'s talk by people who were really in `frm`."""
     total_from, total_to = sum(frm.values()), sum(to.values())
@@ -60,9 +71,9 @@ def _carry(frm: dict[str, float], to: dict[str, float]) -> float:
 
 
 def _candidates(turns: list[dict], ignore: set[str]) -> list[dict]:
-    """Every pause where the people change: [{"at", "pause_s", "gap_s", "before", "after", "overlap"}].
+    """Every pause where the people change: [{"at", "pause_s", "gap_s", "before", "after", "overlap", "strong"}].
     `gap_s` is how long the others were silent around it (the owner left out); `overlap` the more shared of
-    the 10 minutes on each side and the whole conversation on each side."""
+    the 10 minutes on each side and the whole conversation on each side; `strong` see STRONG_*."""
     turns = sorted(turns, key=lambda t: t["start"])
     if len(turns) < 2:
         return []
@@ -84,8 +95,11 @@ def _candidates(turns: list[dict], ignore: set[str]) -> list[dict]:
                         others = [x for x in turns if x["speaker"] not in ignore]
                         gap = (min(x["start"] for x in others if x["start"] >= at)
                                - max(x["end"] for x in others if x["end"] <= at))
+                        strong = bool(ignore) and overlap <= STRONG_MAX_OVERLAP and min(
+                            _own_share(turns, at - WINDOW_S, at, ignore),
+                            _own_share(turns, at, at + WINDOW_S, ignore)) < STRONG_OWN_SHARE
                         found.append({"at": at, "pause_s": round(pause, 1), "gap_s": round(gap, 1),
-                                      "overlap": round(overlap, 2),
+                                      "overlap": round(overlap, 2), "strong": strong,
                                       "before": sorted(before, key=lambda s: -before[s]),
                                       "after": sorted(after, key=lambda s: -after[s])})
         end_so_far = max(end_so_far, t["end"])
@@ -102,6 +116,22 @@ def suggest(turns: list[dict], ignore: set[str] = frozenset()) -> list[dict]:
         if all(abs(f["at"] - k["at"]) >= MIN_PART_S for k in kept):
             kept.append(f)
     return kept
+
+
+def suggestions(conn, sess: dict, turns: list[dict], me: set[str]) -> list[dict]:
+    """For the page: `suggest`, less any near a place the owner said is one conversation (It's one, or Join back),
+    the same rule `auto` keeps to."""
+    undone = [r[0] - sess["start_s"] for r in conn.execute(
+        "SELECT at_s FROM splits WHERE recording_id=? AND undone_at IS NOT NULL", (sess["recording_id"],))]
+    return [f for f in suggest(turns, me) if all(abs(f["at"] - u) >= MIN_PART_S for u in undone)]
+
+
+def keep_whole(conn, sess: dict, at: float) -> None:
+    """It's one conversation (`at`, seconds in): kept as a split already undone, so the page stops suggesting it
+    and the lab never cuts near it. Splitting there by hand later still works (`add`)."""
+    now = time.time()
+    conn.execute("INSERT INTO splits (recording_id, at_s, created_at, by, undone_at) VALUES (?, ?, ?, 'owner', ?) "
+                 "ON CONFLICT (recording_id, at_s) DO NOTHING", (sess["recording_id"], round(sess["start_s"] + at, 2), now, now))
 
 
 def ended(lines: list[dict], at: float) -> bool:
@@ -126,12 +156,12 @@ def apply(conversations: list[dict], splits: list[float], min_speech_s: float) -
     return out
 
 
-def split_now(conn, session: dict, at_s: float, by: str = "jay") -> str:
+def split_now(conn, session: dict, at_s: float, by: str = "owner") -> str:
     """One cut (the lab's, and the owner's single split): see `split_at`. Returns the second part's id."""
     return split_at(conn, session, [at_s], by)[0]
 
 
-def split_at(conn, session: dict, cuts: list[float], by: str = "jay") -> list[str]:
+def split_at(conn, session: dict, cuts: list[float], by: str = "owner") -> list[str]:
     """Record the splits (recording time, inside the session) and apply them to the sessions at once, rather
     than when find_conversations next runs: the owner sees the new conversations straight away. N cuts make
     N+1 parts: the first keeps the session (and its labels), each later one is a new session. Returns the
@@ -166,7 +196,7 @@ def for_recording(conn, recording_id: str) -> list[float]:
                                        "ORDER BY at_s", (recording_id,))]
 
 
-def add(conn, recording_id: str, at_s: float, by: str = "jay") -> None:
+def add(conn, recording_id: str, at_s: float, by: str = "owner") -> None:
     """A split there, by the owner or the lab. The owner splitting where one was joined back splits it again."""
     conn.execute("INSERT INTO splits (recording_id, at_s, created_at, by) VALUES (?, ?, ?, ?) "
                  "ON CONFLICT (recording_id, at_s) DO UPDATE SET undone_at=NULL, by=excluded.by",

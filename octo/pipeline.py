@@ -144,8 +144,13 @@ RETRY_AFTER_S = 15 * 60
 # attempt: the run waits until the limit resets, and so does every other step that needs Claude.
 # On 4 Oct three reviews and a Hindi transcript used up all three attempts in two hours, hours
 # before the reset, and then waited for Try again.
-LIMIT_WORDS = ("hit your session limit", "hit your usage limit", "hit your limit", "usage limit reached")
-_RESETS = re.compile(r"resets\s+(\d{1,2})(?::(\d{2}))?\s*([ap]m)?(?:\s*\(([^)]+)\))?", re.I)
+# The weekly one (31 Oct: "You've hit your weekly limit · resets Nov 3 at 2:30am (Asia/Calcutta)") wasn't recognised
+# until 4 Nov: its six failures were counted and two reviews waited for Try again.
+LIMIT_WORDS = ("hit your session limit", "hit your usage limit", "hit your weekly limit", "hit your limit",
+               "usage limit reached")
+_RESETS = re.compile(r"resets\s+(?:([a-z]{3})[a-z]*\.?\s+(\d{1,2})\s+at\s+)?(\d{1,2})(?::(\d{2}))?\s*([ap]m)?"
+                     r"(?:\s*\(([^)]+)\))?", re.I)
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 
 
 def limit_reset(error: str | None, failed_at: float | None) -> float | None:
@@ -155,22 +160,60 @@ def limit_reset(error: str | None, failed_at: float | None) -> float | None:
         return None
     failed_at = failed_at or time.time()
     m = _RESETS.search(error)
-    hour, minute = (int(m[1]), int(m[2] or 0)) if m else (99, 0)
-    if m and (m[3] or "").lower() == "pm" and hour < 12:
+    hour, minute = (int(m[3]), int(m[4] or 0)) if m else (99, 0)
+    if m and (m[5] or "").lower() == "pm" and hour < 12:
         hour += 12
-    elif m and (m[3] or "").lower() == "am" and hour == 12:
+    elif m and (m[5] or "").lower() == "am" and hour == 12:
         hour = 0
-    if hour > 23 or minute > 59:
+    month = _MONTHS.index(m[1].lower()) + 1 if m and m[1] and m[1].lower() in _MONTHS else None
+    if hour > 23 or minute > 59 or (m and m[1] and not month):
         return failed_at + 3600
     try:
-        zone = ZoneInfo(m[4].strip()) if m[4] else None
+        zone = ZoneInfo(m[6].strip()) if m[6] else None
     except (ValueError, KeyError):  # not a zone name we know: the Mac's own time
         zone = None
     at = datetime.fromtimestamp(failed_at, zone)
-    reset = at.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    try:
+        reset = at.replace(**({"month": month, "day": int(m[2])} if month else {}), hour=hour, minute=minute, second=0,
+                           microsecond=0)
+    except ValueError:  # no such day
+        return failed_at + 3600
     if reset <= at:
-        reset += timedelta(days=1)
+        reset = reset.replace(year=reset.year + 1) if month else reset + timedelta(days=1)
     return reset.timestamp() + 60
+
+
+# Claude Code signed out on this Mac (3 Nov: its login expired and for two days every review failed three times,
+# then said "press Try again", which couldn't fix it). Like the usage limit it says nothing about the run: it isn't
+# counted, and every step that needs Claude waits until `claude auth status` says it's signed in again, looked at
+# once every SIGN_IN_CHECK_S; then they carry on by themselves.
+SIGNED_OUT_WORDS = ("claude auth login", "log in with /login")
+SIGN_IN_CHECK_S = 300
+SIGN_IN = "Claude Code is signed out on this Mac: run claude auth login in Terminal, and reviews carry on by themselves"
+_signed_in: tuple[float, bool] = (0.0, False)
+
+
+def signed_out(error: str | None) -> bool:
+    return bool(error) and any(w in error for w in SIGNED_OUT_WORDS)
+
+
+def signed_in(now: float | None = None) -> bool:
+    """Whether Claude Code is signed in on this Mac now (`claude auth status`), asked at most once a minute."""
+    global _signed_in
+    now = now if now is not None else time.time()
+    if now - _signed_in[0] > 60:
+        from . import claude_code as CC
+        _signed_in = (now, CC.status()["logged_in"])
+    return _signed_in[1]
+
+
+def claude_signed_out(conn, now: float | None = None) -> float | None:
+    """When the newest step that called Claude failed because Claude Code was signed out, while it still is; else None."""
+    for r in rows(conn, "SELECT stage, params, status, error, finished_at FROM stage_runs WHERE status IN ('done','failed') "
+                        "AND stage IN ('insight','commitments','transcribe') ORDER BY finished_at DESC LIMIT 100"):
+        if uses_claude(r):
+            return r["finished_at"] if r["status"] == "failed" and signed_out(r["error"]) and not signed_in(now) else None
+    return None
 
 
 # A provider's rate limit, outage or network failure (octo/providers.py TRANSIENT; review 8 Oct, finding 5) says
@@ -205,9 +248,12 @@ def due_at(conn, stage: str, target: str, input_hash: str) -> float:
     reset = limit_reset(fails[0]["error"], fails[0]["finished_at"])
     if reset is not None:
         return reset
+    if signed_out(fails[0]["error"]):  # claude_blocked_until holds it while still signed out
+        return (fails[0]["finished_at"] or 0) + SIGN_IN_CHECK_S
     if (again := transient_retry(fails)) is not None:
         return again
-    counted = [f for f in fails if limit_reset(f["error"], f["finished_at"]) is None and not transient(f["error"])]
+    counted = [f for f in fails if limit_reset(f["error"], f["finished_at"]) is None and not transient(f["error"])
+               and not signed_out(f["error"])]
     if len(counted) >= MAX_ATTEMPTS:
         return math.inf
     return (counted[0]["finished_at"] or 0) + RETRY_AFTER_S * 2 ** (len(counted) - 1)
@@ -228,6 +274,8 @@ def next_due(conn, now: float | None = None) -> float | None:
                          "AND d.stage=f.stage AND d.input_hash=f.input_hash AND d.status IN ('done','queued','running'))",
                    now - 2 * 86400)
     due = [d for w in waiting if now < (d := due_at(conn, w["stage"], w["target"], w["input_hash"])) < math.inf]
+    if claude_signed_out(conn, now) is not None:  # look again soon: the owner may have signed in
+        due.append(now + SIGN_IN_CHECK_S)
     if (settled := PL.voiceprints_settle_at(conn, now)) is not None:
         due.append(settled)
     return min(due) if due else None
@@ -298,7 +346,21 @@ def claude_blocked_until(conn, now: float | None = None) -> float | None:
               if (r := limit_reset(f["error"], f["finished_at"])) is not None and r > now]
     if claude_calls_since(conn, _midnight(now)) >= DAILY_CLAUDE_CALLS:
         resets.append(_midnight(now, 1))
+    if claude_signed_out(conn, now) is not None:
+        resets.append(now + SIGN_IN_CHECK_S)
     return max(resets) if resets else None
+
+
+def claude_waits(conn, now: float | None = None) -> str | None:
+    """Why something that needs Claude can't go now, in the owner's words, or None."""
+    now = now if now is not None else time.time()
+    if claude_signed_out(conn, now) is not None:
+        return SIGN_IN
+    if (blocked := claude_blocked_until(conn, now)) is None:
+        return None
+    if claude_calls_since(conn, _midnight(now)) >= DAILY_CLAUDE_CALLS:
+        return f"today's {DAILY_CLAUDE_CALLS} Claude calls are used: after midnight"
+    return f"Claude's usage limit: after {datetime.fromtimestamp(blocked):%H:%M}"
 
 
 def run_reader(run: dict) -> dict | None:
@@ -424,7 +486,7 @@ def plan(conn) -> list[str]:
         # Auto-discarded sessions (D10) still get identify re-run, so a new voiceprint or a better
         # rule can bring them back; nothing after identify runs on them.
         for sess in rows(conn, "SELECT * FROM sessions WHERE recording_id=? AND (status='active' OR "
-                               "(status='discarded' AND kept=0 AND note LIKE 'Jay''s voice not heard%'))", rec["id"]):
+                               "(status='discarded' AND kept=0 AND note LIKE 'Your voice not heard%'))", rec["id"]):
             blocked: set[str] = set()  # stages that can't run yet, and so neither can what builds on them
             for name in list(STAGES):
                 stage = STAGES[name]
@@ -647,7 +709,7 @@ def _apply_identify(conn, run: dict) -> None:
 
     # D10 -- a derived state, recalculated whenever identify re-runs; the owner's own "keep" always wins.
     sess = row(conn, "SELECT status, kept, note FROM sessions WHERE id=?", sid)
-    auto_discarded = sess["status"] == "discarded" and (sess["note"] or "").startswith("Jay's voice not heard")
+    auto_discarded = sess["status"] == "discarded" and (sess["note"] or "").startswith("Your voice not heard")
     if not KEEP_ONLY_JAYS:
         if auto_discarded:
             conn.execute("UPDATE sessions SET status='active', note=? WHERE id=?", (PAUSED_NOTE, sid))
@@ -655,7 +717,7 @@ def _apply_identify(conn, run: dict) -> None:
             conn.execute("UPDATE sessions SET note=? WHERE id=? AND note IS NULL", (PAUSED_NOTE, sid))
     elif out["jay_present"] is False and sess["status"] == "active" and not sess["kept"]:
         conn.execute("UPDATE sessions SET status='discarded', note=? WHERE id=?",
-                     ("Jay's voice not heard (D10). Deleted with other raw audio after the retention period; "
+                     ("Your voice not heard (D10). Deleted with other raw audio after the retention period; "
                       "restore with: octo keep " + sid, sid))
     elif out["jay_present"] is not False and auto_discarded:
         conn.execute("UPDATE sessions SET status='active', note=? WHERE id=?",

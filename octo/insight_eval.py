@@ -45,13 +45,13 @@ def evaluate(model: str, fixture: Path = FIXTURE, rubric_text: str | None = None
             dz = diarize_like(t)
             by_id = {ln["id"]: ln for ln in dz["lines"]}
             text = I.transcript(dz["lines"], t["speakers"])
-            jay = t["speakers"][t["jay"]]
+            me = t["speakers"][t["me"]]
             for n_str, expected in t["expect"].items():
                 p = principles[int(n_str)]
                 on_progress(f"{model} · {t['name']} · principle {p['n']}")
-                raw = I.chat(model, I.conduct_messages(p, rules, jay, text), I.CONDUCT_SCHEMA, I.context_size(text, 32768))
-                kind, item = I.check_conduct(raw, p, by_id, {t["jay"]})
-                if kind == "finding" and verify and not I.verified(model, p, jay, item):
+                raw = I.chat(model, I.conduct_messages(p, rules, me, text), I.CONDUCT_SCHEMA, I.context_size(text, 32768))
+                kind, item = I.check_conduct(raw, p, by_id, {t["me"]})
+                if kind == "finding" and verify and not I.verified(model, p, me, item):
                     kind = "dropped"
                 results.append({
                     "transcript": t["name"], "principle": p["n"], "expected": expected,
@@ -59,7 +59,7 @@ def evaluate(model: str, fixture: Path = FIXTURE, rubric_text: str | None = None
                     "quotes": len(raw.get("quotes", [])),
                     "verified": len(item.get("quotes", [])) if kind == "finding" else 0,
                     "second_look_dropped": raw.get("moment", False) and kind == "dropped" and bool(item.get("quotes")),
-                    "third_person": bool(re.search(rf"\b{re.escape(jay)}\b", raw.get("observation", ""))),
+                    "third_person": bool(re.search(rf"\b{re.escape(me)}\b", raw.get("observation", ""))),
                     "observation": raw.get("observation", ""), "try_next_time": raw.get("try_next_time", ""),
                 })
     finally:

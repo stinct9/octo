@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // B16: "this mattered", while it happens. The Mac's clock places it, in whatever conversation was going on;
-// the review reads the minute before it. Tap just after the moment; "Marked" offers Undo for its 2 s (Jay, 22 Oct).
+// the review reads the minute before it. Tap just after the moment; "Marked" offers Undo for its 2 s (22 Oct).
 import { ref } from 'vue'
 import type { Memos } from '../memos'
 import { haptic } from '../haptics'

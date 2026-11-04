@@ -6,11 +6,12 @@ now checks every 5 minutes and posts a notification on this Mac when something n
 
   - a conversation ready to review, or with speakers to confirm
   - a step that failed and waits for Try again (not one that will retry by itself)
+  - Claude Code signed out on this Mac, so reviews wait for a sign-in (4 Nov)
   - the recorder unseen for QUIET_H hours while it was set to record
   - the coach's note, once it's written and until it's opened (6 Oct)
   - your week, from Monday morning until its card is dismissed (B17, 21 Oct: octo/week.py)
 
-**Counts only**: no names, no transcript text, no titles of review steps. **One exception (B23, Jay 21 Oct):**
+**Counts only**: no names, no transcript text, no titles of review steps. **One exception (B23, 21 Oct):**
 10 min before an event with someone Octo knows, octo/events.py posts the event's name and time as the calendar has
 them ("1:1 with Priya in 10 min"), opening that person's page; never anything from reviews, commitments or
 intentions. Every banner from this module stays counts only. It goes to Notification Centre
@@ -37,8 +38,9 @@ TITLE = "Octo"  # one name (product review P0-9)
 
 def waiting(conn, now: float | None = None) -> set[str]:
     """What needs the owner right now, one key per thing: "review:<session>", "confirm:<session>",
-    "failed:<session>", "quiet:<last seen>", "coach:<note>", "week:<Monday>"."""
+    "failed:<session>", "quiet:<last seen>", "coach:<note>", "week:<Monday>", "signin:<when it failed>"."""
     from . import device as D
+    from . import pipeline as P
     from . import sessions as SV
     from .db import rows
     now = time.time() if now is None else now
@@ -50,6 +52,8 @@ def waiting(conn, now: float | None = None) -> set[str]:
     for n in rows(conn, "SELECT id FROM coach_notes WHERE status='done' AND seen_at IS NULL AND finished_at > ?",
                   now - 86400):
         keys.add(f"coach:{n['id']}")
+    if (out := P.claude_signed_out(conn, now)) is not None:
+        keys.add(f"signin:{int(out)}")
     from .week import announce
     if week := announce(conn, now):
         keys.add(week)
@@ -64,7 +68,10 @@ def message(new: set[str], now: float | None = None) -> str | None:
     """One line of counts for the things not announced before, or None."""
     now = time.time() if now is None else now
     n = {k: sum(1 for x in new if x.startswith(f"{k}:")) for k in ("review", "confirm", "failed")}
-    parts = ["Your week is ready"] if any(x.startswith("week:") for x in new) else []
+    parts = ["Claude Code is signed out: reviews wait until you run claude auth login"] \
+        if any(x.startswith("signin:") for x in new) else []
+    if any(x.startswith("week:") for x in new):
+        parts.append("Your week is ready")
     if n["review"]:
         parts.append(f"{n['review']} conversation{'s' if n['review'] > 1 else ''} ready to review")
     if n["confirm"]:
@@ -165,7 +172,8 @@ def app_page(seq: int) -> str | None:
 def menu(keys: set[str], now: float | None = None) -> list[dict]:
     """The app's menu lines for what's waiting, in notify's words, each with the page it opens."""
     now = time.time() if now is None else now
-    out = []
+    out = [{"text": "Claude Code is signed out: reviews wait", "page": "/", "needs": True}] \
+        if any(k.startswith("signin:") for k in keys) else []
     for kind, one, many in (("review", "conversation ready to review", "conversations ready to review"),
                             ("confirm", "conversation with speakers to confirm", "conversations with speakers to confirm"),
                             ("failed", "conversation with a failed step", "conversations with a failed step")):

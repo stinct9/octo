@@ -30,6 +30,10 @@ class Split(BaseModel):
     at: float | list[float]  # seconds into the conversation: one cut, or several at once
 
 
+class Whole(BaseModel):
+    at: float  # seconds into the conversation: the suggestion answered
+
+
 class Group(BaseModel):
     side: Literal["before", "after"]  # the conversation right before or after it, in any recording
 
@@ -112,6 +116,17 @@ def add(router: APIRouter, lab: Lab) -> None:
         processor.kick()
         return {"split_at": [round(at, 1) for at in cuts] if isinstance(body.at, list) else round(body.at, 1),
                 "new_session": new[0], "new_sessions": new}
+
+    @router.post("/sessions/{session_id}/split/keep-whole", dependencies=[Depends(same_origin)])
+    def keep_whole(session_id: str, body: Whole) -> dict:
+        """It's one conversation: the suggestion to split at `at` goes, and the lab never cuts near it."""
+        conn = db()
+        sess = session_or_404(conn, session_id)
+        if not 0 < body.at < sess["end_s"] - sess["start_s"]:
+            raise HTTPException(422, "that point isn't in this conversation")
+        with tx(conn):
+            S.keep_whole(conn, sess, body.at)
+        return {"kept_whole": round(body.at, 1)}
 
     @router.post("/sessions/{session_id}/group", dependencies=[Depends(same_origin)])
     def group(session_id: str, body: Group) -> dict:
@@ -308,7 +323,7 @@ def add(router: APIRouter, lab: Lab) -> None:
         conn = db()
         if not SESSION_ID.match(session_id) or not conn.execute(
                 "UPDATE sessions SET status='active', kept=1, note='restored by you' WHERE id=? AND status='discarded' "
-                "AND note LIKE 'Jay''s voice not heard%'",
+                "AND note LIKE 'Your voice not heard%'",
                 (session_id,)).rowcount:
             raise HTTPException(404, "nothing to restore")
         processor.kick()

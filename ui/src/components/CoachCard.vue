@@ -7,9 +7,11 @@ import { lab } from '../lab/api'
 import { day } from '../lab/format'
 import { href } from '../lab/router'
 import type { CoachSummary } from '../lab/types'
+import FoldToggle from './FoldToggle.vue'
 
 const c = ref<CoachSummary | null>(null)
 const asking = ref(false)
+const open = ref(true)
 const error = ref('')
 let timer: ReturnType<typeof setInterval> | undefined
 async function load() {
@@ -39,21 +41,22 @@ const reviews = (n: number) => `${n} review${n === 1 ? '' : 's'}`
         <span v-if="latest && !latest.seen" class="badge">New</span></div>
       <template v-if="c.running">
         <div class="text">Reading your {{ reviews(c.reads) }} together…</div>
-        <div class="muted small" role="status">A minute or two. You can leave this page; it carries on.</div>
+        <div v-if="open" class="muted small" role="status">A minute or two. You can leave this page; it carries on.</div>
       </template>
       <template v-else-if="latest">
         <a class="text link-text" :href="href.coach">{{ work ? `Work on: ${work.theme}` : 'Nothing held up across two conversations yet' }}</a>
-        <div v-if="work?.try" class="muted small">Try: {{ work.focus_text }}</div>
+        <div v-if="open && work?.try" class="muted small">Try: {{ work.focus_text }}</div>
       </template>
       <template v-else>
         <div class="text">What would a coach tell you to work on?</div>
-        <div class="muted small">{{ c.can_ask ? `It reads your ${reviews(c.reads)} together, with what you marked, and names one thing. One Claude call.`
+        <div v-if="open" class="muted small">{{ c.can_ask ? `It reads your ${reviews(c.reads)} together, with what you marked, and names one thing. One Claude call.`
           : c.why_not && c.why_not.startsWith('the coach needs') ? `Once two conversations have reviews, it reads them together and names one thing to work on.` : c.why_not }}</div>
       </template>
       <p v-if="c.failed && !c.running" class="error small" role="alert">The coach couldn't finish: {{ c.failed.error }}</p>
       <p v-if="error" class="error small" role="alert">{{ error }}</p>
     </div>
-    <div class="acts">
+    <FoldToggle v-model="open" name="coach" label="the coach" />
+    <div v-if="open" class="acts">
       <a v-if="latest && !c.running" class="btn btn-small" :href="href.coach">Open the note</a>
       <button v-if="!c.running && (!latest || c.new_since > 0 || c.failed)" type="button" class="btn btn-small"
               :class="{ 'btn-primary': !latest }" :disabled="!c.can_ask || asking"
@@ -72,6 +75,7 @@ a.btn { color: var(--ink); text-decoration: none; }
 .text { font-size: 16px; font-weight: 600; color: var(--ink); }
 .link-text { text-decoration: none; }
 .link-text:hover { text-decoration: underline; text-underline-offset: 3px; }
+.coach .fold { align-self: flex-start; margin-top: -4px; order: 1; }  /* after the buttons; on a phone, beside the eyebrow */
 .acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .since { flex-basis: 100%; text-align: right; }
 .badge { font-size: 12px; font-weight: 500; color: var(--accent); background: var(--accent-soft); padding: 1px 8px; border-radius: 999px; }
@@ -82,5 +86,6 @@ a.btn { color: var(--ink); text-decoration: none; }
   .acts { flex-basis: 100%; }
   .acts .btn { flex: 1; justify-content: center; height: 44px; }
   .since { text-align: left; }
+  .coach .fold { order: 0; }
 }
 </style>

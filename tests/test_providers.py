@@ -96,7 +96,7 @@ def test_jays_lab_keeps_claude_code_and_its_exact_parameters(conn):
 
 
 def test_opening_claude_code_to_every_lab_changes_no_input_hash_in_jays(conn, monkeypatch):
-    """31 Oct (Jay): any lab may choose Claude Code. In his lab, chosen or not, the review's and commitments' params
+    """31 Oct: any lab may choose Claude Code. In his lab, chosen or not, the review's and commitments' params
     and input hashes are what they were before, so nothing of his re-runs; the owner's profile stays out of them."""
     monkeypatch.setattr(CC, "claude_bin", lambda: "/usr/local/bin/claude")
     for name in ("insight", "commitments"):
@@ -207,7 +207,7 @@ def test_the_hindi_merge_uses_the_owners_model_in_a_new_lab_and_claude_code_in_j
         c.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, queued_at, is_current, output) "
                   "VALUES ('t1', 'transcribe', 's1', 'h', 'done', 0, 1, ?)", (json.dumps(out),))
     from octo.hindi import HINDI
-    conn.execute("""INSERT OR REPLACE INTO app_config (key, value, updated_at) VALUES ('lab_origin', '"jay"', 0)""")  # the first lab, as migrated (octo/labconfig.py)
+    conn.execute("""INSERT OR REPLACE INTO app_config (key, value, updated_at) VALUES ('lab_origin', '"first"', 0)""")  # the first lab, as migrated (octo/labconfig.py)
     assert PL.hindi_input(conn, "s1") == {"hindi": HINDI}  # The owner's: unchanged, nothing re-transcribes
     assert PL.hindi_input(new_lab, "s1") == {}  # no model yet: stays paused
     PV.add("anthropic", api_key="sk-ant-x-9999")
@@ -462,14 +462,14 @@ def _lab_before_8_oct(path, claude_code: bool | None, reviews: bool):
 def test_which_lab_is_decided_once_and_every_setting_follows_it(tmp_path, monkeypatch):
     """Review 8 Oct, finding 8 (octo/labconfig.py)."""
     monkeypatch.setattr(LC, "TEST_OVERRIDES", {})
-    jays = _lab_before_8_oct(tmp_path / "jay.db", claude_code=True, reviews=True)
-    assert LC.origin(jays) == "jay" and LC.flag(jays, "claude_code")
+    jays = _lab_before_8_oct(tmp_path / "first.db", claude_code=True, reviews=True)
+    assert LC.origin(jays) == "first" and LC.flag(jays, "claude_code")
     assert not LC.flag(jays, "voiceprints_need_consent")
     # A buyer's lab from 7 Oct that has had reviews since is still a buyer's: its own rows said so.
     buyer = _lab_before_8_oct(tmp_path / "buyer.db", claude_code=False, reviews=True)
     assert LC.origin(buyer) == "product" and not LC.flag(buyer, "claude_code")
     # A setting added later follows the lab, not "has it had reviews": the buyer's lab isn't the owner's for it.
-    monkeypatch.setitem(LC.FLAGS, "ticktick_auto", {LC.JAY: True, LC.PRODUCT: False})
+    monkeypatch.setitem(LC.FLAGS, "ticktick_auto", {LC.FIRST: True, LC.PRODUCT: False})
     assert LC.flag(jays, "ticktick_auto") and not LC.flag(buyer, "ticktick_auto")
     # Never an environment variable: a shell left with the old switches set changes nothing.
     monkeypatch.setenv("OCTO_CLAUDE_CODE", "1")

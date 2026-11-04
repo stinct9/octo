@@ -53,7 +53,7 @@ def no_real_iphone(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def no_real_app(monkeypatch):
     """No test quits the owner's Octo app: launcher.remove() and install() SIGTERM every running one
-    (20 Oct: test_doctor's remove() quit Jay's app on each test run)."""
+    (20 Oct: test_doctor's remove() quit the owner's app on each test run)."""
     from octo import launcher as LN
     monkeypatch.setattr(LN, "stop", lambda pids, wait_s=5: None)
 

@@ -166,7 +166,8 @@ def _todo(conn, session_id: str, g: list[dict] | None = None) -> dict:
         blocked = P.claude_blocked_until(conn)
         if not live and waiting and blocked and P.uses_claude(waiting):
             capped = P.claude_calls_since(conn, P._midnight(time.time())) >= P.DAILY_CLAUDE_CALLS
-            detail = (f"today's {P.DAILY_CLAUDE_CALLS} Claude calls are used · resumes after midnight" if capped else
+            detail = (P.SIGN_IN if P.claude_signed_out(conn) is not None else
+                      f"today's {P.DAILY_CLAUDE_CALLS} Claude calls are used · resumes after midnight" if capped else
                       f"waiting for Claude's usage limit to reset (about {_clock(blocked - 60)})")
         elif not live and waiting and (models := MD.missing_for(conn, waiting["stage"])):
             detail = "waiting for the speech models: Set up Octo shows how far they've come" if models else None
@@ -190,6 +191,7 @@ def _todo(conn, session_id: str, g: list[dict] | None = None) -> dict:
             reset = P.limit_reset(err, last["finished_at"])
             hint = ("Ollama isn't running: start it, or install the login item (octo login-item install)"
                     if name == "insight" and ("Connection refused" in err or "urlopen error" in err) else
+                    P.SIGN_IN if P.signed_out(err) else
                     None if reset is None else
                     f"Claude's usage limit was reached · tries again after {_clock(reset - 60)}" if reset > time.time() else
                     "Claude's usage limit has reset · trying again shortly")
@@ -273,7 +275,7 @@ def redoing(conn, session_id: str) -> bool:
 
 
 # B25: a call recorded on the iPhone, shared from Notes, whose note is "Call with <name>" (Apple's title).
-# shortcut: the file's name is a secondary source's word, not Apple's; change this once Jay has shared one.
+# shortcut: the file's name is a secondary source's word, not Apple's; change this once a real one has been shared.
 PHONE_CALL = re.compile(r"^call with ", re.I)
 
 
@@ -395,7 +397,8 @@ def detail(conn, sess: dict) -> dict:
         # Hindi or mixed, merged by Claude from two drafts (octo/hindi.py): the page says so.
         "merged": bool(tr and tr["status"] == "done" and tr["output"] and (load_json(tr["output"]) or {}).get("merged")),
         "split": S.here(conn, sess),  # split from the one before or after: by whom, for Join back
-        "split_suggestions": S.suggest(dz_out["turns"], {sp["letter"] for sp in speakers(conn, session_id) if sp["self"]})
+        "split_suggestions": S.suggestions(conn, sess, dz_out["turns"],
+                                           {sp["letter"] for sp in speakers(conn, session_id) if sp["self"]})
                              if dz_out and not redoing(conn, session_id) else [],
         # B35: the parts of one discussion it's one of (on the first, the later parts' lines), or its neighbours.
         "parts": PT.page(conn, sess),

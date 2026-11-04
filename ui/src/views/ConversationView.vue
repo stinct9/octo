@@ -13,7 +13,6 @@ import FullReview from '../components/conversation/FullReview.vue'
 import OwnerWords from '../components/OwnerWords.vue'
 import PartsPanel from '../components/PartsPanel.vue'
 import { markedText } from '../lab/marks'
-import NewToYou from '../components/NewToYou.vue'
 import PlayerCard from '../components/conversation/PlayerCard.vue'
 import QuestionsCard from '../components/conversation/QuestionsCard.vue'
 import TalkThrough from '../components/TalkThrough.vue'
@@ -24,7 +23,7 @@ import { offers } from '../lab/calendar'
 import SplitPanel from '../components/SplitPanel.vue'
 import TranscriptCard from '../components/conversation/TranscriptCard.vue'
 import { lab, type FeedbackChange } from '../lab/api'
-import { kept, keepConversation } from '../lab/kept'
+import { forgetConversation, kept, keepConversation } from '../lab/kept'
 import { ASIDE, mss, speakerColors, when } from '../lab/format'
 import { remember, remembered } from '../lab/remembered'
 import { itemText, newToYouEntries } from '../lab/review'
@@ -61,7 +60,7 @@ async function load() {
   } catch (e) {
     if (!alive) return
     const msg = e instanceof Error ? e.message : String(e)
-    if (msg === 'no such conversation') { kept.conversations.delete(props.id); s.value = null }  // deleted meanwhile
+    if (msg === 'no such conversation') { forgetConversation(props.id); s.value = null }  // deleted meanwhile
     if (s.value && msg !== 'no such conversation') { stale.value = msg; timer = setTimeout(load, 5000); return }
     error.value = msg
   }
@@ -85,6 +84,21 @@ async function joinBack() {
     if (r.session !== props.id) location.hash = href.conversation(r.session)
     else await load()
   } catch (e) { joinError.value = e instanceof Error ? e.message : String(e) } finally { joining.value = false }
+}
+
+// A clear "two conversations here?" (split.STRONG_*), put first rather than in the speakers' strip: the lab doesn't cut
+// these (the owner, 31 Oct), so the owner splits or says it's one.
+const strong = computed(() => s.value?.split_suggestions.find((g) => g.strong) ?? null)
+const strongBusy = ref(false)
+const strongError = ref('')
+async function answerStrong(split: boolean) {
+  if (!strong.value) return
+  strongBusy.value = true
+  strongError.value = ''
+  try {
+    await (split ? lab.split(props.id, [strong.value.at]) : lab.keepWhole(props.id, strong.value.at))
+    await load()
+  } catch (e) { strongError.value = e instanceof Error ? e.message : String(e) } finally { strongBusy.value = false }
 }
 
 // ---- who's who ---------------------------------------------------------------------------------
@@ -250,7 +264,7 @@ async function redoReview() {
   try { const r = await lab.redoReview(props.id); if (s.value) s.value.todo = r.todo; redoError.value = ''; redo() }
   catch (e) { redoError.value = `Couldn't start it: ${e instanceof Error ? e.message : e}` } finally { redoing.value = false }
 }
-function gone() { location.hash = href.conversations }
+function gone() { forgetConversation(props.id); location.hash = href.conversations }
 
 // Not a conversation (B5, 13 Oct): the TV, music, singing. Offered when nobody here is you, and from ⋯ on any.
 const askAside = ref(false)
@@ -263,6 +277,7 @@ async function setAside(kind: AsideKind | null) {
   try {
     const r = await lab.aside(props.id, kind)
     if (s.value) Object.assign(s.value, { aside: r.aside, todo: r.todo })
+    if (kind) forgetConversation(props.id)  // out of the list
     askAside.value = false
     asideError.value = ''
     if (!kind) redo()  // put back: processing carries on
@@ -506,6 +521,20 @@ async function answerFocus(a: FocusAnswer | null) {
         <span v-if="joinError" class="error" role="alert"> {{ joinError }}</span>
       </p>
       <PartsPanel :s="s" :can-edit="canEdit" @changed="load" />
+      <section v-if="strong" class="aside-note" aria-label="Two conversations?">
+        <span><strong>Two conversations?</strong> The people change at {{ mss(strong.at) }}:
+          {{ strong.before.map((l) => nameOf(byLetter[l])).join(', ') }} before,
+          {{ strong.after.map((l) => nameOf(byLetter[l])).join(', ') }} after.</span>
+        <div class="aside-kinds">
+          <button v-if="!s.audio_deleted" type="button" class="btn btn-small" @click="playFrom(Math.max(0, strong.at - 10))">Hear the change</button>
+          <template v-if="canEdit">
+            <button type="button" class="btn btn-small btn-primary" :disabled="strongBusy" @click="answerStrong(true)">Split here</button>
+            <button type="button" class="btn btn-small" :disabled="strongBusy" @click="answerStrong(false)">It's one</button>
+          </template>
+          <span v-else class="muted small">Split it on your Mac.</span>
+        </div>
+      </section>
+      <p v-if="strongError" class="error small" role="alert">{{ strongError }}</p>
       <p v-if="s.todo.kind === 'failed' && s.todo.error" class="muted small note-line">{{ s.todo.error }}</p>
       <p v-if="retryError" class="error small" role="alert">{{ retryError }}</p>
       <section v-if="s.aside" class="aside-note" role="note">
@@ -576,17 +605,16 @@ async function answerFocus(a: FocusAnswer | null) {
                   @confirm="showSpeakers = true" @play="playClip" @play-quote="playQuote" @focus="practiseMeasure" @changed="load"
                   @practise="practise" @step="goToStep" @change="change" @ticktick="toTickTick" @ticktick-all="toTickTickAll" />
 
-      <!-- The question that makes a conversation reviewed, right after what to do: it lists every headline to tick, so
-           it needs nothing below it (product/UI review, 28 Oct: it had drifted 3.4 screens down). -->
-      <NewToYou v-if="settled && askEntries.length && s.insight_run" :entries="askEntries" :answer="shownAnswer" :legacy="legacyAnswer" :feedback="s.feedback"
-                :saving="answering" :error="answerError" :focus-item="focusItem" @submit="submitAnswer" @practise="practise" />
+      <!-- The full review asks the question that makes a conversation reviewed, right after what to do (product/UI
+           review, 28 Oct: it had drifted 3.4 screens down); each headline is ticked where it's read (the owner, 4 Nov). -->
+      <FullReview v-if="settled" :ins="ins" :is-review="isReview" :feedback="s.feedback" :can-hear="canHear" :is-me="isMe" :who="who"
+                  :color="color" :focus-item="focusItem" :playing-clip="playingClip"
+                  :ask="askEntries.length > 0 && !!s.insight_run" :answer="shownAnswer" :legacy="legacyAnswer"
+                  :saving="answering" :error="answerError"
+                  @hear="hear" @play="playLine" @practise="practise" @change="change" @submit="submitAnswer" />
 
       <Commitments v-if="settled && s.commitments" :block="s.commitments" :at="s.started_at" :connected="s.ticktick_connected"
                    :can-hear="canHear" :playing="playingClip" @play="playClip" />
-
-      <FullReview v-if="settled" :ins="ins" :is-review="isReview" :feedback="s.feedback" :can-hear="canHear" :is-me="isMe" :who="who"
-                  :color="color" :focus-item="focusItem" :playing-clip="playingClip"
-                  @hear="hear" @play="playLine" @practise="practise" @change="change" />
 
       <TalkThrough v-if="settled && isReview && !s.aside" :session-id="s.id" @open="openAt" />
 
@@ -626,7 +654,7 @@ async function answerFocus(a: FocusAnswer | null) {
 <style scoped>
 .page { width: 100%; max-width: 860px; margin: 0 auto; padding: 20px 24px 56px; display: flex; flex-direction: column; gap: 16px; }
 .back { font-size: 14px; color: var(--accent); text-decoration: none; }
-/* stays at the top while you read, so going back needs no scroll (Jay, 28 Oct) */
+/* stays at the top while you read, so going back needs no scroll (28 Oct) */
 .page > .back { position: sticky; top: 0; z-index: 5; padding: 10px 0; margin: -10px 0; background: var(--ground); }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }

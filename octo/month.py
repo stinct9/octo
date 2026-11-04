@@ -1,10 +1,10 @@
-"""A calendar to see it all from above (B37, docs/backlog.md; Jay, 30 Oct): a month of conversations, then one day, then
+"""A calendar to see it all from above (B37, docs/backlog.md; 30 Oct): a month of conversations, then one day, then
 the conversation page. Read from the database when asked; no model, nothing stored.
 
 - **A month** (`month`): per local day, how many conversations, minutes talked, how many have a review shown and how
   many of those are still to answer ("What here was new to you?" not answered: `sessions.reviewed_at`), and who was in
   them; and the month in numbers. Set-aside recordings and deleted conversations don't count (only active ones).
-- **Fillers** (Jay, 30 Oct): per day and per conversation, the owner's fillers per 100 of their words, pooled over the
+- **Fillers** (30 Oct): per day and per conversation, the owner's fillers per 100 of their words, pooled over the
   conversations on the fillers' line only (fillers.all_conversations, kept per conversation; Progress's rule).
 - **A day** (`day`): that day's conversations as the list shows them (`sessions.summary`) with the review's one thing,
   and the day's calendar events (B23 keeps two days either side, so older days have none), as one timeline.

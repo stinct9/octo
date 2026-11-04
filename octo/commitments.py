@@ -1,4 +1,4 @@
-"""Commitments both ways (B14, Jay 19 Oct; coaching plan C5): what the owner promised, and what others
+"""Commitments both ways (B14, 19 Oct; coaching plan C5): what the owner promised, and what others
 promised them, in each conversation. A step of its own after the review, so the review's prompt, inputs and
 input hash stay exactly as they were and no review is made again.
 
@@ -157,7 +157,7 @@ def _at(conn, session_id: str) -> float | None:
 
 
 def in_history(conn, session_id: str) -> bool:
-    """From the 14 days before the step shipped, or since (Jay, 19 Oct): older conversations are never queued."""
+    """From the 14 days before the step shipped, or since (19 Oct): older conversations are never queued."""
     at = _at(conn, session_id)
     return at is not None and at >= config(conn, "commitments_from", 0)
 
@@ -310,7 +310,7 @@ def to_ticktick(conn, commitment_id: str, add=None) -> dict:
     return get(conn, commitment_id)
 
 
-# ---- the owner's check of the step (Jay, 19 Oct: the first ten by eye before they're trusted) -----------------------
+# ---- the owner's check of the step (19 Oct: the first ten by eye before they're trusted) -----------------------
 
 VERDICTS = ("right", "partly", "wrong")
 FIRST = 10

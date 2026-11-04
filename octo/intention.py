@@ -1,4 +1,4 @@
-"""B15: an intention before, a reflection after (docs/backlog.md, Jay 19 Oct). The owner's own words, no model call here.
+"""B15: an intention before, a reflection after (docs/backlog.md, 19 Oct). The owner's own words, no model call here.
 
 - **The intention** hangs on a person (the recorder is always on, so there's no moment "before a conversation"):
   "Next time with Asha, I want to…", one open line per person, on their page. The next conversation where they're

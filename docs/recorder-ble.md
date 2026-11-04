@@ -8,7 +8,7 @@ What the phone app (`mobile/`, product plan 4.5, `docs/phone-plan.md`) and the r
 - Name: `Octo XXXX` (the last two bytes of its Wi-Fi MAC address, in hex, from the chip's fuses). rec-12 and
   rec-13 read it from the Wi-Fi driver before Wi-Fi had started, so a recorder paired at boot was `Octo 0000`.
 - Only once paired with a Mac (`octo device pair`): before that it has no Bluetooth and shows "Set me up".
-- **Advertising, rec-15** (Jay, 8 Oct): every 152.5 ms for a minute after it starts, after a tap of its button
+- **Advertising, rec-15** (8 Oct): every 152.5 ms for a minute after it starts, after a tap of its button
   and after a phone disconnects; then every 1022.5 ms for as long as a phone is paired, so the app reconnects
   whenever it's opened; not at all with no phone paired once the window has closed. Never while a phone is
   connected. rec-12 to rec-14: for 10 minutes after starting and after a tap, then not at all.

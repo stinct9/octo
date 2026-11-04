@@ -12,7 +12,7 @@ What's left out, swapped in and searched for is in public-copy.json, which is ne
   block    words that must not appear anywhere in the copy, in a file or in a file's path: exit 1
   warn     words that are reported, file by file, for a person to decide
 Words match whole, in any case. Every file that reads as text is searched, whatever its name (review 8 Oct,
-finding 16: .pbxproj, .xcconfig, .storyboard and .gitignore were copied unread, and "Jay" missed "JAY").
+finding 16: .pbxproj, .xcconfig, .storyboard and .gitignore were copied unread, and a name was missed in capitals).
 """
 
 from __future__ import annotations

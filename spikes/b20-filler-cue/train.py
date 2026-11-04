@@ -141,7 +141,7 @@ def main() -> None:
     rows, wrong_at = evaluate(net, test, dev, hours)
     (OUT / "step2.json").write_text(json.dumps({"hours": hours, "rows": rows, "wrong": wrong_at}, indent=1))
 
-    # Round 2 (20 Oct, after Jay heard 37 of 40 unexplained cues as no "you know"): the transcript's negatives are
+    # Round 2 (20 Oct, after the owner heard 37 of 40 unexplained cues as no "you know"): the transcript's negatives are
     # right, so the model's own false cues on the training conversations become hard negatives.
     hard = []
     for c in train:

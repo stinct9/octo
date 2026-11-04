@@ -1,5 +1,5 @@
-"""A smoke set on the demo lab as both kinds of lab (architecture review 8, 28 Oct): Jay's, and a new buyer's. The rest of
-the suite runs as Jay's lab (conftest's as_jays_lab); here each lab's own `lab_origin` decides its flags, so the product
+"""A smoke set on the demo lab as both kinds of lab (architecture review 8, 28 Oct): the first, and a new buyer's. The rest of
+the suite runs as the first lab (conftest's as_jays_lab); here each lab's own `lab_origin` decides its flags, so the product
 that ships to strangers gets the same pass: every GET route answers, and the pipeline drains on a fake model."""
 
 import json
@@ -18,7 +18,7 @@ from octo import worker as W
 from octo.api import make_router
 from octo.db import connect, row, rows
 
-KINDS = ("jay", "buyer")
+KINDS = ("first", "buyer")
 # The route has nothing to show for this lab (no such id, nothing recorded yet): fine. A 5xx never is.
 NOTHING_HERE = {404, 409, 410}  # 410: the audio went at 60 days (here: never under HOME)
 
@@ -101,8 +101,8 @@ def _fake_answer(schema: dict) -> dict:
 @pytest.mark.parametrize("pick", ("key", "claude-code"))
 def test_the_pipeline_drains_on_a_fake_model(lab, monkeypatch, pick):
     kind, db, conn = lab
-    if kind == "jay" and pick == "key":
-        pytest.skip("Jay's lab chooses nothing: it runs as it always has")
+    if kind == "first" and pick == "key":
+        pytest.skip("The first lab chooses nothing: it runs as it always has")
     from octo import rubric as RB
     RB.OWN.write_text("# Rubric\n\n## Conduct principles\n\n1. Listen before answering.\n\n2. Keep your word.\n")  # the buyer's lab starts with none
     asked = []
@@ -146,7 +146,7 @@ def test_the_pipeline_drains_on_a_fake_model(lab, monkeypatch, pick):
     assert review["id"] not in before and json.loads(review["output"])["summary"] == "A made-up review."
     whole = row(conn, "SELECT id, params, upstream FROM stage_runs WHERE target=? AND stage='insight' AND is_current=1", head)
     assert whole["id"] not in before and len(json.loads(whole["params"])["parts"]) == len(json.loads(whole["upstream"])) == 2
-    # Whatever the owner chose, and only that: Claude Code is never used unless chosen (or Jay's lab, as always).
+    # Whatever the owner chose, and only that: Claude Code is never used unless chosen (or the first lab, as always).
     assert set(asked) == ({"anthropic"} if kind == "buyer" and pick == "key" else {"claude-code"})
     if kind == "buyer" and pick == "claude-code":  # the buyer's own profile, never the first lab's way of addressing
         assert "owner" in json.loads(row(conn, "SELECT params FROM stage_runs WHERE id=?", review["id"])["params"])

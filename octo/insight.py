@@ -142,8 +142,8 @@ BENEATH_SCHEMA = {
 }
 
 
-def conduct_messages(principle: dict, rules: str, jay: str, text: str) -> list[dict]:
-    system = f"""You help {jay} review his own conduct in a recorded conversation, against ONE principle he wrote himself. His other principles are checked separately and cover other things, so answer only for this one.
+def conduct_messages(principle: dict, rules: str, me: str, text: str) -> list[dict]:
+    system = f"""You help {me} review his own conduct in a recorded conversation, against ONE principle he wrote himself. His other principles are checked separately and cover other things, so answer only for this one.
 
 Rules he set for these reviews:
 {rules}
@@ -158,9 +158,9 @@ How to answer, in this order:
 Also:
 - Moments include how he responds to what is said to him or about him, not only what he starts.
 - Other people's lines are context; never judge them.
-- Use only the principle as {jay} wrote it. Do not add other teachings or general advice.
+- Use only the principle as {me} wrote it. Do not add other teachings or general advice.
 - Lines marked "(speaker or words unsure)" may be attributed to the wrong person or misheard; prefer other lines."""
-    user = f"""Principle {principle['n']}, in {jay}'s words:
+    user = f"""Principle {principle['n']}, in {me}'s words:
 {principle['text']}
 
 Transcript:
@@ -168,13 +168,13 @@ Transcript:
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def verify_messages(principle: dict, jay: str, finding: dict) -> list[dict]:
+def verify_messages(principle: dict, me: str, finding: dict) -> list[dict]:
     """A second, stricter look at one finding: judging is more reliable than generating, and
     small models otherwise file any friction (or any helpfulness) under unrelated principles."""
     quotes = "\n".join(f'[{q["line"]}] "{q["text"]}"' for q in finding["quotes"])
-    system = f"""You check one claimed observation about {jay}'s conduct against ONE of his principles. Be strict.
-Answer "clearly_about_it": true only if the quoted words show {jay} doing (or failing to do) the specific thing this principle asks. A related topic, a general tone, an ordinary helpful act or an ordinary disagreement is NOT enough; those are covered by his other principles. First give "why" in one sentence."""
-    user = f"""Principle {principle['n']}, in {jay}'s words:
+    system = f"""You check one claimed observation about {me}'s conduct against ONE of his principles. Be strict.
+Answer "clearly_about_it": true only if the quoted words show {me} doing (or failing to do) the specific thing this principle asks. A related topic, a general tone, an ordinary helpful act or an ordinary disagreement is NOT enough; those are covered by his other principles. First give "why" in one sentence."""
+    user = f"""Principle {principle['n']}, in {me}'s words:
 {principle['text']}
 
 Claimed observation: {finding['observation']}
@@ -184,9 +184,9 @@ Quoted lines:
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def beneath_messages(jay: str, text: str) -> list[dict]:
-    system = f"""You help {jay} reflect on a recorded conversation. Offer at most two questions for {jay} to think about: things beneath the surface, such as a topic he kept returning to, something he avoided, or what he seemed to want but didn't say.
-- Questions only, never conclusions. Address {jay} as "you". Ask about {jay}, never diagnose the other people.
+def beneath_messages(me: str, text: str) -> list[dict]:
+    system = f"""You help {me} reflect on a recorded conversation. Offer at most two questions for {me} to think about: things beneath the surface, such as a topic he kept returning to, something he avoided, or what he seemed to want but didn't say.
+- Questions only, never conclusions. Address {me} as "you". Ask about {me}, never diagnose the other people.
 - Each question must point to the lines that prompted it: quote the exact words with the line number.
 - If nothing stands out, return an empty list. That is a normal answer."""
     return [{"role": "system", "content": system}, {"role": "user", "content": f"Transcript:\n{text}"}]
@@ -262,8 +262,8 @@ def check_conduct(raw: dict, principle: dict, by_id: dict[int, dict], jay_letter
     }
 
 
-def verified(model: str, principle: dict, jay: str, finding: dict) -> bool:
-    return bool(chat(model, verify_messages(principle, jay, finding), VERIFY_SCHEMA, 4096).get("clearly_about_it"))
+def verified(model: str, principle: dict, me: str, finding: dict) -> bool:
+    return bool(chat(model, verify_messages(principle, me, finding), VERIFY_SCHEMA, 4096).get("clearly_about_it"))
 
 
 def check_beneath(raw: dict, by_id: dict[int, dict]) -> list[dict]:
@@ -356,9 +356,9 @@ def run(diarize: dict, names: dict[str, str], jay_letters: set[str], params: dic
     by_id = {ln["id"]: ln for ln in lines}
     text = transcript(lines, names)
     ctx = context_size(text, params["max_ctx"])
-    jay = next((names[k] for k in jay_letters if k in names), "the owner")
+    me = next((names[k] for k in jay_letters if k in names), "the owner")
     rules = review_rules(rubric_text)
-    base = [CODE, model, ctx, jay, sorted(jay_letters), text, memo_key(lines)]
+    base = [CODE, model, ctx, me, sorted(jay_letters), text, memo_key(lines)]
     asked = False
     t0 = time.time()
     try:
@@ -370,9 +370,9 @@ def run(diarize: dict, names: dict[str, str], jay_letters: set[str], params: dic
             else:
                 on_progress(f"principle {p['n']} of {len(items)}")
                 asked = True
-                kind, item = check_conduct(chat(model, conduct_messages(p, rules, jay, text), CONDUCT_SCHEMA, ctx),
+                kind, item = check_conduct(chat(model, conduct_messages(p, rules, me, text), CONDUCT_SCHEMA, ctx),
                                            p, by_id, jay_letters)
-                if kind == "finding" and not verified(model, p, jay, item):
+                if kind == "finding" and not verified(model, p, me, item):
                     kind, item = "dropped", {"principle": p["n"], "reason": "a second look found it wasn't about this principle"}
             out["memo"][key] = {"kind": kind, "item": item}
             if kind == "finding":
@@ -388,7 +388,7 @@ def run(diarize: dict, names: dict[str, str], jay_letters: set[str], params: dic
         else:
             on_progress("beneath the surface")
             asked = True
-            out["beneath"] = check_beneath(chat(model, beneath_messages(jay, text), BENEATH_SCHEMA, ctx), by_id)
+            out["beneath"] = check_beneath(chat(model, beneath_messages(me, text), BENEATH_SCHEMA, ctx), by_id)
         out["memo"][key] = out["beneath"]
     finally:
         if asked:

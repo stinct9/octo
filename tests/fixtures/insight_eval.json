@@ -4,7 +4,7 @@
     {
       "name": "sofa budget",
       "speakers": {"A": "Nisha", "B": "Sam"},
-      "jay": "B",
+      "me": "B",
       "lines": [
         ["A", "We need to decide on the sofa this week. The one at Home Centre is forty thousand."],
         ["B", "Forty? That's fine, let's just order it."],
@@ -26,7 +26,7 @@
     {
       "name": "Sunday logistics",
       "speakers": {"A": "Nisha", "B": "Sam"},
-      "jay": "B",
+      "me": "B",
       "lines": [
         ["A", "Did you get the milk?"],
         ["B", "Yes, and the curry leaves. I didn't forget this time."],
@@ -44,7 +44,7 @@
     {
       "name": "credit at work",
       "speakers": {"A": "Nisha", "B": "Sam"},
-      "jay": "B",
+      "me": "B",
       "lines": [
         ["A", "How was the review meeting?"],
         ["B", "Ravi presented the dashboard as if he built it alone. My team did most of that work."],

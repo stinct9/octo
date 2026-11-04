@@ -9,7 +9,7 @@ counts, in_gate=0).
 Heard by one local step: Qwen3-ASR in English with its aligner (octo/asr.py), in a worker the pipeline's runner
 starts before anything else (the owner is waiting). No language vote and no speakers: every word is the owner's.
 
-Then where the point came (coaching plan C5; Jay, 22 Oct, after the pilot on the pitch memos: learnings, Speech,
+Then where the point came (coaching plan C5; 22 Oct, after the pilot on the pitch memos: learnings, Speech,
 21 Oct): one call per take to the review's own model (settings.reader, as the coach), the take's words and its
 prompt only. The quote is checked against what was heard and timed from the word times, or it's dropped; the
 20-word version is shown with its count, since the pilot's ran over 6 times in 14. Within the 60 Claude calls a

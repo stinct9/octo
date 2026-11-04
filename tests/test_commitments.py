@@ -129,7 +129,7 @@ def test_it_waits_for_the_review_and_for_its_history(tmp_path):
     assert CM.ready(conn, sid)
     params, _ = wanted(conn, STAGES["commitments"], sid, ["dz_1"])
     assert params["speakers"] == SPEAKERS and params["open"] == [] and params["model"] == "claude-opus-5-5"
-    # From the 14 days before the step came (set once by the migration), never older (Jay, 19 Oct).
+    # From the 14 days before the step came (set once by the migration), never older (19 Oct).
     since = config(conn, "commitments_from")
     assert abs(since - (time.time() - 14 * 86400)) < 60
     old = make(conn, "ses_20260901_00000002", at=since - 3600, rec="rec_20260901_00000002", dz_id="dz_2")

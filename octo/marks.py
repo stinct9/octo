@@ -1,4 +1,4 @@
-"""B16: mark a moment (docs/backlog.md, Jay 19 Oct). "This mattered", said while it happens: a double tap on the
+"""B16: mark a moment (docs/backlog.md, 19 Oct). "This mattered", said while it happens: a double tap on the
 recorder (rec-26 writes `{"button":"mark","at_ms":…}` to its manifest) or the phone's Mark button (the Mac's clock
 places it, as it answers). You mark after it lands, so the moment is just before the mark.
 
@@ -19,7 +19,7 @@ import time
 from .db import new_id, row, rows
 
 GRACE_S = 15.0  # a mark just after the conversation's last words is still about it
-UNDO_S = 60.0  # the phone's Undo (Jay, 22 Oct): a mark it just made, and only that
+UNDO_S = 60.0  # the phone's Undo (22 Oct): a mark it just made, and only that
 
 
 def add(conn, at: float | None = None, source: str = "phone") -> dict:

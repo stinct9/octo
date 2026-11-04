@@ -15,6 +15,7 @@ import { onMac } from '../lab/where'
 import type { AsideRow, Incoming, SessionSummary, Status } from '../lab/types'
 
 const sessions = ref<SessionSummary[] | null>(kept.list?.sessions ?? null)
+const refreshing = ref(!!kept.list)  // showing the list as last seen until it's asked again: rows may still move
 const incoming = ref<Incoming[]>(kept.list?.incoming ?? [])
 const error = ref('')
 const show = ref<'needs' | 'all'>('needs')
@@ -120,6 +121,7 @@ async function load() {
     if (!alive) return
     error.value = `Couldn't load conversations: ${e instanceof Error ? e.message : e}`
   }
+  refreshing.value = false
   timer = setTimeout(poll, busy.value ? 3000 : 30000)  // rows move through their steps while busy
 }
 // While busy, ask what changed (a few ms) and fetch the list (seconds with a long queue) only when it moved, or after
@@ -135,7 +137,7 @@ async function poll() {
 }
 onMounted(load)
 
-// The privacy line names what really reads the transcript in this lab (Jay, 22 Oct): the review's model, and Hindi
+// The privacy line names what really reads the transcript in this lab (22 Oct): the review's model, and Hindi
 // only where something merges its drafts. Without an answer it says what's true of every lab.
 const privacy = ref<Status['privacy'] | null>(null)
 onMounted(() => { lab.status().then((s) => { privacy.value = s.privacy ?? null }).catch(() => {}) })
@@ -187,7 +189,7 @@ const incomingText: Record<Incoming['state'], string> = {
 
     <SearchBox :blur="blur" />
 
-    <!-- On a phone the list comes first, the cards after it (Jay, 22 Oct): .home-card's order, below -->
+    <!-- On a phone the list comes first, the cards after it (22 Oct): .home-card's order, below -->
     <SetupBanner class="home-card" />
     <AgendaCard class="home-card" />
     <WeekCard class="home-card" />
@@ -245,7 +247,9 @@ const incomingText: Record<Incoming['state'], string> = {
 
     <p v-if="!error && sessions?.length && shown.length === 0" class="muted">Nothing needs you right now. <button type="button" class="link" @click="show = 'all'">Show all</button></p>
 
-    <section v-if="!error && sessions?.length && shown.length" class="card list" aria-label="Conversations" :class="{ blur }">
+    <p v-if="refreshing" class="muted small working" role="status">Updating…</p>
+    <section v-if="!error && sessions?.length && shown.length" class="card list" aria-label="Conversations"
+             :class="{ blur, refreshing }" :aria-busy="refreshing">
       <a v-for="s in shown" :key="s.id" class="row" :href="href.conversation(s.id)">
         <div class="when">
           <div class="strong">{{ when(s.started_at) }}</div>
@@ -287,7 +291,7 @@ const incomingText: Record<Incoming['state'], string> = {
       <label class="check"><input v-model="blur" type="checkbox"> Blur previews</label>
       <span class="spacer" />
       <span>Audio and voiceprints stay on this Mac. {{ leaves }} A task goes to TickTick only when you press its button.</span>
-      <!-- On a phone there's no Setup menu: About Octo is here (Jay, 22 Oct) -->
+      <!-- On a phone there's no Setup menu: About Octo is here (22 Oct) -->
       <a v-if="!onMac" class="about" href="/about" target="_blank" rel="noopener">About Octo</a>
     </div>
   </main>
@@ -320,6 +324,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; flex-grow: 1; }
 .seg button { border: 0; background: transparent; color: var(--muted); padding: 8px 14px; min-height: 40px; border-radius: 8px; font-size: 14px; cursor: pointer; }
 .seg button[aria-pressed='true'] { background: var(--surface); color: var(--ink); font-weight: 500; }
 .list { overflow: hidden; }
+.list.refreshing { opacity: 0.55; transition: opacity 0.2s; }
 .row {
   display: grid; grid-template-columns: 170px minmax(0, 1fr) 250px 16px; gap: 20px; align-items: center;
   padding: 16px 22px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none;

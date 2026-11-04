@@ -51,7 +51,16 @@ that leaves is a conversation's text when it's reviewed, sent to the model you c
 2. It finishes by starting the lab when you log in, building the **Octo** app (below) and opening **Set up Octo** in
    it. The speech models (about 10 GB) download in the background meanwhile. Two of them
    (`pyannote/speaker-diarization-3.1` and `pyannote/segmentation-3.0`) need a free Hugging Face account: the
-   page's *Speech models* section says how (accept two pages, paste a **read** token). Then: who you are, your
+   page's *Speech models* section walks you through it and shows which is accepted:
+   1. Make an account at https://huggingface.co/join (confirm the email they send).
+   2. Make a **Read** token at https://huggingface.co/settings/tokens/new?tokenType=read and paste it on the page.
+   3. Signed in to Hugging Face in your browser, open https://huggingface.co/pyannote/speaker-diarization-3.1 and
+      https://huggingface.co/pyannote/segmentation-3.0. Near the top of each is a box saying you need to agree to share
+      your contact information. Fill in **Company/university** (where you work or study, or "Personal") and **Website**
+      (your company's site, or any page about you), then click **Agree and access repository**. The box then says you
+      were granted access. pyannote's form says they may email you now and then about their paid services.
+
+   The page checks every few seconds and starts the download once both are accepted. Then: who you are, your
    principles in your own words, the model for reviews (Claude Code on your plan, or a key), and your voice (confirm yourself in your first
    conversation).
 

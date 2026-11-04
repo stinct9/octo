@@ -446,7 +446,7 @@ def build(now: float | None = None, new_lab: bool = False) -> Path:
     conn = connect(DB)
     # Which lab the demo is (octo/labconfig.py): a buyer's new one, or one like the owner's.
     conn.execute("INSERT OR REPLACE INTO app_config (key, value, updated_at) VALUES ('lab_origin', ?, 0)",
-                 ('"product"' if new_lab else '"jay"',))
+                 ('"product"' if new_lab else '"first"',))
     conn.execute("DELETE FROM app_config WHERE key IN ('claude_code', 'voiceprints_need_consent')")
     rubric = RUBRIC.read_text()
     items = principles(rubric)

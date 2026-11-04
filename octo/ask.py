@@ -1,4 +1,4 @@
-"""Ask your conversations (B24, Jay 21 Oct): a question in plain words, answered from the transcripts.
+"""Ask your conversations (B24, 21 Oct): a question in plain words, answered from the transcripts.
 
 For what search (B12, octo/search.py) can't do: meaning rather than exact words. One model call per question.
 
@@ -9,7 +9,7 @@ For what search (B12, octo/search.py) can't do: meaning rather than exact words.
   nothing asked. The page says which conversations went and how many lines.
 - **Every moment checked in code** against the lines that were sent (insight.verify_quote), or dropped; a claim
   without one says so.
-- **What leaves the Mac** (Jay, 21 Oct): the question and the picked lines of several conversations at once, other
+- **What leaves the Mac** (21 Oct): the question and the picked lines of several conversations at once, other
   people's words in them, to the owner's model (settings.reader, as the coach's).
 - **Calls:** one per question, in the day's DAILY_CLAUDE_CALLS (pipeline._calls_since counts done asks); a usage-limit
   failure holds the pipeline until it resets, as the coach's does.
@@ -34,7 +34,7 @@ from . import sessions as SV
 from .db import load_json, new_id, row, rows, tx
 from .search import readable
 
-# Lines sent per question. A review sends one whole conversation: in Jay's lab (27 Oct, 60 conversations) the median is
+# Lines sent per question. A review sends one whole conversation: in the first lab (27 Oct, 60 conversations) the median is
 # 142 lines, the longest 382, the whole lab 7,751 (learnings, Ask). 400 keeps a question at most one long review's worth
 # (~6,000 words, ~8k tokens, about 5% of that lab) while leaving room for stretches of ~10 conversations; MAX_CHARS
 # stops a few very long lines going past that.
@@ -292,10 +292,8 @@ def why_not(conn, now: float | None = None) -> str | None:
     if who["kind"] == "claude-code":
         if not CC.claude_bin():
             return "Claude Code isn't installed (the `claude` command)"
-        if (blocked := P.claude_blocked_until(conn, now)) is not None:
-            capped = P.claude_calls_since(conn, P._midnight(now)) >= P.DAILY_CLAUDE_CALLS
-            return (f"today's {P.DAILY_CLAUDE_CALLS} Claude calls are used: after midnight" if capped else
-                    f"Claude's usage limit: after {datetime.fromtimestamp(blocked):%H:%M}")
+        if why := P.claude_waits(conn, now):
+            return why
     elif who.get("connection") and P.budget_blocked_until(conn, who["connection"], now):
         return "today's calls for this model are used: after midnight"
     return None

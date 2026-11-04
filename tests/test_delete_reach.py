@@ -12,7 +12,7 @@ REFS = ("session_id", "person_id", "by_person", "to_person", "target")
 # What's left on purpose: the conversation's row, as 'deleted', so finding conversations again can't bring it back.
 KEPT_AFTER_DELETE = {"sessions.id"}
 # Forget leaves the steps' stored results as they are (who-is-who matches, the commitments step's inputs): security
-# review L9, Jay's call whether Forget goes further. The reviews that named them are made again (api.py, /people/forget).
+# review L9, the owner's call whether Forget goes further. The reviews that named them are made again (api.py, /people/forget).
 KEPT_AFTER_FORGET = {"stage_runs.params", "stage_runs.output"}
 
 

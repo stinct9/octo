@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Fillers, in one place (23 Oct, Jay's design review): your list and where each is cued, the recorder's cue (B20, B22,
+// Fillers, in one place (23 Oct, design review): your list and where each is cued, the recorder's cue (B20, B22,
 // rec-27), training a cue for any filler (B29), the phone's and the Mac's live cue (B21), and the check by ear. The trend
 // stays on Progress. On a phone only the list (PHONE_ROUTES): the recorder's cue and training are the Mac's.
 import { computed, onMounted, onUnmounted, ref } from 'vue'

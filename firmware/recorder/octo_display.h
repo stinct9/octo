@@ -229,7 +229,7 @@ static void od_shift(uint32_t ms, int *dx, int *dy) {
 }
 
 // REC as tall as the time (20 Oct, review: size 1 couldn't be read across a table under the glass); the octopus
-// smaller (9 to 8) to pay for its pixels. The dot blinks once a second, as on the bright screen (Jay, 20 Oct):
+// smaller (9 to 8) to pay for its pixels. The dot blinks once a second, as on the bright screen (20 Oct):
 // recorder.ino draws this one every 500 ms, on the half second, so it's on for the first half of each second.
 static void od_ambient_recording(od_frame *f, uint32_t seconds, uint32_t ms) {
   int dx, dy;
@@ -355,7 +355,7 @@ static void od_screen_update_result(od_frame *f, int kind, const char *fw, uint3
 }
 
 
-// ---- sending to the Mac (20 Oct, Jay: "syncing, syncing + recording, just recording") ----------------
+// ---- sending to the Mac (20 Oct: "syncing, syncing + recording, just recording") ----------------
 //
 // A line of small words, never in REC's place: whether it's recording stays the one thing anyone at the table
 // reads. Reviewed with two designers before building (20 Oct): no up arrow (beside REC it reads as "uploading

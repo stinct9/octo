@@ -1,4 +1,4 @@
-"""One discussion in parts (B35, Jay 30 Oct): neighbouring conversations read as one at the review, never in the audio.
+"""One discussion in parts (B35, 30 Oct): neighbouring conversations read as one at the review, never in the audio.
 
 find_conversations cuts at 3 minutes of silence, `cap_length` cuts anything over an hour, and the recorder ends a
 recording after three silent minutes, so one meeting can come out as two or three conversations. Each stays a
@@ -27,7 +27,7 @@ from .split import AUTO_MAX_OVERLAP, WINDOW_S, _carry, _talk
 
 GAP_S = 178.0           # find_conversations' 3 minutes, less its pad: nearer than this in one recording is the hour cap's cut
 AUTO_MAX_GAP_S = 600.0  # the lab groups across a pause or recordings at most 10 minutes apart
-AUTO_MIN_CARRY = 0.5    # ... when at least half of each side's talk is by people major on the other (Jay, 30 Oct)
+AUTO_MIN_CARRY = 0.5    # ... when at least half of each side's talk is by people major on the other (30 Oct)
 MIN_TALK_S = 30.0       # others' talk on each side, or there's nothing to compare
 HAND_MAX_GAP_S = 1800.0  # by hand, the conversation right before or after, up to half an hour apart
 NEAR_S = 2.0            # a split this near the boundary is the boundary
@@ -208,7 +208,7 @@ def sweep(conn, apply: bool = False) -> list[dict]:
     return out
 
 
-def add(conn, first: str, second: str, by: str = "jay", why: str | None = None) -> None:
+def add(conn, first: str, second: str, by: str = "owner", why: str | None = None) -> None:
     conn.execute("INSERT INTO parts (first_id, second_id, by, kind, created_at) VALUES (?, ?, ?, ?, ?) "
                  "ON CONFLICT (first_id, second_id) DO UPDATE SET by=excluded.by, kind=excluded.kind, undone_at=NULL, "
                  "created_at=excluded.created_at", (first, second, by, why, time.time()))
@@ -221,7 +221,7 @@ def group_with(conn, sid: str, side: str) -> str:
     a, b = (before, me) if side == "before" else (me, after)
     if not a or not b or b["at"] - a["end_at"] > HAND_MAX_GAP_S:
         raise ValueError("only the conversation right before or after, up to half an hour apart")
-    add(conn, a["id"], b["id"], by="jay")
+    add(conn, a["id"], b["id"], by="owner")
     return group(conn, sid)[0]["id"]
 
 

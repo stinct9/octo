@@ -152,7 +152,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .warn { color: var(--warn); }
 .fail { color: var(--fail); }
 
-/* Waiting, said plainly (Jay, 28 Oct: "no loading spinners and hard to understand if I need to wait"). A spinner
+/* Waiting, said plainly (28 Oct: "no loading spinners and hard to understand if I need to wait"). A spinner
    beside every "Loading…", and a bar across the top while something you did is being saved or worked out. Both
    wait a moment before showing, so a quick answer doesn't flash. */
 .loading { display: flex; align-items: center; gap: 10px; }

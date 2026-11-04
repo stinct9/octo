@@ -251,3 +251,11 @@ def test_a_release_update_offline_or_broken_changes_nothing(tmp_path):
     with pytest.raises(DP.DeployError, match="isn't an Octo release"):
         DP.update_release(app, now=True, fetch=lambda url: "bbb222")
     assert DP.installed(app) == "aaa111" and not (app / DP.PAUSE).exists()
+
+
+def test_the_release_is_asked_for_as_octo(monkeypatch):
+    # Cloudflare answers Python's own User-Agent with 403 (31 Oct, beta.octolab.online): the lab would never see an update.
+    asked = []
+    monkeypatch.setattr(DP.urllib.request, "urlopen", lambda req, timeout: asked.append(req) or (_ for _ in ()).throw(OSError()))
+    assert DP.latest("https://beta.example/p/octo.tar.gz") is None
+    assert asked[0].full_url == "https://beta.example/p/version.txt" and asked[0].get_header("User-agent") == "octo-update"

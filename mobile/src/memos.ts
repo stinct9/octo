@@ -169,7 +169,7 @@ export class Memos {
   }
 
   private lastMark = ''
-  /** Undo the mark just made (Jay, 22 Oct). False when the Mac didn't take it back. */
+  /** Undo the mark just made (22 Oct). False when the Mac didn't take it back. */
   async unmark(): Promise<boolean> {
     const { host, cfg, phase } = this.lab.s
     if (!this.lastMark || phase !== 'ready' || !host || !cfg) return false

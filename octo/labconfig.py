@@ -1,6 +1,6 @@
 """Which lab this is, and the settings that follow from it (review 8 Oct, finding 8).
 
-Decided once per lab, as `lab_origin` in app_config: "jay" for a lab that had reviews before the product (7 Oct:
+Decided once per lab, as `lab_origin` in app_config: "first" for a lab that had reviews before the product (7 Oct:
 the first lab), "product" for any other. A setting that differs between the two takes its value from the table below,
 one row per setting with its value for each. Before 8 Oct each setting was decided the first time the code met it,
 by "has this lab had reviews?": a setting added later would have treated every buyer's lab with a review as the first lab.
@@ -15,16 +15,16 @@ from __future__ import annotations
 import json
 
 ORIGIN = "lab_origin"
-JAY, PRODUCT = "jay", "product"
+FIRST, PRODUCT = "first", "product"
 
 FLAGS: dict[str, dict[str, bool]] = {
     # Claude Code on the Mac's own login is what runs when nothing's chosen: the first lab, as before. Any lab may choose
-    # it since 31 Oct (Jay, product plan P5); a new lab's owner picks it, nothing picks it for them.
-    "claude_code": {JAY: True, PRODUCT: False},
-    "voiceprints_need_consent": {JAY: False, PRODUCT: True},  # 4.6; the first lab keeps its 30 Sep decision (D1)
-    # B29 (Jay, 23 Oct): recordings are kept, not deleted at 60 days, so the filler cue can keep learning from them.
+    # it since 31 Oct (product plan P5); a new lab's owner picks it, nothing picks it for them.
+    "claude_code": {FIRST: True, PRODUCT: False},
+    "voiceprints_need_consent": {FIRST: False, PRODUCT: True},  # 4.6; the first lab keeps its 30 Sep decision (D1)
+    # B29 (23 Oct): recordings are kept, not deleted at 60 days, so the filler cue can keep learning from them.
     # A new lab keeps D5's 60 days, as the landing page says.
-    "keep_recordings": {JAY: True, PRODUCT: False},
+    "keep_recordings": {FIRST: True, PRODUCT: False},
 }
 
 # Set only by tests (tests/conftest.py runs them as the first lab); empty in the lab itself.
@@ -37,7 +37,7 @@ def _get(conn, key: str):
 
 
 def origin(conn) -> str:
-    """"jay" or "product". A database the migration hasn't reached reads as a new lab: the safe side."""
+    """"first" or "product". A database the migration hasn't reached reads as a new lab: the safe side."""
     return _get(conn, ORIGIN) or PRODUCT
 
 
@@ -55,8 +55,8 @@ def decide(conn) -> None:
         return
     cc = _get(conn, "claude_code")
     if cc is not None:
-        lab = JAY if cc else PRODUCT
+        lab = FIRST if cc else PRODUCT
     else:
-        lab = JAY if conn.execute("SELECT 1 FROM stage_runs WHERE stage='insight' LIMIT 1").fetchone() else PRODUCT
+        lab = FIRST if conn.execute("SELECT 1 FROM stage_runs WHERE stage='insight' LIMIT 1").fetchone() else PRODUCT
     conn.execute("INSERT OR IGNORE INTO app_config (key, value, updated_at) VALUES (?, ?, strftime('%s','now'))",
                  (ORIGIN, json.dumps(lab)))

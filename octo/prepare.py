@@ -1,7 +1,7 @@
-"""Prepare for a conversation (B36, docs/backlog.md; Jay, 30 Oct): before talking to someone, a plan made from
+"""Prepare for a conversation (B36, docs/backlog.md; 30 Oct): before talking to someone, a plan made from
 everything the lab holds about them, including what others said about them where they weren't there.
 
-Done by hand first for a coffee with someone Jay had met on one group call: she said 71 words in it, and 8 other
+Done by hand first for a coffee with someone the owner had met on one group call: she said 71 words in it, and 8 other
 conversations mentioned her by name. Most of what read her came from those, so the mentions are the feature.
 
 - **Picked on the Mac, no model** (`pick`): the conversations they were confirmed in, and the lines that **name them**
@@ -15,7 +15,7 @@ conversations mentioned her by name. Most of what read her came from those, so t
 - **Held to the owner's principles first:** ask to understand, never how to position or win the room. Every moment
   checked in code (ask.verify) or dropped; a reading resting only on mentions is marked second-hand, in code. What
   looks said in confidence comes back under "Be careful", never as something to raise (the model's guess, from the words).
-- **What leaves the Mac** (Jay, 30 Oct): their conversations' lines and the lines naming them in others', other
+- **What leaves the Mac** (30 Oct): their conversations' lines and the lines naming them in others', other
   people's words about someone who wasn't there, plus the reviews' readings of them and the owner's principles.
 - **Kept until the next conversation with them:** one per person, replaced once the next is made (the last stays while
   a new one runs or fails); "ready" until the conversation it was for (the first with them after it was made, or the

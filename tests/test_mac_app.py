@@ -132,7 +132,7 @@ def test_an_update_is_offered_in_a_new_lab_only(app, monkeypatch):  # noqa: F811
     texts = lambda: [x for x in mac.get("/api/octo/mac-app").json()["lines"] if x.get("action") == "update"]  # noqa: E731
     monkeypatch.setattr(LC, "origin", lambda conn: LC.PRODUCT)
     assert texts() == [{"text": "Octo update ready", "action": "update"}]
-    monkeypatch.setattr(LC, "origin", lambda conn: LC.JAY)  # the first lab updates with `octo deploy`
+    monkeypatch.setattr(LC, "origin", lambda conn: LC.FIRST)  # the first lab updates with `octo deploy`
     assert texts() == []
 
 

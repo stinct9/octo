@@ -12,6 +12,7 @@ import pytest
 
 from octo import db as DB
 from octo import device as D
+from octo import labconfig as LC
 
 
 def test_a_new_database_opened_by_many_at_once_migrates_once_without_errors(tmp_path):
@@ -67,7 +68,7 @@ def test_changing_the_schema_needs_a_new_version():
     seen = hashlib.sha256((DB.SCHEMA + inspect.getsource(DB._migrate)).encode()).hexdigest()[:16]
     assert {1: "1c51cdf3f06d1522", 2: "54686faa5b108404", 3: "ea5edcb9f747cfed", 4: "e3aaf20b56b01f00", 5: "d29d1c5660c19823",
             6: "39d396643d83f0a9", 7: "ecb012df8aa45162", 8: "90169815ed0e2e6d", 9: "0695602aa7936b11", 10: "8a5bae1a291c8db0", 11: "4e00a1248b00861c", 12: "b2108a075833d24a", 13: "ebdabdd6bba688b4",
-            14: "1c9fdad7bcd03498", 15: "e5a3924225090778", 16: "4dfc8acc087835cc", 17: "8b8134991b9f6c6d", 18: "ff6ee1fbf2df50ca", 19: "aadd92d97a5fe083", 20: "0273e559d957842d"}.get(DB.SCHEMA_VERSION) == seen, f"bump SCHEMA_VERSION; then expect {seen}"
+            14: "1c9fdad7bcd03498", 15: "e5a3924225090778", 16: "4dfc8acc087835cc", 17: "8b8134991b9f6c6d", 18: "ff6ee1fbf2df50ca", 19: "aadd92d97a5fe083", 20: "0273e559d957842d", 21: "a2da785ec2e2ec61"}.get(DB.SCHEMA_VERSION) == seen, f"bump SCHEMA_VERSION; then expect {seen}"
 
 
 @pytest.fixture
@@ -112,16 +113,46 @@ def test_a_lab_at_19_has_its_joins_made_parts(tmp_path):
     conn.execute("DROP TABLE parts")
     conn.execute("CREATE TABLE joins (recording_id TEXT, a_s REAL, b_s REAL, session_id TEXT, second_id TEXT, "
                  "created_at REAL, by TEXT, undone_at REAL, PRIMARY KEY (recording_id, a_s))")
-    conn.execute("INSERT INTO joins VALUES ('r1', 1800, 1846, 's1', 's2', 5, 'lab', NULL), ('r1', 4500, 4600, 's3', 's4', 6, 'jay', 7)")
+    conn.execute("INSERT INTO joins VALUES ('r1', 1800, 1846, 's1', 's2', 5, 'lab', NULL), ('r1', 4500, 4600, 's3', 's4', 6, 'sam', 7)")  # before D9: the owner's name
     conn.execute("PRAGMA user_version=19")
     conn.close()
     conn = DB.connect(path)
     assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name='joins'").fetchone()
     assert [tuple(r) for r in conn.execute("SELECT first_id, second_id, by, undone_at FROM parts ORDER BY first_id")] == \
-        [("s1", "s2", "lab", None), ("s3", "s4", "jay", 7)]
+        [("s1", "s2", "lab", None), ("s3", "s4", "owner", 7)]
     assert [tuple(r) for r in conn.execute("SELECT id, end_s, status FROM sessions WHERE id IN ('s1', 's2') ORDER BY id")] == \
         [("s1", 1800.0, "active"), ("s2", 3700.0, "active")]
     assert conn.execute("PRAGMA user_version").fetchone()[0] == DB.SCHEMA_VERSION
+
+
+def test_a_lab_at_20_keeps_no_name_in_what_is_stored(tmp_path):
+    """Schema 21 (D9, 31 Oct): the first lab's kind, who split or grouped by hand and D10's note were the first owner's
+    name ("sam" here). They become "first", "owner" and "Your voice", and the lab behaves as it did."""
+    path = tmp_path / "v20.db"
+    conn = DB.connect(path)
+    conn.execute("""UPDATE app_config SET value='"sam"' WHERE key='lab_origin'""")
+    conn.execute("INSERT INTO recordings (id, source, path, duration_s, created_at) VALUES ('r1', 'device', 'x', 9000, 0)")
+    conn.execute("INSERT INTO splits (recording_id, at_s, created_at, by) VALUES ('r1', 10, 0, 'sam'), ('r1', 20, 0, 'lab')")
+    conn.execute("INSERT INTO parts (first_id, second_id, by, created_at) VALUES ('s1', 's2', 'sam', 0), ('s2', 's3', 'lab', 0)")
+    notes = ("Sam's voice not heard (D10). Deleted with other raw audio after the retention period; restore with: octo keep s1",
+             "Not sure you're in this one: kept to be safe.")
+    for n, (sid, note) in enumerate(zip(("s1", "s2"), notes)):
+        conn.execute("INSERT INTO sessions (id, recording_id, start_s, end_s, speech_s, created_at, status, note) "
+                     "VALUES (?, 'r1', ?, ?, 1, 0, 'discarded', ?)", (sid, n * 10, n * 10 + 1, note))
+    conn.execute("PRAGMA user_version=20")
+    conn.close()
+    conn = DB.connect(path)
+    assert LC.origin(conn) == LC.FIRST and LC.FLAGS["claude_code"][LC.origin(conn)]
+    assert [r[0] for r in conn.execute("SELECT by FROM splits ORDER BY at_s")] == ["owner", "lab"]
+    assert [r[0] for r in conn.execute("SELECT by FROM parts ORDER BY first_id")] == ["owner", "lab"]
+    assert [r[0] for r in conn.execute("SELECT note FROM sessions ORDER BY id")] == [
+        "Your voice not heard (D10). Deleted with other raw audio after the retention period; restore with: octo keep s1",
+        notes[1]]
+    new = DB.connect(tmp_path / "new.db")
+    new.execute("""UPDATE app_config SET value='"product"' WHERE key='lab_origin'""")
+    new.execute("PRAGMA user_version=20")
+    new.close()
+    assert LC.origin(DB.connect(tmp_path / "new.db")) == LC.PRODUCT
 
 
 def test_a_lab_at_18_gets_the_plans_tables(tmp_path):
