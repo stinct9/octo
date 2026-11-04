@@ -109,10 +109,11 @@ def settled_speakers(conn, session_id: str, need_self: bool = True, with_person:
     """Who each speaker is, once that's settled for the current diarize run: the owner confirmed, and no
     suggestion waiting for an answer. Unnamed voices may stay "Speaker C". None if not settled. A part of one
     discussion (B35) needn't have the owner in it, and says who each named speaker is (`person`)."""
-    dz = row(conn, "SELECT id, output FROM stage_runs WHERE target=? AND stage='diarize' AND is_current=1", session_id)
-    if not dz or not dz["output"]:
+    dz = row(conn, "SELECT id, output IS NOT NULL AS has_output FROM stage_runs WHERE target=? AND stage='diarize' "
+                   "AND is_current=1", session_id)
+    if not dz or not dz["has_output"]:
         return None
-    letters = apply(json.loads(dz["output"]), for_run(conn, session_id, dz["id"]))["speakers"]
+    letters = _letters(conn, dz["id"], for_run(conn, session_id, dz["id"]))
     got = {r["speaker"]: r for r in rows(conn, "SELECT ss.speaker, ss.state, p.id AS person, p.name, p.is_self FROM session_speakers ss "
                                                "LEFT JOIN people p ON p.id = ss.person_id "
                                                "WHERE ss.session_id=? AND ss.diarize_run=?", session_id, dz["id"])}
@@ -126,6 +127,20 @@ def settled_speakers(conn, session_id: str, need_self: bool = True, with_person:
     return [{"speaker": k, "name": got[k]["name"] if known(k) else f"Speaker {k}",
              "self": bool(known(k) and got[k]["is_self"]),
              **({"person": got[k]["person"] if known(k) else None} if with_person else {})} for k in letters]
+
+
+def _letters(conn, dz_id: str, fixes: list[dict]) -> list[str]:
+    """The speakers of a diarize run as corrected. A done run's output is written once, so only the corrections can change
+    them: the list asked this of every conversation, reading and correcting each ~40 KB output every time (4 Nov)."""
+    key, made = (row(conn, "PRAGMA database_list")["file"], dz_id), json.dumps(fixes, sort_keys=True, default=str)
+    hit = _LETTERS.get(key)
+    if not hit or hit[0] != made:
+        out = json.loads(row(conn, "SELECT output FROM stage_runs WHERE id=?", dz_id)["output"])
+        hit = _LETTERS[key] = (made, apply(out, fixes)["speakers"])
+    return list(hit[1])
+
+
+_LETTERS: dict[tuple[str, str], tuple[str, list[str]]] = {}  # (lab, diarize run) → (its corrections, its letters)
 
 
 def hindi_input(conn, session_id: str) -> dict:

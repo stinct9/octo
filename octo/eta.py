@@ -65,7 +65,7 @@ def _model(params: str | dict | None) -> str:
 def rates(conn) -> dict[str, tuple[float, float]]:
     """Per stage (and per model where it has one: "insight:claude-opus-5-5"), (fixed s, s per minute)."""
     out = dict(DEFAULT)
-    found = rows(conn, "SELECT sr.stage, sr.params, sr.output, sr.finished_at - sr.started_at AS took, "
+    found = rows(conn, "SELECT sr.id, sr.stage, sr.params, sr.finished_at - sr.started_at AS took, "
                        "coalesce((s.end_s - s.start_s), r.duration_s) / 60.0 AS minutes FROM stage_runs sr "
                        "LEFT JOIN sessions s ON s.id = sr.target LEFT JOIN recordings r ON r.id = sr.target "
                        "WHERE sr.status='done' AND sr.started_at > 0 AND sr.finished_at >= sr.started_at "
@@ -75,7 +75,7 @@ def rates(conn) -> dict[str, tuple[float, float]]:
         if not f["minutes"] or f["minutes"] <= 0:
             continue
         key = f["stage"]
-        if key == "transcribe" and f["output"] and '"merged"' in f["output"] and (load_json(f["output"]) or {}).get("merged"):
+        if key == "transcribe" and _merged(conn, f["id"]):
             key = "transcribe+merge"
         model = _model(f["params"])
         for k in [key, f"{key}:{model}"] if model else [key]:
@@ -87,6 +87,19 @@ def rates(conn) -> dict[str, tuple[float, float]]:
         if fit:
             out[k] = fit
     return out
+
+
+def _merged(conn, run_id: str) -> bool:
+    """A transcript merged by Claude (octo/hindi.py). Asked of a done run, whose output is written once: sorting every
+    run with its output spilled ~20 MB of transcripts to a temporary file on each forecast (4 Nov)."""
+    key = (row(conn, "PRAGMA database_list")["file"], run_id)
+    if key not in _MERGED:
+        m = row(conn, "SELECT json_extract(output, '$.merged') m FROM stage_runs WHERE id=?", run_id)["m"]
+        _MERGED[key] = bool(load_json(m) if isinstance(m, str) and m[:1] in "{[" else m)  # an object comes back as its text
+    return _MERGED[key]
+
+
+_MERGED: dict[tuple[str, str], bool] = {}
 
 
 def seconds(rate: dict[str, tuple[float, float]], stage: str, minutes: float, model: str = "", merge: bool = False) -> float:

@@ -261,6 +261,7 @@ PHONE_ROUTES: dict[tuple[str, str], str] = {
     ("GET", "/api/octo/calendar/day"): ANYWHERE,
     ("GET", "/api/octo/people/{person_id}/prepare"): ANYWHERE,  # B36: a plan before a conversation, read on the way
     ("GET", "/api/octo/people/{person_id}/prepare/pick"): ANYWHERE,
+    ("GET", "/api/octo/prefs"): ANYWHERE,  # the owner's folds and views, the same on every device (4 Nov)
     # answering and marking
     ("POST", "/api/octo/sessions/{session_id}/answer"): ANYWHERE,
     ("POST", "/api/octo/sessions/{session_id}/feedback"): ANYWHERE,
@@ -305,6 +306,7 @@ PHONE_ROUTES: dict[tuple[str, str], str] = {
     ("POST", "/api/octo/people/{person_id}/prepare/delete"): ANYWHERE,  # a plan, never a conversation, as Ask's Delete
     ("POST", "/api/octo/recordings"): ANYWHERE,  # a memo; over Tailscale only end-to-end encrypted (as Q2)
     ("POST", "/api/octo/device/recording"): ANYWHERE,
+    ("PUT", "/api/octo/prefs/{key}"): ANYWHERE,  # a fold opened or closed: a page's look, nothing else
     # can't be undone: from the home Wi-Fi only (each also asks on the page)
     ("POST", "/api/octo/sessions/{session_id}/delete"): HOME,
     ("POST", "/api/octo/drills/{drill_id}/delete"): HOME,

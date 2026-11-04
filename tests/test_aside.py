@@ -105,14 +105,13 @@ def _sp(*selves):
 
 def test_the_guess_is_few_words_nobody_you_and_no_answer_yet():
     sess = {"start_s": 0.0, "end_s": 240.0, "aside": None}  # four minutes
-    words = lambda n: [{"text": "word " * n}]
-    assert AS.maybe(sess, _sp(False, False), []) is True  # B1's evening: voices, no words
-    assert AS.maybe(sess, _sp(False, False), words(79)) is True  # under 20 a minute
-    assert AS.maybe(sess, _sp(False, False), words(80)) is False
-    assert AS.maybe(sess, _sp(False, False), words(800), without_jay=True) is True  # the TV talks a lot
-    assert AS.maybe(sess, _sp(True, False), []) is False  # The owner is in it
-    assert AS.maybe(sess, [], []) is False  # nobody heard yet: still being worked out
-    assert AS.maybe({**sess, "aside": "conversation"}, _sp(False), []) is False  # he said it is one
+    assert AS.maybe(sess, _sp(False, False), 0) is True  # B1's evening: voices, no words
+    assert AS.maybe(sess, _sp(False, False), 79) is True  # under 20 a minute
+    assert AS.maybe(sess, _sp(False, False), 80) is False
+    assert AS.maybe(sess, _sp(False, False), 800, without_jay=True) is True  # the TV talks a lot
+    assert AS.maybe(sess, _sp(True, False), 0) is False  # The owner is in it
+    assert AS.maybe(sess, [], 0) is False  # nobody heard yet: still being worked out
+    assert AS.maybe({**sess, "aside": "conversation"}, _sp(False), 0) is False  # he said it is one
 
 
 def test_the_list_offers_the_guess_and_not_after_an_answer(lab):

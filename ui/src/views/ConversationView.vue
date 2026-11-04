@@ -25,7 +25,7 @@ import TranscriptCard from '../components/conversation/TranscriptCard.vue'
 import { lab, type FeedbackChange } from '../lab/api'
 import { forgetConversation, kept, keepConversation } from '../lab/kept'
 import { ASIDE, mss, speakerColors, when } from '../lab/format'
-import { remember, remembered } from '../lab/remembered'
+import { pref } from '../lab/remembered'
 import { itemText, newToYouEntries } from '../lab/review'
 import { href } from '../lab/router'
 import { canEdit } from '../lab/where'
@@ -309,16 +309,14 @@ function sample(letter: string) {
   if (at) playClip(`sp-${letter}`, at.start, Math.min(at.end, at.start + 10))
 }
 
-// ---- the folded parts, remembered on this device ----------------------------------------------
+// ---- the folded parts, remembered in the lab --------------------------------------------------
 const showSpeakers = ref(false)
 // Speakers to confirm is the one thing blocking the review: open them when it comes to that.
 watch(() => s.value?.todo.kind, (kind, was) => { if (kind === 'confirm' && was !== 'confirm') showSpeakers.value = true })
 const lineById = computed(() => Object.fromEntries(allLines.value.map((l) => [l.id, l])))
-const showLines = ref(remembered('octo:transcript', false))
-watch(showLines, (on) => remember('octo:transcript', on))
+const showLines = pref('octo:transcript', false)
 // Your fillers underlined in your lines (6 Oct), switched from How you showed up.
-const markFillers = ref(remembered('octo:mark-fillers', true))
-watch(markFillers, (on) => remember('octo:mark-fillers', on))
+const markFillers = pref('octo:mark-fillers', true)
 
 const smooth = (): ScrollBehavior => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth')
 // The ⋯ menu's tools, opened at the bottom of the page.

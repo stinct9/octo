@@ -62,7 +62,7 @@ def unanswer(conn, session_id: str) -> bool:
     return was["status"] == "set_aside"
 
 
-def maybe(sess: dict, speakers: list[dict], lines: list[dict], without_jay: bool = False) -> bool:
+def maybe(sess: dict, speakers: list[dict], words: int, without_jay: bool = False) -> bool:
     """A guess that this active conversation isn't one (for "Sort them"): the owner hasn't answered for it,
     nobody in it is them, and it's settled without them or has under FEW_WORDS_PER_MIN words a minute.
     Display only."""
@@ -71,7 +71,7 @@ def maybe(sess: dict, speakers: list[dict], lines: list[dict], without_jay: bool
     if without_jay:
         return True
     minutes = max((sess["end_s"] - sess["start_s"]) / 60, 0.5)
-    return sum(len(ln["text"].split()) for ln in lines) / minutes < FEW_WORDS_PER_MIN
+    return words / minutes < FEW_WORDS_PER_MIN
 
 
 def listed(conn) -> list[dict]:

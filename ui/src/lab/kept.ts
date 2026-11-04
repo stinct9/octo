@@ -1,10 +1,12 @@
-import type { Incoming, SessionDetail, SessionSummary } from './types'
+import type { Incoming, PersonPage, Progress, SessionDetail, SessionSummary } from './types'
 
 /** What the last visit to a page showed, kept while the app is open: going back shows it at once, and the page then
  *  asks again (28 Oct: going back and forth between conversations took a long time, with "Loading…" every time). */
 export const kept = {
   list: null as { sessions: SessionSummary[]; older: number; aside: number; incoming: Incoming[] } | null,
   conversations: new Map<string, SessionDetail>(),
+  progress: null as Progress | null,  // 4 Nov: Progress and a person's page too, ~3 s each on a busy Mac
+  people: new Map<string, PersonPage>(),
 }
 
 const CONVERSATIONS = 12

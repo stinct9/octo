@@ -30,6 +30,8 @@
   GET  /api/octo/agenda                 today's and tomorrow's calendar events, who's in each, what was recorded (B34)
   GET  /api/octo/people/{id}/quiet      their usual gap, how long since, the "hasn't heard" line, muted?
   POST /api/octo/people/{id}/quiet      {"muted"}: never flag them, or flag them again
+  GET  /api/octo/prefs                  the owner's choices on the pages (folds, the calendar's view), every device's
+  PUT  /api/octo/prefs/{key}            {"value": true|false|"text"}: one of them; the last saved wins (octo/routes/prefs.py)
   GET  /api/octo/actions                every open "What to do" step from current reviews
   GET  /api/octo/actions/ticktick       which of those are completed in TickTick
   POST /api/octo/recordings?name=&source=   the raw audio file as the body; header X-Octo-Upload: 1
@@ -207,6 +209,22 @@ class Processor:
                 self.crashed = True
             finally:
                 self.running = False
+            if self.db is not None:
+                warm(self.db)  # what the pass made, kept for the pages before they're opened
+
+
+def warm(db: Callable) -> None:
+    """Build what the read-time pages keep (fillers.memoized and the list's own) before anyone asks: on Jay's lab, with the
+    speech models in memory, a person's page took 26 s the first time after a start and 2 s after (4 Nov). Each kept
+    record is still checked against what it's made from on every read, so this only moves the work earlier."""
+    from . import delivery as DV, fillers as FI, questions as QS, search as SE, sessions as SV
+    try:
+        conn = db()
+        for sid in [r["id"] for r in conn.execute("SELECT id FROM sessions WHERE status='active'")]:
+            SV.speakers(conn, sid), SV._preview(conn, sid), SV.todo(conn, sid)
+        FI.summary(conn), DV.all_conversations(conn), QS.summary(conn), list(SE.readable(conn))
+    except Exception as e:  # never worth a crash: the page builds what it needs when asked
+        print(f"warm: {e!r}", file=sys.stderr)
 
 
 class Watchdog:

@@ -9,16 +9,24 @@ import FromReviews from '../components/FromReviews.vue'
 import QuietLine from '../components/QuietLine.vue'
 import OwnerWords from '../components/OwnerWords.vue'
 import { lab } from '../lab/api'
+import { kept } from '../lab/kept'
 import { day, MEASURE_LABEL, measureValue, todoLabel, when } from '../lab/format'
 import { HAPPENED, happenedText } from '../lab/intention'
 import { href } from '../lab/router'
 import type { Measure, PersonPage, WithAndEveryone } from '../lab/types'
 
 const props = defineProps<{ id: string }>()
-const p = ref<PersonPage | null>(null)
+const p = ref<PersonPage | null>(kept.people.get(props.id) ?? null)  // as last seen, then asked again
 const error = ref('')
 onMounted(async () => {
-  try { p.value = await lab.person(props.id) } catch (e) { error.value = e instanceof Error ? e.message : String(e) }
+  try {
+    p.value = await lab.person(props.id)
+    kept.people.set(props.id, p.value)
+  } catch (e) {
+    p.value = null
+    kept.people.delete(props.id)
+    error.value = e instanceof Error ? e.message : String(e)
+  }
 })
 
 const stepSessions = computed(() => [...new Set((p.value?.steps ?? []).map((t) => t.session_id))])

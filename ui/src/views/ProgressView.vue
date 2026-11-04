@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import FillersCard from '../components/FillersCard.vue'
 import HeldMark from '../components/HeldMark.vue'
 import { lab } from '../lab/api'
+import { kept } from '../lab/kept'
 import { DELIVERY_NAME, deliveryValue } from '../lab/delivery'
 import { today, when } from '../lab/format'
 import { href } from '../lab/router'
@@ -15,10 +16,10 @@ import WeekCard from '../components/WeekCard.vue'
 const checks = [...(onMac ? [{ label: 'fillers', href: href.fillerCheck }] : []),
   { label: 'questions', href: href.questionCheck }, { label: 'commitments', href: href.commitmentCheck }]
 
-const p = ref<Progress | null>(null)
+const p = ref<Progress | null>(kept.progress)  // as last seen, then asked again
 const error = ref('')
 onMounted(async () => {
-  try { p.value = await lab.progress() } catch (e) { error.value = e instanceof Error ? e.message : String(e) }
+  try { p.value = kept.progress = await lab.progress() } catch (e) { error.value = e instanceof Error ? e.message : String(e) }
   lab.questions().then((q) => { qs.value = q }).catch(() => {})
 })
 // Others' questions and who spoke next (B4): 1:1s and groups apart, since in a group many aren't for you.

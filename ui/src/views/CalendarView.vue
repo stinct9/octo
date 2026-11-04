@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { lab } from '../lab/api'
 import { mss, speakerColors, todoLabel } from '../lab/format'
 import { dayTitle, fillersText, grid, minutesText, monthTitle, shift, spoken, WEEKDAY_SHORT, type Show } from '../lab/month'
+import { pref } from '../lab/remembered'
 import { href } from '../lab/router'
 import type { DayView, MonthView } from '../lab/types'
 
@@ -23,9 +24,8 @@ async function load() {
 onMounted(load)
 watch(() => [props.month, props.day], load)
 
-// Conversations or fillers (30 Oct), remembered on this device only.
-const show = ref<Show>((() => { try { return localStorage.getItem('octo.calendar.show') === 'fillers' ? 'fillers' : 'talk' } catch { return 'talk' } })())
-watch(show, (v) => { try { localStorage.setItem('octo.calendar.show', v) } catch { /* private window */ } })
+// Conversations or fillers (30 Oct), remembered in the lab (4 Nov).
+const show = pref<Show>('octo.calendar.show', 'talk')
 const weeks = computed(() => (m.value ? grid(m.value, show.value) : []))
 const thisMonth = computed(() => !!m.value && m.value.today.slice(0, 7) === m.value.month)
 const hm = (t: number) => new Date(t * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })

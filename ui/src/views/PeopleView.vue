@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { lab } from '../lab/api'
+import { kept } from '../lab/kept'
 import { mss, when } from '../lab/format'
 import { href } from '../lab/router'
 import { canDelete } from '../lab/where'
@@ -86,6 +87,9 @@ async function confirmForget() {
   if (!forgetting.value) return
   try {
     await lab.forget(forgetting.value.name, typed.value)
+    kept.people.clear()  // what the pages showed of them, held while the app is open
+    kept.conversations.clear()
+    kept.list = kept.progress = null
     forgetting.value = null
     await load()
   } catch (e) {

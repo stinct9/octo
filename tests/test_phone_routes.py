@@ -100,6 +100,7 @@ REVIEWED = {
     ("POST", "/api/octo/sessions/{session_id}/talk/clear"): H,
     ("POST", "/api/octo/recordings"): A,
     ("POST", "/api/octo/device/recording"): A,
+    ("GET", "/api/octo/prefs"): A, ("PUT", "/api/octo/prefs/{key}"): A,  # folds and views: the page's look only (4 Nov)
     ("POST", "/api/octo/sessions/{session_id}/delete"): H,
     ("POST", "/api/octo/people/forget"): H,
     ("POST", "/api/octo/people/rename"): H,

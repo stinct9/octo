@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { lab, LET_IN, working, type LetIn } from './lab/api'
+import { loadPrefs } from './lab/remembered'
 import { href, route } from './lab/router'
 import { scrollPlaces } from './lab/scroll'
 import { onMac } from './lab/where'
@@ -65,6 +66,10 @@ const setupEl = ref<HTMLElement | null>(null)
 function closeOutside(e: Event) { if (setupOpen.value && !setupEl.value?.contains(e.target as Node)) setupOpen.value = false }
 function closeOnEscape(e: KeyboardEvent) { if (e.key === 'Escape') setupOpen.value = false }
 onMounted(() => { document.addEventListener('click', closeOutside); document.addEventListener('keydown', closeOnEscape) })
+// The owner's folds and views, from the lab: on first load and each time the page comes back (another device may have changed one).
+const prefsAgain = () => { if (document.visibilityState === 'visible') void loadPrefs() }
+onMounted(() => { void loadPrefs(); document.addEventListener('visibilitychange', prefsAgain); window.addEventListener('focus', prefsAgain) })
+onUnmounted(() => { document.removeEventListener('visibilitychange', prefsAgain); window.removeEventListener('focus', prefsAgain) })
 onUnmounted(() => { document.removeEventListener('click', closeOutside); document.removeEventListener('keydown', closeOnEscape) })
 watch(() => route.current, () => { setupOpen.value = false })
 

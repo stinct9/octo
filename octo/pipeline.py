@@ -128,8 +128,16 @@ def input_hash(stage: Stage, params: dict, target: str, upstream: list[str]) -> 
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
-def current(conn, target: str, stage: str) -> dict | None:
-    return row(conn, "SELECT * FROM stage_runs WHERE target=? AND stage=? AND is_current=1", target, stage)
+def current(conn, target: str, stage: str, output: bool = True) -> dict | None:
+    """The current run. output=False leaves its output out (has_output says if there is one): a transcript is ~120 KB,
+    and the list read every one of them each time it was asked for, ~22 MB on Jay's lab (4 Nov)."""
+    if output:
+        return row(conn, "SELECT * FROM stage_runs WHERE target=? AND stage=? AND is_current=1", target, stage)
+    return row(conn, f"SELECT {_NO_OUTPUT}, output IS NOT NULL AS has_output FROM stage_runs WHERE target=? AND stage=? "
+                     "AND is_current=1", target, stage)
+
+
+_NO_OUTPUT = "id, stage, target, input_hash, status, is_current, stale, upstream, params, error, queued_at, started_at, finished_at, progress"
 
 
 # A failed run is tried again on a later pass, after a wait that doubles each time, and given up
@@ -298,13 +306,15 @@ def _calls_since(conn, since: float, which: Callable[[dict], bool]) -> int:
     """Model calls made since `since` by runs whose reader `which` picks: a review is one, a Hindi merge one per
     chunk; and, for Claude Code, the coach's notes."""
     n = 0
-    for r in rows(conn, "SELECT stage, output, params FROM stage_runs WHERE status='done' AND finished_at >= ? "
+    # Two fields, not the output: today's transcripts are ~120 KB each, and this is asked on most pages (4 Nov).
+    for r in rows(conn, "SELECT stage, params, json_extract(output, '$.usage') AS usage, "
+                        "json_extract(output, '$.merged.calls') AS calls FROM stage_runs WHERE status='done' AND finished_at >= ? "
                         "AND stage IN ('insight', 'transcribe', 'commitments')", since):
         who = run_reader(r)
         if not who or not which(who):
             continue
-        out = json.loads(r["output"] or "null") or {}
-        n += (1 if out.get("usage") else 0) if r["stage"] != "transcribe" else (out.get("merged") or {}).get("calls", 0)
+        used = load_json(r["usage"]) if isinstance(r["usage"], str) and r["usage"][:1] in "{[" else r["usage"]
+        n += (1 if used else 0) if r["stage"] != "transcribe" else (r["calls"] or 0)
     for d in rows(conn, "SELECT point FROM drills WHERE point IS NOT NULL AND point_at >= ?", since):
         p = load_json(d["point"]) or {}
         n += 1 if p.get("usage") and p.get("reader") and which(p["reader"]) else 0

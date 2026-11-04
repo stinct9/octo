@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -153,6 +154,9 @@ def create_app(runner: Runner | None = None, steps: dict[str, Step] | None = Non
             app.state.octo_watchdog.keep_going()  # and when the lab can't save to its folder
             app.state.octo_filler_trainer.keep_going()  # the filler cue's weekly retrain, at night (B22)
             app.state.octo_models.start()  # speech models still missing (a new lab): fetched in the background
+            from octo.api import warm
+            from octo.db import connect
+            threading.Thread(target=warm, args=(connect,), daemon=True, name="octo-warm").start()  # pages fast from the first visit
         if phone_access and PH.enabled():
             await app.state.phone_server.start()  # the Wi-Fi listener for a paired phone (octo/phone_api.py)
         yield

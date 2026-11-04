@@ -9,7 +9,7 @@ import { computed, ref, watch } from 'vue'
 import HeldMark from '../HeldMark.vue'
 import ReviewItem from '../ReviewItem.vue'
 import type { FeedbackChange } from '../../lab/api'
-import { remember, remembered } from '../../lab/remembered'
+import { pref } from '../../lab/remembered'
 import { entries, heldCounts, itemQuote, newToYouEntries } from '../../lab/review'
 import type { Answer, Evidence, Insights, ItemFeedback, Quote } from '../../lab/types'
 
@@ -83,7 +83,7 @@ const said = computed(() => {
 const offer = computed(() => (chosen.value.some((e) => e.id === props.focusItem) ? [] : chosen.value.slice(0, 3)))
 const short = (t: string) => (t.length > 48 ? `${t.slice(0, 46).trimEnd()}…` : t)
 
-const readAll = ref(remembered('octo:review-open', false))
+const readAll = pref('octo:review-open', false)
 const opened = ref<Set<string>>(new Set())
 const isOpen = (id: string) => readAll.value !== opened.value.has(id)  // "open all" flips what's been toggled
 const allOpen = computed(() => fullCount.value > 0 && all.value.every((e) => isOpen(e.id)))
@@ -96,7 +96,6 @@ function toggleItem(id: string) {
 function toggleAll() {
   readAll.value = !allOpen.value
   opened.value = new Set()
-  remember('octo:review-open', readAll.value)
 }
 
 // A principle is heard in the owner's own words where it has them.

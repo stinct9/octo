@@ -1,14 +1,16 @@
 <script setup lang="ts">
-// Folds a home card to its header and one line, and opens it again (the owner, 4 Nov). Remembered per card on
-// this device; everything starts open. The card owns `v-model` and hides its body when it's false.
+// Folds a home card to its header and one line, and opens it again (the owner, 4 Nov). Remembered per card in the
+// lab, so every device folds it alike; everything starts open. The card owns `v-model` and hides its body when it's false.
 import { watch } from 'vue'
-import { remember, remembered } from '../lab/remembered'
+import { pref } from '../lab/remembered'
 
 const props = defineProps<{ name: string; label: string }>()
 const open = defineModel<boolean>({ default: true })
 const key = `octo:fold:${props.name}`
-open.value = remembered(key, true)
-watch(open, (v) => remember(key, v))
+const saved = pref(key, true)
+open.value = saved.value
+watch(saved, (v) => { open.value = v })  // the lab's answer, or another device's choice
+watch(open, (v) => { if (v !== saved.value) saved.value = v })
 </script>
 
 <template>

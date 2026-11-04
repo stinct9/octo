@@ -53,7 +53,7 @@ def diarized(conn, session_id: str) -> tuple[dict | None, dict | None, list[dict
 
 def speakers(conn, session_id: str) -> list[dict]:
     """Every speaker in the current diarize run, with who they are and how sure that is."""
-    dz = current(conn, session_id, "diarize")
+    dz = current(conn, session_id, "diarize", output=False)
     if not dz or dz["status"] != "done":
         return []
     fixes = C.for_run(conn, session_id, dz["id"])
@@ -61,7 +61,7 @@ def speakers(conn, session_id: str) -> list[dict]:
     run = (_lab(conn), dz["id"])
     hit = _TALK.get(run)
     if not hit or hit[0] != key:  # a run's output is written once: only the corrections can change these
-        full = C.apply(load_json(dz["output"]), fixes)
+        full = C.apply(load_json(row(conn, "SELECT output FROM stage_runs WHERE id=?", dz["id"])["output"]), fixes)
         hit = _TALK[run] = (key, {"speakers": full["speakers"], "talk_s": full["talk_s"]})
     out = hit[1]
     ident = current(conn, session_id, "identify")
@@ -106,7 +106,7 @@ def paused(tr: dict | None, conn=None) -> str | None:
     """Why this conversation's transcript isn't used (a language that's paused), or None. With the connection, SQLite
     reads the three fields it needs: the list asked this of every row, and parsing every whole transcript (word times
     and all) was half its time (architecture review, 28 Oct)."""
-    if not (tr and tr["status"] == "done" and tr["output"]):
+    if not (tr and tr["status"] == "done" and tr.get("output", tr.get("has_output"))):
         return None
     if conn is None or "id" not in tr.keys():
         return language_paused(load_json(tr["output"]))
@@ -155,7 +155,7 @@ def _todo(conn, session_id: str, g: list[dict] | None = None) -> dict:
     aside = row(conn, "SELECT aside FROM sessions WHERE id=? AND status='set_aside'", session_id)
     if aside:  # not a conversation, as the owner marked it (B5): nothing left to do
         return {"kind": "aside", "what": aside["aside"]}
-    runs = {name: current(conn, session_id, name) for name in SESSION_STAGES}
+    runs = {name: current(conn, session_id, name, output=name == "insight") for name in SESSION_STAGES}
     pending = [name for name in SESSION_STAGES if row(
         conn, "SELECT id FROM stage_runs WHERE target=? AND stage=? AND status IN ('queued','running')", session_id, name)]
     if pending:
@@ -200,7 +200,7 @@ def _todo(conn, session_id: str, g: list[dict] | None = None) -> dict:
     why = paused(runs.get("transcribe"), conn)
     if why:
         # Hindi waits for the owner to confirm themselves on the draft before it's merged (J2): ask them.
-        tr_out = load_json(runs["transcribe"]["output"])
+        tr_out = load_json(current(conn, session_id, "transcribe")["output"])
         if other_language(tr_out) == "hi" and runs.get("diarize") and runs["diarize"]["status"] == "done" \
                 and jay_talk_s(conn, session_id) < MERGE_MIN_JAY_S:
             if without_jay(conn, session_id):
@@ -288,9 +288,7 @@ def source(sess: dict) -> str:
 
 def summary(conn, sess: dict) -> dict:
     sp = speakers(conn, sess["id"])
-    _, out, _ = diarized(conn, sess["id"])
-    lines = out["lines"] if out and not paused(current(conn, sess["id"], "transcribe"), conn) else []
-    preview = next((ln["text"] for ln in lines if len(ln["text"]) > 30 and not ln["uncertain"]), None)
+    preview, words = _preview(conn, sess["id"])
     td = todo(conn, sess["id"])
     g = PT.whole(conn, sess["id"])  # B35: the list shows one discussion in parts once, on its first
     who = [{"letter": s["letter"], "name": display(s), "state": s["state"], "self": s["self"]} for s in sp]
@@ -309,8 +307,29 @@ def summary(conn, sess: dict) -> dict:
         "todo": td,
         # A guess that it isn't a conversation (B5): offered in "Sort them", never acted on by itself.
         "maybe_aside": sess.get("status", "active") == "active"
-                       and AS.maybe(sess, sp, out["lines"] if out else [], without_jay=td["kind"] == "not_you"),
+                       and AS.maybe(sess, sp, words, without_jay=td["kind"] == "not_you"),
     }
+
+
+def _preview(conn, session_id: str) -> tuple[str | None, int]:
+    """The list row's first line and how many words were said: read from the diarize output (~40 KB) only when its run,
+    the corrections or the transcript's run change (4 Nov: the list read and corrected every one on every visit)."""
+    dz = current(conn, session_id, "diarize", output=False)
+    if not dz or dz["status"] != "done":
+        return None, 0
+    tr = current(conn, session_id, "transcribe", output=False)
+    fixes = C.for_run(conn, session_id, dz["id"])
+    key = json.dumps([_lab(conn), dz["id"], tr and tr["id"], fixes], sort_keys=True, default=str)
+    hit = _PREVIEW.get(session_id)
+    if not hit or hit[0] != key:
+        out = C.apply(load_json(row(conn, "SELECT output FROM stage_runs WHERE id=?", dz["id"])["output"]), fixes)
+        lines = out["lines"] if not paused(tr, conn) else []
+        hit = _PREVIEW[session_id] = (key, (next((ln["text"] for ln in lines if len(ln["text"]) > 30 and not ln["uncertain"]), None),
+                                            sum(len(ln["text"].split()) for ln in out["lines"])))
+    return hit[1]
+
+
+_PREVIEW = FL.memo()  # session → (what it's made from, (preview, words)): a line's words, so Delete and Forget drop it
 
 
 def feedback_view(conn, insight_run: str) -> dict[str, dict]:

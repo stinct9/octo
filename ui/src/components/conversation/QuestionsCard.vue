@@ -1,8 +1,7 @@
 <script setup lang="ts">
 // Others' questions and who spoke next (B4), folded like the transcript.
-import { ref, watch } from 'vue'
 import { mss } from '../../lab/format'
-import { remember, remembered } from '../../lab/remembered'
+import { pref } from '../../lab/remembered'
 import type { SessionDetail } from '../../lab/types'
 
 const props = defineProps<{
@@ -14,8 +13,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ play: [item: string, start: number, end: number] }>()
 
-const showQs = ref(remembered('octo:questions', false))
-watch(showQs, (on) => remember('octo:questions', on))
+const showQs = pref('octo:questions', false)
 const lineText = (id: number) => props.lineById[id]?.text ?? ''
 </script>
 
