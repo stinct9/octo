@@ -100,7 +100,7 @@ const selectedChoice = (s: PipelineStep) => s.choices.find((c) => c.id === s.sel
           </div>
 
           <p v-if="s.blocked" class="warn" role="status">{{ s.blocked }}:
-            <template v-if="s.choices.length">choose one with <b>Change model…</b> below, or</template>
+            <template v-if="s.choices.length">choose one with <b>Change model…</b> below, or </template>
             <a href="#/settings">connect one in Settings</a>.</p>
           <p v-if="done[s.stage]" class="note small" role="status">{{ done[s.stage] }}</p>
 

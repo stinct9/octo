@@ -214,13 +214,18 @@ def add(conn, first: str, second: str, by: str = "owner", why: str | None = None
                  "created_at=excluded.created_at", (first, second, by, why, time.time()))
 
 
+def by_hand(a: dict, b: dict) -> bool:
+    """`b` starts after `a` ends (overlapping recordings are two takes of one time, never parts), within half an hour."""
+    return -NEAR_S <= b["at"] - a["end_at"] <= HAND_MAX_GAP_S
+
+
 def group_with(conn, sid: str, side: str) -> str:
     """By hand: this conversation and the one right before or after it are one discussion. Returns the head's id.
     ValueError when there's none within half an hour."""
     before, me, after = around(conn, sid)
     a, b = (before, me) if side == "before" else (me, after)
-    if not a or not b or b["at"] - a["end_at"] > HAND_MAX_GAP_S:
-        raise ValueError("only the conversation right before or after, up to half an hour apart")
+    if not a or not b or not by_hand(a, b):
+        raise ValueError("only the conversation right before or after, up to half an hour apart and not overlapping")
     add(conn, a["id"], b["id"], by="owner")
     return group(conn, sid)[0]["id"]
 
@@ -390,7 +395,7 @@ def page(conn, sess: dict) -> dict | None:
         offers = []
         for side, a, b in (("before", before, me), ("after", me, after)):
             other = a if side == "before" else b
-            if other and b["at"] - a["end_at"] <= HAND_MAX_GAP_S:
+            if other and by_hand(a, b):
                 offers.append({"side": side, "other": other["id"], "gap_s": round(b["at"] - a["end_at"]),
                                "minutes": round((other["end_s"] - other["start_s"]) / 60, 1),
                                "who": [SV.display(sp) for sp in SV.speakers(conn, other["id"]) if not sp["self"]],

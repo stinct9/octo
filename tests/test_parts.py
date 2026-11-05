@@ -101,6 +101,16 @@ def test_across_recordings_back_to_back_and_not_too_far(tmp_path):
         assert not grouped or PT.kind(conn, *PT._active(conn)) == "recordings"
 
 
+def test_overlapping_recordings_are_never_offered_as_parts(tmp_path):
+    """A phone memo of the meeting the recorder also caught: two takes of one time, not one discussion in two parts
+    (the demo lab offered them as "-131 s apart", 5 Nov)."""
+    spans = meeting(["B", "J"], 1, 9.5)
+    conn = _lab(tmp_path, [(0.0, 600.0, spans), (0.0, 600.0, spans)], {"B": "Bo"}, recordings=[1000.0, 1300.0])
+    assert PT.page(conn, row(conn, "SELECT * FROM sessions WHERE id='s1'")) is None
+    with pytest.raises(ValueError):
+        PT.group_with(conn, "s1", "after")
+
+
 def test_the_owners_word_wins_and_the_lab_decides_each_boundary_once(tmp_path):
     for d in ("1", "2"):
         (tmp_path / d).mkdir()
