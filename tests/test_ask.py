@@ -6,6 +6,8 @@ from datetime import datetime
 
 import pytest
 
+from tests.calls import through_claude_code
+
 from octo import ask as AK
 from octo import corrections as C
 from octo import pipeline as P
@@ -43,10 +45,11 @@ def _lab(tmp_path):
 
 def answer(*claims, limits=""):
     """A model's answer: each claim (text, [(conversation, line, quote)])."""
-    def ask(model, effort, system, prompt, schema):
+    def fake(model, effort, system, prompt, schema):
         ask.prompt = prompt
         return {"claims": [{"text": t, "quotes": [{"conversation": c, "line": n, "text": q} for c, n, q in qs]} for t, qs in claims],
                 "not_found": "", "limits": limits}, {"duration_ms": 1000, "input_tokens": 10, "output_tokens": 5}
+    ask = through_claude_code(fake)
     return ask
 
 

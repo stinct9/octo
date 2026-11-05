@@ -20,6 +20,7 @@ from octo.api import make_router
 from octo.db import connect, load_json, row
 
 from test_coach import _lab, _three, mark
+from tests.calls import spend, through_reader
 
 CLAUDE = {"kind": "claude-code", "model": "claude-opus-5-5", "effort": "high"}
 
@@ -45,7 +46,7 @@ def lab(tmp_path, monkeypatch):
         if isinstance(a, Exception):
             raise a
         return a, {"output_tokens": 30}
-    monkeypatch.setattr(RH, "_ask", ask)
+    monkeypatch.setattr(RH, "_ask", through_reader(ask))
     app = FastAPI()
     app.include_router(make_router(lambda: connect(tmp_path / "t.db"), processor=SimpleNamespace(kick=lambda: None)))
     return SimpleNamespace(conn=conn, seen=seen, answers=answers, s1=s1, s2=s2, client=TestClient(app))
@@ -104,8 +105,7 @@ def test_each_reply_and_the_review_count_in_the_day_and_a_limit_waits(lab):
     RH.say(lab.conn, r, "")  # its reply to "Three." now
     assert RH.view(lab.conn, r)["turns"][-1]["by"] == "them" and RH.view(lab.conn, r)["error"] is None
     assert P.claude_calls_since(lab.conn, 0) == before + 3
-    lab.conn.execute("UPDATE rehearsals SET turns=? WHERE id=?",
-                     (json.dumps([{"by": "them", "text": "x", "at": time.time(), "reader": CLAUDE}] * P.DAILY_CLAUDE_CALLS), r))
+    spend(lab.conn, P.DAILY_CLAUDE_CALLS)
     assert "today's 60 Claude calls are used" in RH.why_not(lab.conn)
 
 

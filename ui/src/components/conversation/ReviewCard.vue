@@ -29,6 +29,8 @@ const props = defineProps<{
   highlight: string | null
   ttError: string
   changeError: string
+  /** The one question's ticks on the What to do rows (review 5 Nov, item 4). */
+  ticks?: { asking: boolean; picked: Set<string>; answered: string[] } | null
 }>()
 const markFillers = defineModel<boolean>('markFillers', { required: true })
 const emit = defineEmits<{
@@ -42,6 +44,7 @@ const emit = defineEmits<{
   change: [item: string, c: FeedbackChange]
   ticktick: [item: string]
   ticktickAll: []
+  tick: [item: string, on: boolean]
 }>()
 
 const isReview = computed(() => props.ins?.kind === 'review')
@@ -102,7 +105,7 @@ const intentionRows = computed(() => {
       <div v-if="s.insights.next?.length" class="block">
         <TaskList :tasks="s.insights.next" :feedback="s.feedback" :sent="s.ticktick" :connected="s.ticktick_connected"
                   :sending="sending" :settings-href="href.settings" :tt-done="ttDone" :focus-item="focusItem"
-                  :one-step="one?.next ?? null" :highlight="highlight"
+                  :one-step="one?.next ?? null" :highlight="highlight" :ticks="ticks" @tick="(item, on) => emit('tick', item, on)"
                   @change="(item, c) => emit('change', item, c)" @practise="emit('practise', $event)" @ticktick="emit('ticktick', $event)" @ticktick-all="emit('ticktickAll')" />
         <p v-if="ttError" class="error small" role="alert">{{ ttError }}</p>
       </div>

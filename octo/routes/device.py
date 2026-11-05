@@ -15,6 +15,8 @@ from .. import device as D
 from ..db import row
 from .common import Lab, same_origin
 
+RECENT_CHECK_S = 90  # the lab asks the recorder every 30 s; a failure this recent is still the answer
+
 
 class Recording(BaseModel):
     on: bool
@@ -48,7 +50,11 @@ def add(router: APIRouter, lab: Lab) -> None:
         from .. import device as D
         cfg = D.load_config() or {}
         out = {"paired": bool(cfg.get("key")), "developer_build": D.developer_build(), "networks": None, "error": None}
-        if out["paired"]:
+        last = D.last_status() or {}
+        if out["paired"] and last.get("error") and time.time() - (last.get("checked_at") or 0) < RECENT_CHECK_S:
+            # The 30 s check just failed to reach it: say so at once, not after the lock and four tries (16 s, 5 Nov)
+            out["error"] = f"not reachable on Wi-Fi now ({last['error']})"
+        elif out["paired"]:
             try:
                 with D.holding(db(), wait_s=5):
                     out["networks"] = D.networks_wifi(D.Device.from_config(), "list")

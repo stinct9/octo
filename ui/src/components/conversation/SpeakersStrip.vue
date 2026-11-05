@@ -129,7 +129,8 @@ const numbersLine = computed(() => {
 .label { width: 76px; flex-shrink: 0; font-size: 13px; color: var(--muted); font-weight: 500; }
 .names { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .name { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
-.name .who { color: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.name .who { color: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px;
+  display: inline-block; padding: 11px 4px; margin: -11px -4px; }  /* a 44 px tap area that doesn't move the line */
 .name .who:hover { color: var(--accent); text-decoration-color: currentColor; }
 .nums { flex: 1; min-width: 0; color: var(--ink-2); }
 .strip .link { white-space: nowrap; min-height: 36px; }

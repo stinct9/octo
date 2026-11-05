@@ -1,18 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import CoachCard from '../components/CoachCard.vue'
-import FocusBanner from '../components/FocusBanner.vue'
 import FromReviews from '../components/FromReviews.vue'
 import AgendaCard from '../components/AgendaCard.vue'
+import WorkingOn from '../components/WorkingOn.vue'
 import WeekCard from '../components/WeekCard.vue'
 import SearchBox from '../components/SearchBox.vue'
 import SetupBanner from '../components/SetupBanner.vue'
 import { lab } from '../lab/api'
 import { kept } from '../lab/kept'
-import { ASIDE, etaText, inProgress, mss, needsYou, speakerColors, todoLabel, when } from '../lab/format'
+import { ASIDE, etaText, inProgress, mss, needsYou, sourceName, speakerColors, todoLabel, when } from '../lab/format'
 import { href } from '../lab/router'
 import { onMac } from '../lab/where'
-import type { AsideRow, Incoming, SessionSummary, Status } from '../lab/types'
+import type { AsideRow, Incoming, SessionSummary, States, Status } from '../lab/types'
 
 const sessions = ref<SessionSummary[] | null>(kept.list?.sessions ?? null)
 const refreshing = ref(!!kept.list)  // showing the list as last seen until it's asked again: rows may still move
@@ -141,6 +140,9 @@ onMounted(load)
 // only where something merges its drafts. Without an answer it says what's true of every lab.
 const privacy = ref<Status['privacy'] | null>(null)
 onMounted(() => { lab.status().then((s) => { privacy.value = s.privacy ?? null }).catch(() => {}) })
+// Where every conversation is, all of them (Progress's line until 5 Nov, review item 8): asked once a visit.
+const states = ref<States | null>(null)
+onMounted(() => { lab.states().then((s) => { states.value = s }).catch(() => {}) })
 const leaves = computed(() => {
   const p = privacy.value
   if (!p) return 'Transcript text goes only to the model you chose for reviews, and only once you\'re confirmed in the conversation.'
@@ -189,12 +191,12 @@ const incomingText: Record<Incoming['state'], string> = {
 
     <SearchBox :blur="blur" />
 
-    <!-- On a phone the list comes first, the cards after it (22 Oct): .home-card's order, below -->
-    <SetupBanner class="home-card" />
+    <!-- The list comes first, the cards after it (on a phone since 22 Oct, the Mac too since 5 Nov, review item 3):
+         .home-card's order, below. Only setup stays above while it isn't done. -->
+    <SetupBanner />
     <AgendaCard class="home-card" />
     <WeekCard class="home-card" />
-    <FocusBanner class="home-card" />
-    <CoachCard class="home-card" />
+    <WorkingOn class="home-card" />
     <FromReviews class="home-card" />
 
     <div v-if="inApp" class="drop muted"><span>From Voice Memos: open a memo, tap Share, then <b>Octo</b>. Add recordings is for files saved in Files.</span></div>
@@ -253,7 +255,7 @@ const incomingText: Record<Incoming['state'], string> = {
       <a v-for="s in shown" :key="s.id" class="row" :href="href.conversation(s.id)">
         <div class="when">
           <div class="strong">{{ when(s.started_at) }}</div>
-          <div class="muted small">{{ mss(s.duration_s) }} · {{ s.source }}<template v-if="(s.part_count ?? 1) > 1"> · {{ s.part_count }} parts</template></div>
+          <div class="muted small">{{ mss(s.duration_s) }} · {{ sourceName(s.source) }}<template v-if="(s.part_count ?? 1) > 1"> · {{ s.part_count }} parts</template></div>
         </div>
         <div class="who">
           <div class="chips">
@@ -279,7 +281,7 @@ const incomingText: Record<Incoming['state'], string> = {
         <div v-for="r in asideRows" :key="r.id" class="row aside-row">
           <a class="when" :href="href.conversation(r.id)">
             <div class="strong">{{ when(r.started_at) }}</div>
-            <div class="muted small">{{ mss(r.duration_s) }} · {{ r.source }} · {{ ASIDE[r.aside] }}</div>
+            <div class="muted small">{{ mss(r.duration_s) }} · {{ sourceName(r.source) }} · {{ ASIDE[r.aside] }}</div>
           </a>
           <button type="button" class="btn btn-small" @click="putBack(r.id)">It's a conversation</button>
         </div>
@@ -287,6 +289,9 @@ const incomingText: Record<Incoming['state'], string> = {
       <p v-if="asideError" class="error small" role="alert">{{ asideError }}</p>
     </section>
 
+    <p v-if="states" class="muted small states">All of them: {{ states.reviewed }} reviewed · {{ states.to_review }} to review ·
+      {{ states.waiting_on_you }} waiting on you · {{ states.failed }} failed · {{ states.processing }} processing ·
+      {{ states.cant_count }} can't count (too short, without you, or not transcribed) · {{ states.not_counted }} you left out</p>
     <div class="foot muted small">
       <label class="check"><input v-model="blur" type="checkbox"> Blur previews</label>
       <span class="spacer" />
@@ -352,12 +357,13 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; flex-grow: 1; }
 .error { color: var(--fail); }
 .link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; text-decoration: underline; }
 .foot { display: flex; align-items: center; gap: 12px; }
+.states { margin: 0; }
 .check { display: flex; align-items: center; gap: 8px; min-height: 44px; flex-shrink: 0; white-space: nowrap; }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .spacer { flex-grow: 1; }
+.home-card { order: 1; }
+.drop, .states, .foot { order: 2; }
 @media (max-width: 640px) {
-  .home-card { order: 1; }
-  .drop, .foot { order: 2; }
   .foot { flex-wrap: wrap; }
 }
 @media (max-width: 760px) {

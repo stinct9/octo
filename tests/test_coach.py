@@ -16,11 +16,13 @@ from octo import focus as F
 from octo import measures as M
 from octo import notify as N
 from octo import pipeline as P
+from octo import runs as RN  # the holds and the day's calls (risk 8, 5 Nov)
 from octo import sessions as SV
 from octo import voice as V
 from octo.api import make_router
 from octo.db import connect, row, rows
 from octo.privacy import delete_session
+from tests.calls import spend, through_claude_code
 
 DAY = 86400
 T0 = datetime(2026, 10, 2, 10, 0).timestamp()
@@ -112,7 +114,7 @@ def fake_ask(got: list):
     def ask(model, effort, system, prompt, schema):
         got.append({"model": model, "effort": effort, "system": system, "prompt": prompt, "schema": schema})
         return json.loads(json.dumps(RAW)), USAGE
-    return ask
+    return through_claude_code(ask)
 
 
 @pytest.fixture
@@ -259,11 +261,10 @@ def test_when_it_cannot_be_asked(tmp_path, claude, monkeypatch):
     monkeypatch.setattr(CC, "claude_bin", lambda: None)
     assert CO.why_not(conn) == "Claude Code isn't installed (the `claude` command)"
     monkeypatch.setattr(CC, "claude_bin", lambda: "/usr/local/bin/claude")
-    monkeypatch.setattr(P, "DAILY_CLAUDE_CALLS", 1)
-    conn.execute("INSERT INTO coach_notes (id, created_at, status, model, usage, finished_at) VALUES ('c_old', 0, 'done', 'm', '{}', ?)",
-                 (datetime.now().timestamp(),))
+    monkeypatch.setattr(RN, "DAILY_CLAUDE_CALLS", 1)
+    spend(conn, 1)
     assert CO.why_not(conn) == "today's 1 Claude calls are used: after midnight"
-    monkeypatch.setattr(P, "DAILY_CLAUDE_CALLS", 60)
+    monkeypatch.setattr(RN, "DAILY_CLAUDE_CALLS", 60)
     # A note left "running" by a restart doesn't hold the coach up for ever.
     conn.execute("INSERT INTO coach_notes (id, created_at, status, model) VALUES ('c_stuck', ?, 'running', 'm')",
                  (datetime.now().timestamp() - CO.STOPPED_AFTER_S - 5,))

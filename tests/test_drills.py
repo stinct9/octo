@@ -19,6 +19,7 @@ from octo import privacy as PV
 from octo.api import make_router
 from octo.db import connect, row
 from tests.test_search import L, _conv
+from tests.calls import through_claude_code
 
 UPLOAD = {"x-octo-upload": "1"}
 
@@ -182,8 +183,8 @@ def test_where_the_point_came_one_call_its_quote_checked_and_timed(lab, monkeypa
     monkeypatch.setattr(ST, "reader", lambda conn: CLAUDE)
     did = take(lab)
     seen = []
-    ask = asker({"point_line": 0, "point_quote": "the reason is, you know, the tests pass", "build_up_right": False,
-                 "build_up_why": "The answer came first.", "short": "We ship Friday: the tests pass."}, seen)
+    ask = through_claude_code(asker({"point_line": 0, "point_quote": "the reason is, you know, the tests pass", "build_up_right": False,
+                                     "build_up_why": "The answer came first.", "short": "We ship Friday: the tests pass."}, seen))
     before = P.claude_calls_since(lab.conn, 0)
     assert DR.find_points(lab.conn, log=lambda m: None, ask=ask) == 1
     assert len(seen) == 1 and "[0] 0:00 Sam: The answer is yes" in seen[0]["prompt"] and '"p"' in seen[0]["system"]

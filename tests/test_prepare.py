@@ -22,6 +22,7 @@ from octo.api import make_router
 from octo.db import connect, load_json, row
 
 from test_coach import DAY, T0, _conv, _lab, _three
+from tests.calls import through_reader
 
 CLAUDE = {"kind": "claude-code", "model": "claude-opus-5-5", "effort": "high"}
 PLAN = {"aim": "Listen first.", "why": "An introduction.",
@@ -55,7 +56,7 @@ def lab(tmp_path, monkeypatch):
         if isinstance(a, Exception):
             raise a
         return a, {"output_tokens": 40}
-    monkeypatch.setattr(PP, "_ask", ask)
+    monkeypatch.setattr(PP, "_ask", through_reader(ask))
     monkeypatch.setattr(PP, "run_in_background", lambda db, pid: started.append(pid))
     db = lambda: connect(tmp_path / "t.db")  # noqa: E731
     app = FastAPI()

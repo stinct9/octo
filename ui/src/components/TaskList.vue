@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // A review's "What to do", one line per step: due date, TickTick, Did it. Details fold underneath,
-// with Practise this, Let it go (6 Oct: off home's list, not counted as acted) and Not right?.
+// with Practise this and Not right?. Let it go (6 Oct: off home's list, not counted as acted) beside Did it, as on home (5 Nov).
 import { computed, ref, watch } from 'vue'
 import type { FeedbackChange } from '../lab/api'
 import { dueDay, today as localToday } from '../lab/format'
@@ -22,8 +22,11 @@ const props = defineProps<{
   oneStep?: number | null
   /** A step to show open and highlighted (from the one thing's link). */
   highlight?: string | null
+  /** "What here was new to you?" on these rows (review 5 Nov, item 4): ticks while it's asked, "New to you" once answered. */
+  ticks?: { asking: boolean; picked: Set<string>; answered: string[] } | null
 }>()
-const emit = defineEmits<{ change: [item: string, change: FeedbackChange]; ticktick: [item: string]; ticktickAll: []; practise: [item: string] }>()
+const emit = defineEmits<{ change: [item: string, change: FeedbackChange]; ticktick: [item: string]; ticktickAll: []; practise: [item: string]
+  tick: [item: string, on: boolean] }>()
 
 const rows = computed(() => props.tasks.map((t, i) => {
   const id = `n${i}`
@@ -53,21 +56,25 @@ watch(() => props.highlight, (id) => { if (id && !open.value.has(id)) toggle(id)
     <div class="actions">
       <button v-if="connected && unsent > 1" type="button" class="tt small" :disabled="!!sending" @click="emit('ticktickAll')">
         + Add all {{ unsent }} to TickTick</button>
-      <a v-if="!connected" class="small" :href="settingsHref">Connect TickTick</a>
+      <a v-if="!connected" class="small tap" :href="settingsHref">Connect TickTick</a>
     </div>
   </div>
+  <p v-if="ticks?.asking" class="small muted">Tick a step that was new to you: it counts toward “What here was new to you?”, below.</p>
   <ul class="tasks">
     <li v-for="r in rows" :id="`item-${r.id}`" :key="r.id" :class="{ quiet: r.acted || r.letGo, lit: highlight === r.id }">
       <div class="row">
+        <label v-if="ticks?.asking" class="tick" :title="'New to me'"><input type="checkbox" :checked="ticks.picked.has(r.id)"
+               :aria-label="`New to me: ${r.title}`" @change="emit('tick', r.id, ($event.target as HTMLInputElement).checked)"></label>
         <button type="button" class="toggle" :aria-expanded="open.has(r.id)" :aria-controls="`task-${r.id}`" @click="toggle(r.id)">
           <svg class="chev" :class="{ down: open.has(r.id) }" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" /></svg>
           <span class="title">{{ r.title }}</span>
         </button>
+        <span v-if="!ticks?.asking && ticks?.answered.includes(r.id)" class="badge">New to you</span>
         <span v-if="oneStep === r.i" class="tag">The one thing</span>
         <span v-if="focusItem === r.id" class="badge">Your focus</span>
         <span v-if="r.t.due" class="due" :class="{ late: r.overdue }" :title="r.overdue ? 'Past its date' : 'Do by'"><template v-if="r.overdue">Late · </template>{{ dueDay(r.t.due) }}</span>
         <template v-if="r.acted">
-          <span class="done small">✓ Done</span>
+          <span class="done small">✓ Did it</span>
           <button type="button" class="link small" @click="emit('change', r.id, { acted: false })">Undo</button>
         </template>
         <template v-else-if="r.letGo">
@@ -79,8 +86,10 @@ watch(() => props.highlight, (id) => { if (id && !open.value.has(id)) toggle(id)
           <button v-else-if="connected" type="button" class="tt small" :disabled="!!sending" @click="emit('ticktick', r.id)">
             {{ sending === r.id ? 'Adding…' : '+ TickTick' }}</button>
           <button v-if="ttDone?.[r.id]" type="button" class="did small" title="Completed in TickTick" @click="emit('change', r.id, { acted: true })">
-            Done in TickTick · mark done</button>
+            Done in TickTick · Did it</button>
           <button v-else type="button" class="did small" @click="emit('change', r.id, { acted: true })">Did it</button>
+          <button type="button" class="link small" title="Off the list on home; not counted as done"
+                  @click="emit('change', r.id, { let_go: true })">Let it go</button>
         </template>
       </div>
       <div v-if="open.has(r.id)" :id="`task-${r.id}`" class="more">
@@ -88,8 +97,6 @@ watch(() => props.highlight, (id) => { if (id && !open.value.has(id)) toggle(id)
         <p v-if="r.t.why" class="small muted">Why: {{ r.t.why }}</p>
         <div class="foot">
           <button v-if="focusItem !== r.id && !r.acted" type="button" class="link small" @click="emit('practise', r.id)">Practise this</button>
-          <button v-if="!r.acted && !r.letGo" type="button" class="link small" title="Off the list on home; not counted as done"
-                  @click="emit('change', r.id, { let_go: true })">Let it go</button>
           <NotRight :feedback="feedback[r.id]" @change="emit('change', r.id, $event)" />
         </div>
       </div>
@@ -105,6 +112,9 @@ watch(() => props.highlight, (id) => { if (id && !open.value.has(id)) toggle(id)
 .tasks li { padding: 4px 12px 4px 6px; border-top: 1px solid var(--line); }
 .tasks li:first-child { border-top: 0; }
 .tasks li.lit { background: var(--accent-soft); border-radius: 10px; }
+.tick { width: 44px; min-height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; margin-right: -10px; }
+.tick:hover { background: var(--quote); }
+.tick input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .row { display: flex; align-items: center; gap: 10px; min-height: 46px; flex-wrap: wrap; }
 .toggle { flex: 1; min-width: 12rem; display: flex; align-items: center; gap: 8px; text-align: left; border: 0; background: none; color: var(--ink);
   font: inherit; padding: 6px; cursor: pointer; border-radius: 8px; }
@@ -126,6 +136,7 @@ watch(() => props.highlight, (id) => { if (id && !open.value.has(id)) toggle(id)
 .tt:disabled { opacity: 0.6; cursor: default; }
 .in { color: var(--accent); font-weight: 500; text-decoration: none; white-space: nowrap; }
 .link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 6px 0; font: inherit; min-height: 32px; }
+.tap { display: inline-block; padding: 12px 6px; margin: -12px -6px; }  /* a 44 px tap area that doesn't move the line */
 .more { padding: 2px 0 12px 32px; display: flex; flex-direction: column; gap: 8px; }
 .detail { margin: 0; color: var(--ink-2); }
 .foot { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; }
@@ -135,6 +146,7 @@ p { margin: 0; }
 @media (max-width: 640px) {
   .tt, .did, .link { min-height: 44px; }
   .toggle { flex-basis: 100%; }
+  .tick + .toggle { flex-basis: calc(100% - 34px); }
   .more { padding-left: 8px; }
 }
 </style>

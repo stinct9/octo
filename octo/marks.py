@@ -22,6 +22,13 @@ GRACE_S = 15.0  # a mark just after the conversation's last words is still about
 UNDO_S = 60.0  # the phone's Undo (22 Oct): a mark it just made, and only that
 
 
+def wall_clock(clock: tuple[float, float] | None, start_ms: float | None) -> float | None:
+    """Seconds since 1970 for a moment `start_ms` after boot, if the Mac set the clock in that boot."""
+    if not clock or start_ms is None:
+        return None
+    return (clock[0] - clock[1] + start_ms) / 1000  # here since 5 Nov, so marks and fillers needn't import device (risk 8)
+
+
 def add(conn, at: float | None = None, source: str = "phone") -> dict:
     """A mark from the phone: now, by the Mac's clock."""
     m = {"id": new_id("mark"), "at": time.time() if at is None else at, "source": source}
@@ -39,7 +46,6 @@ def undo(conn, mark_id: str, now: float | None = None) -> bool:
 def from_manifest(conn, boot: int, text: str) -> int:
     """The recorder's marks in one boot's manifest, placed by that boot's clock as its chunks are. Those already read
     (or deleted) add nothing; one before the Mac set the boot's clock waits for a later sync. How many were new."""
-    from .device import wall_clock
     clock, found = None, []
     for line in text.splitlines():
         try:

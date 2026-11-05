@@ -43,6 +43,13 @@ def _active(conn) -> list[dict]:
 def groups(conn) -> list[list[dict]]:
     """Every group of two or more parts, each in order. A link counts while both are active and still neighbours: a
     split or a new conversation between them leaves it dormant (the lab may then group the new neighbours)."""
+    from . import frame as FR
+    if (got := FR.once(conn, "groups", lambda: _groups(conn))) is not None:  # the list's request: once, not per row
+        return got
+    return _groups(conn)
+
+
+def _groups(conn) -> list[list[dict]]:
     order = _active(conn)
     nxt = {a["id"]: b for a, b in zip(order, order[1:])}
     linked = {r["first_id"]: r["second_id"] for r in rows(conn, "SELECT first_id, second_id FROM parts WHERE undone_at IS NULL")}
@@ -75,7 +82,7 @@ def whole(conn, sid: str) -> list[dict]:
 
 
 def answered(conn, sid: str) -> bool:
-    from .planning import pinned_review
+    from .runs import pinned_review
     return bool(row(conn, "SELECT 1 FROM sessions WHERE id=? AND reviewed_at IS NOT NULL", sid) or pinned_review(conn, sid))
 
 
@@ -93,7 +100,7 @@ def held(conn, sid: str) -> bool:
         return False
     if g[0]["id"] != sid:
         return True
-    from .pipeline import current
+    from .runs import current
     cur = current(conn, sid, "insight")
     asked = row(conn, "SELECT redo_review FROM sessions WHERE id=?", sid)["redo_review"]
     if is_whole(cur) or (asked and asked in ("whole", cur and cur["id"])):
@@ -214,6 +221,9 @@ def add(conn, first: str, second: str, by: str = "owner", why: str | None = None
                  "created_at=excluded.created_at", (first, second, by, why, time.time()))
 
 
+OFFER_MIN_S = 60
+
+
 def by_hand(a: dict, b: dict) -> bool:
     """`b` starts after `a` ends (overlapping recordings are two takes of one time, never parts), within half an hour."""
     return -NEAR_S <= b["at"] - a["end_at"] <= HAND_MAX_GAP_S
@@ -274,7 +284,7 @@ def letters(conn, g: list[dict]) -> tuple[list[dict], list[dict]]:
     review's}). The head keeps its letters; a later part's speaker settled as someone already heard takes their letter,
     anyone else gets one of their own ("C2": speaker C of part 2). ([], []) until every part is settled (no suggestion
     waiting) and the owner is confirmed in at least one."""
-    from .planning import settled_speakers
+    from .runs import settled_speakers
     speakers: list[dict] = []
     by_person: dict[str, str] = {}
     meta = []
@@ -395,9 +405,10 @@ def page(conn, sess: dict) -> dict | None:
         offers = []
         for side, a, b in (("before", before, me), ("after", me, after)):
             other = a if side == "before" else b
-            if other and by_hand(a, b):
+            # a neighbour under a minute isn't offered (review 5 Nov, item 7): too little to be a part of anything
+            if other and by_hand(a, b) and other["end_s"] - other["start_s"] >= OFFER_MIN_S:
                 offers.append({"side": side, "other": other["id"], "gap_s": round(b["at"] - a["end_at"]),
-                               "minutes": round((other["end_s"] - other["start_s"]) / 60, 1),
+                               "duration_s": round(other["end_s"] - other["start_s"]),
                                "who": [SV.display(sp) for sp in SV.speakers(conn, other["id"]) if not sp["self"]],
                                "ungrouped": decided(conn, a, b)})
         return {"offers": offers} if offers else None

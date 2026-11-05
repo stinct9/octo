@@ -23,9 +23,12 @@ from .db import load_json, new_id, row, rows
 
 
 def for_run(conn, session_id: str, diarize_run: str) -> list[dict]:
-    return [{**json.loads(r["data"]), "id": r["id"], "kind": r["kind"]} for r in rows(
+    from . import frame as FR
+    every = FR.corrections(conn)  # the list's request: every conversation's, read once
+    got = every.get((session_id, diarize_run), []) if every is not None else rows(
         conn, "SELECT * FROM corrections WHERE session_id=? AND diarize_run=? ORDER BY created_at, rowid",
-        session_id, diarize_run)]
+        session_id, diarize_run)
+    return [{**json.loads(r["data"]), "id": r["id"], "kind": r["kind"]} for r in got]
 
 
 def add(conn, session_id: str, diarize_run: str, kind: str, data: dict) -> None:

@@ -5,15 +5,14 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import IphoneSetup from '../components/IphoneSetup.vue'
 import ModelsKeys from '../components/ModelsKeys.vue'
+import ReviewModel from '../components/ReviewModel.vue'
 import SetupStep from '../components/SetupStep.vue'
-import { lab } from '../lab/api'
 import { href } from '../lab/router'
-import type { PipelineStep } from '../lab/types'
 
 interface Profile { name?: string; pronoun?: string; about?: string; principles_from?: string; never?: string }
 interface Sections { principles: string; rules: string; parsed: { n: number; title: string }[]; file: string; examples?: { text: string; why: string }[] }
 interface Step { id: string; done: boolean; skipped?: boolean; optional?: boolean; why?: Check[]; do?: string; link?: string | null; note?: string | null }
-interface Setup { steps: Step[]; complete: boolean; empty?: boolean }
+interface Setup { steps: Step[]; complete: boolean; empty?: boolean; recorder_key?: string | null }
 interface Check { mark: '✓' | '!' | '✗'; what: string; detail: string; fix: string }
 interface Model { repo: string; state: 'ready' | 'downloading' | 'waiting' | 'needs_access' | 'failed'; gated: boolean; error: string | null; size_gb: number | null; have_gb: number | null }
 interface Models { running: boolean; models: Model[] }
@@ -163,29 +162,9 @@ async function savePrinciples() {
   } catch (e) { prError.value = e instanceof Error ? e.message : String(e) }
 }
 
-// 3. A model for reviews
-const review = ref<PipelineStep | null>(null)
-const pick = ref('')
-const modelNote = ref('')
-const modelError = ref('')
-// Usable choices, the owner's own connections first: having just connected one, that's what they mean.
-const usable = computed(() => (review.value?.choices ?? []).filter((c) => !c.unavailable)
-  .sort((a, b) => Number(!a.provider) - Number(!b.provider)))
-const loadReview = () => lab.pipeline().then((steps) => {
-  review.value = steps.find((s) => s.stage === 'insight') ?? null
-  pick.value = review.value?.selected ?? usable.value[0]?.id ?? ''
-}).catch(() => {})
-const current = computed(() => review.value?.choices.find((c) => c.id === review.value?.selected))
-const picked = computed(() => review.value?.choices.find((c) => c.id === pick.value))
-async function useModel() {
-  modelError.value = ''
-  try {
-    const r = await lab.choose('insight', pick.value)
-    review.value = r.steps.find((s) => s.stage === 'insight') ?? null
-    modelNote.value = `Reviews use ${review.value?.choices.find((c) => c.id === r.selected)?.label ?? r.selected}.`
-    loadSetup()
-  } catch (e) { modelError.value = e instanceof Error ? e.message : String(e) }
-}
+// 3. A model for reviews: the same control as Settings → Models and keys (ReviewModel.vue, review 5 Nov, item 9)
+const modelCtl = ref<InstanceType<typeof ReviewModel> | null>(null)
+const current = computed(() => modelCtl.value?.current)
 
 onMounted(async () => {
   loadSetup()
@@ -193,7 +172,6 @@ onMounted(async () => {
   call<SampleReview | Record<string, never>>('GET', '/api/octo/settings/sample').then((r) => { if ('review' in r) sample.value = r as SampleReview }).catch(() => {})
   call<{ profile: Profile }>('GET', '/api/octo/settings/owner').then((r) => { profile.value = { pronoun: 'they', ...r.profile } }).catch(() => {})
   call<Sections>('GET', '/api/octo/settings/rubric').then((s) => { sections.value = s; principles.value = s.principles; rules.value = s.rules }).catch(() => {})
-  loadReview()
 })
 </script>
 
@@ -224,6 +202,9 @@ onMounted(async () => {
         <ul class="checks"><li v-for="c in step('mac')?.why" :key="c.what" :class="c.mark === '✗' ? 'is-bad' : 'is-warn'"><span class="mark" aria-hidden="true">{{ c.mark }}</span>
           <span><b>{{ c.what }}</b>: {{ c.detail }}<span v-if="c.fix" class="fix">{{ c.fix }}</span></span></li></ul>
       </template>
+      <p v-if="setup.recorder_key" class="small">Keep a copy of the recorder's key in your password manager: the
+        <code>enc_private</code> line in <code>{{ setup.recorder_key }}</code>. Without it, audio still on the recorder's card
+        can't be read if this Mac is lost.</p>
     </SetupStep>
 
     <SetupStep :n="nOf('models')" title="Speech models" :state="stateOf('models')">
@@ -345,25 +326,15 @@ onMounted(async () => {
 
       <p class="muted">The review reads the conversation's text; you choose which model: Claude Code on this Mac, on your own
         Claude plan, or a model on an API key, which its maker bills per use.</p>
-      <p v-if="current">Reviews use <b>{{ current.label }}</b>. <a :href="href.pipeline">Change it on the Pipeline page</a>; keys are in <a :href="href.settings">Settings</a>.</p>
-      <template v-else>
-        <ModelsKeys in-setup @changed="loadReview" />
-        <div v-if="usable.length" class="line">
-          <label class="field grow">Review with
-            <select v-model="pick" aria-describedby="pick-why"><option v-for="c in usable" :key="c.id" :value="c.id">{{ c.label }}</option></select>
-          </label>
-          <button type="button" class="btn" :disabled="!pick" @click="useModel">Use it</button>
-        </div>
-        <p v-if="picked" id="pick-why" class="muted small">{{ picked.why }}</p>
-        <p v-if="modelError" class="error small" role="alert">{{ modelError }}</p>
-      </template>
-      <p v-if="modelNote" class="ok small" aria-live="polite">{{ modelNote }}</p>
+      <p v-if="current">Reviews use <b>{{ current.label }}</b>. Choose another here; keys are in <a :href="href.settings">Settings</a>.</p>
+      <ModelsKeys v-else in-setup @changed="modelCtl?.load()" />
+      <ReviewModel ref="modelCtl" @changed="loadSetup" />
           <div class="try">
         <h3>Try it on a made-up conversation</h3>
 
       <p class="muted">Before you record anyone: a short invented 1:1 between you and a team lead, reviewed against your
-        principles by your model. It sends that made-up text (about 300 words) to your model once, on your plan or key, and
-        counts toward nothing.</p>
+        principles by your model. It sends that made-up text (about 300 words) once, on your model (your plan or your key),
+        and counts toward nothing.</p>
       <p v-if="!done('principles') || !done('model')" class="muted small">Write your principles and choose a model first.</p>
       <div v-else class="line">
         <button type="button" class="btn" :disabled="sampleBusy" @click="runSample">{{ sampleBusy ? 'Reviewing… (up to a minute)' : sample ? 'Review it again' : 'Review the sample' }}</button>

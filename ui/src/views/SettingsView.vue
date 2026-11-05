@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import CalendarSettings from '../components/CalendarSettings.vue'
 import ExportImport from '../components/ExportImport.vue'
 import InviteTester from '../components/InviteTester.vue'
 import ModelsKeys from '../components/ModelsKeys.vue'
 import RecorderSettings from '../components/RecorderSettings.vue'
+import PipelineView from './PipelineView.vue'
+
+// #/pipeline opens Each step (advanced) here (the Pipeline page until 5 Nov, review item 9): old links keep working.
+const props = defineProps<{ steps?: boolean }>()
+const stepsOpen = ref(!!props.steps)
+const stepsEl = ref<HTMLElement | null>(null)
+onMounted(() => { if (props.steps) void nextTick(() => stepsEl.value?.scrollIntoView()) })
 
 interface TickTick {
   connected: boolean
@@ -73,14 +80,15 @@ onMounted(async () => { talk.value = await call<{ effort: string; efforts: strin
   <main class="page">
     <div>
       <h1>Settings</h1>
-      <p class="muted">The models your reviews run on, connections to your other tools, and exporting your lab. This page is only on the Mac.
+      <p class="muted">The models your reviews and each step run on, connections to your other tools, and exporting your lab. This page is only on the Mac.
         Your name and principles are on <a href="#/setup">Set up Octo</a>.</p>
     </div>
 
     <ModelsKeys />
-    <RecorderSettings />
-    <InviteTester />
-
+    <details ref="stepsEl" class="card steps" :open="stepsOpen" @toggle="stepsOpen = ($event.target as HTMLDetailsElement).open">
+      <summary><h2>Each step (advanced)</h2> <span class="muted small">every recording's steps, the model each uses, and why</span></summary>
+      <PipelineView v-if="stepsOpen" />
+    </details>
     <section class="card pad" aria-labelledby="talk">
       <h2 id="talk">Talk it through</h2>
       <p class="muted">How hard your review's model thinks before each reply when you talk a conversation through.
@@ -94,6 +102,9 @@ onMounted(async () => { talk.value = await call<{ effort: string; efforts: strin
       </div>
       <p v-if="talkError" class="error" role="alert">{{ talkError }}</p>
     </section>
+
+    <RecorderSettings />
+    <InviteTester />
 
     <section class="card pad" aria-labelledby="tt">
       <div class="row-head">
@@ -167,5 +178,9 @@ ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 
 .facts dd { margin: 0; }
 .choices { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
 .choice { display: flex; gap: 10px; align-items: center; min-height: 32px; cursor: pointer; }
+.steps { padding: 0; }
+.steps > summary { padding: 18px 22px; cursor: pointer; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-height: 44px; }
+.steps[open] > summary { border-bottom: 1px solid var(--line); }
+.steps > :not(summary) { padding: 18px 22px; }
 .cap { text-transform: capitalize; font-weight: 600; }
 </style>

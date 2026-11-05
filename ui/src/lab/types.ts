@@ -268,7 +268,7 @@ export interface WeekCard {
   current: boolean
   counts: { heard: number; reviewed: number; acted: number }
   focus: { id: string; text: string; measure: Measure | null; week: Measured | null; usual: Measured | null } | null
-  commitments?: { mine: number; theirs: number; due: Commitment[] }
+  commitments?: { mine: number; theirs: number; due: Commitment[]; unnamed: number; unnamed_session: string | null }
   quiet?: Quiet[]
   coach?: { note_id: string; at: number; theme: string | null } | null
 }
@@ -351,7 +351,12 @@ export interface Focus {
   numbers?: SinceBefore | null
   /** The coach note it came from, if any. */
   coach_note?: string | null
+  /** B38: who has solved this, in the owner's words. */
+  solved?: Solved | null
 }
+/** B38, goal 2: who has solved this, written by the owner; Octo never suggests one. */
+export interface SolvedInput { who: string; what: string; source: string | null }
+export interface Solved extends SolvedInput { updated_at: number }
 /** The focus on a conversation's page: the owner's answer there, and that conversation's own number. */
 export type SessionFocus = Focus & { answer: FocusAnswer | null; here?: number | null }
 export interface FocusSummary { active: Focus | null; past: Focus[] }
@@ -416,8 +421,9 @@ export interface SessionCalendar { events: { title: string; start: number; end: 
 export interface PartOffer {
   side: 'before' | 'after'
   other: string
+  /** Seconds from one's end to the other's start; under 0 when the recordings overlap. */
   gap_s: number
-  minutes: number
+  duration_s: number
   who: string[]
   /** The owner said before that these two aren't one discussion. */
   ungrouped: boolean
@@ -463,6 +469,7 @@ export interface SessionDetail extends Omit<SessionSummary, 'speakers'> {
   insight_run: string | null
   /** A rated review kept although what it was made from changed since: the page offers a redo. */
   review_outdated: boolean
+  review_forgotten?: boolean
   feedback: Record<string, ItemFeedback>
   /** The owner's answer to the one question on the review shown, or null while it waits. */
   answer: Answer | null
@@ -543,19 +550,26 @@ export interface Progress {
   /** Each principle in the owner's words, and what each review shown now said about it, newest first. */
   by_principle: { n: number; text: string; seen: { session_id: string; at: number | null; with: string[]; title: string | null;
     observation: string | null; item: string; verdict: 'right' | 'partly' | 'wrong' | null; held?: Held | null }[] }[]
-  /** Where every conversation is, and what's waiting on the owner. */
-  states?: Record<'reviewed' | 'to_review' | 'waiting_on_you' | 'failed' | 'processing' | 'cant_count' | 'not_counted', number>
   weekly: { week: string; conversations: number; share: number | null; questions: number; talked_over: number }[]
   insight_conversations: number
   /** Practice (B18): its own line, never in the counts above. */
   drills?: DrillLine
 }
 
+/** Where every conversation is, and what's waiting on the owner: the list's footer (review 5 Nov, item 8). */
+export type States = Record<'reviewed' | 'to_review' | 'waiting_on_you' | 'failed' | 'processing' | 'cant_count' | 'not_counted', number>
+
 /** An open "What to do" step from a current review, for home's "From your reviews". */
 export interface OpenTask {
+  /** A review's step, or one of the owner's own commitments ("you promised", 5 Nov), its id in `item`. */
+  kind: 'step' | 'promise'
   session_id: string
-  run: string
+  run: string | null
   item: string
+  /** The commitment that is the same promise (a step's pair, or the promise itself): shown once. */
+  promise: string | null
+  /** Whom it was promised to (a promise). */
+  to?: string | null
   at: number | null
   title: string
   due: string | null
@@ -744,6 +758,8 @@ export interface CoachNoteBody {
   limits: string
   dropped: { section: string; theme: string; reason: string }[]
   unknown_evidence: string[]
+  /** B38: "What would <who> do here?", answered from the owner's note only; absent on notes before it. */
+  would?: { who: string; source: string | null; on: 'focus' | 'work_on'; text: string } | null
 }
 export type CoachPart = 'work_on' | 'keep' | 'also0' | 'also1'
 export interface CoachMark { verdict: 'right' | 'partly' | 'wrong' | null; novelty: 'new' | 'knew' | null }
@@ -762,6 +778,8 @@ export interface CoachNote {
   focus: { id: string; text: string; started_at: number; active: boolean; tally: Record<FocusAnswer, number> } | null
   /** How he'll know: that number since this note, against before it. */
   numbers: SinceBefore | null
+  /** B38: who has solved its "work on", in the owner's words. */
+  solved?: Solved | null
 }
 export interface CoachSummary {
   latest: CoachNote | null

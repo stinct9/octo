@@ -17,6 +17,7 @@ LINE = "curl -fsSL https://beta.example.org/0123abcd/install.sh | bash"
 class FakeSMTP:
     sent: list = []
     refuse = False
+    context = None
 
     def close(self):
         pass
@@ -24,8 +25,8 @@ class FakeSMTP:
     def __init__(self, host, port, timeout):
         assert (host, port) == IV.SMTP
 
-    def starttls(self):
-        pass
+    def starttls(self, context=None):
+        FakeSMTP.context = context
 
     def ehlo(self):
         self.esmtp_features = {"auth": "PLAIN LOGIN"}
@@ -112,7 +113,7 @@ class GoogleLike(smtplib.SMTP):
     def __init__(self, host, port, timeout):
         super().__init__()
 
-    def starttls(self):
+    def starttls(self, context=None):
         pass
 
     def ehlo(self, name=""):
@@ -150,3 +151,10 @@ def test_it_can_send_as_an_alias_while_signing_in_as_the_account(monkeypatch):  
     assert IV.status()["from"] == "owner@example.org" and "as" not in IV.load()
     with pytest.raises(IV.InviteError, match="alias"):
         IV.setup("owner@example.org", "", "", "support", smtp=FakeSMTP)
+
+
+def test_gmail_s_certificate_is_checked():
+    """smtplib's starttls() without a context doesn't verify: the app password would go to whoever answered (5 Nov)."""
+    IV.setup("owner@example.org", "abcdabcdabcdabcd", LINE, smtp=FakeSMTP)
+    ctx = FakeSMTP.context
+    assert ctx is not None and ctx.verify_mode == IV.ssl.CERT_REQUIRED and ctx.check_hostname

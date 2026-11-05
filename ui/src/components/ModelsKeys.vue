@@ -2,6 +2,7 @@
 // Models and keys (product plan 4.1): the services the review, the Hindi merge and the coach can run on.
 // Keys go in and are never shown again: the server returns only their last four characters.
 import { computed, onMounted, ref } from 'vue'
+import ReviewModel from './ReviewModel.vue'
 
 interface Connection {
   id: string
@@ -30,13 +31,15 @@ interface View {
   claude_models: ClaudeModel[]
   review: string | null
   blocked: string | null
+  first_lab?: boolean
   added?: Connection
   tested?: { ok: boolean; model?: string; seconds?: number; error?: string }
 }
 
 const emit = defineEmits<{ changed: [] }>()
-// On Set up Octo the choice is made right under this, not on the Pipeline page (install review, 5 Nov)
+// The review's model is chosen with ReviewModel: on Set up Octo right under this, here inside it (review 5 Nov, item 9)
 const props = defineProps<{ inSetup?: boolean }>()
+const picker = ref<InstanceType<typeof ReviewModel> | null>(null)
 const view = ref<View | null>(null)
 const error = ref('')
 const note = ref('')
@@ -55,7 +58,7 @@ async function run(fn: () => Promise<unknown>, done = '') {
   try {
     const got = await fn()
     if (got && typeof got === 'object' && 'connections' in got) view.value = got as View
-    if (done) emit('changed')
+    if (done) { emit('changed'); void picker.value?.load() }
     note.value = done
     return true
   } catch (e) {
@@ -136,11 +139,13 @@ const price = (m: ClaudeModel) => `$${m.price[0]} in · $${m.price[1]} out per m
       <h2 id="mk">Models and keys</h2>
       <span v-if="view && !view.blocked" class="ok small">Reviews have a model</span>
     </div>
-    <p class="muted">The review, the Hindi merge and the coach send a conversation's <b>text</b> (the transcript, names and numbers)
-      to the model you choose. The audio and voiceprints never leave this Mac. There are two ways to Claude: Claude Code on
+    <p class="muted"><template v-if="!view || view.first_lab">The review, the Hindi merge and the coach send</template><template v-else>The review
+      and the coach send</template> a conversation's <b>text</b> (the transcript, names and numbers)
+      to the model you choose<template v-if="view && !view.first_lab">, and so does merging the two drafts of a Hindi one</template>. The audio and voiceprints never leave this Mac. There are two ways to Claude: Claude Code on
       this Mac, on your own Claude plan, or an Anthropic API key, billed per use. Or another service.</p>
     <p v-if="view?.blocked" class="warn" role="status">Reviews are waiting for a model: set up one of these, then choose it
-      <template v-if="props.inSetup">below.</template><template v-else>on the <a href="#/pipeline">Pipeline</a> page.</template></p>
+      <template v-if="props.inSetup">here, below.</template><template v-else>in <b>Review with</b>, below.</template></p>
+    <ReviewModel v-if="!props.inSetup" ref="picker" />
 
     <div v-if="view" class="service" aria-labelledby="cc-h">
       <div class="row-head">
@@ -164,7 +169,7 @@ const price = (m: ClaudeModel) => `$${m.price[0]} in · $${m.price[1]} out per m
       <p v-if="view.claude_code.fix" class="small">{{ view.claude_code.fix.slice(0, view.claude_code.fix.indexOf(': ')) }}, in Terminal:
         <code class="mono">{{ fixCommand(view.claude_code.fix) }}</code>, then <button type="button" class="btn btn-small" :disabled="busy" @click="load">Check again</button></p>
       <p v-else-if="!view.claude_code.in_use" class="muted small">To use it, choose “Claude Code on this Mac” for reviews
-        <template v-if="props.inSetup">below.</template><template v-else>on the <a href="#/pipeline">Pipeline</a> page.</template></p>
+        <template v-if="props.inSetup">here, below.</template><template v-else>in <b>Review with</b>, above.</template></p>
     </div>
 
     <p v-if="!view && !error" class="muted loading" role="status">Loading…</p>
@@ -224,7 +229,8 @@ const price = (m: ClaudeModel) => `$${m.price[0]} in · $${m.price[1]} out per m
       </template>
       <template v-else>
         <p class="muted small">OpenAI, Google's OpenAI-compatible endpoint, OpenRouter, or a model server on this Mac (LM Studio,
-          Ollama's /v1). Models not tested with Octo say so on the Pipeline page.</p>
+          Ollama's /v1). Models not tested with Octo say so <template v-if="props.inSetup">when you choose one</template><template
+          v-else>in <b>Review with</b></template>.</p>
         <div class="grid">
           <label class="field">Name<input v-model="label" type="text" placeholder="e.g. OpenRouter" :disabled="busy"></label>
           <label class="field">Base URL<input v-model="baseUrl" type="url" placeholder="https://…/v1" spellcheck="false" :disabled="busy"></label>

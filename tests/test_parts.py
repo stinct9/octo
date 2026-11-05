@@ -310,3 +310,14 @@ def test_the_sweep_lists_before_it_groups_and_never_regroups(tmp_path):
     assert len(PT.sweep(conn, apply=True)) == 1 and _ids(PT.group(conn, "s1")) == ["s1", "s2"]
     PT.ungroup(conn, "s1", "s2")
     assert PT.sweep(conn, apply=True) == [] and PT.groups(conn) == []  # the owner's "Not one discussion" stands
+
+
+def test_a_neighbour_under_a_minute_isnt_offered(tmp_path):
+    # Review 5 Nov, item 7: a 40 s neighbour 30 s after a five-minute conversation is too little to be a part of it.
+    spans = meeting(["B", "J"], 1, 4.5) + meeting(["B", "J"], 331, 0.5)
+    conn = _lab(tmp_path, [(0.0, 300.0, spans), (330.0, 370.0, spans)], {"B": "Bo"})
+    s1 = row(conn, "SELECT * FROM sessions WHERE id='s1'")
+    assert PT.page(conn, {**s1, "status": "active"}) is None
+    conn.execute("UPDATE sessions SET end_s=400 WHERE id='s2'")
+    offer = PT.page(conn, {**s1, "status": "active"})["offers"][0]
+    assert offer["side"] == "after" and offer["gap_s"] == 30 and offer["duration_s"] == 70

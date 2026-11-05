@@ -434,6 +434,8 @@ def forget(conn, name: str) -> bool:
         prepare.drop_for(conn, theirs)  # B36: plans for others that read a conversation they were in
         conn.execute("DELETE FROM preparations WHERE person_id=?", (p["id"],))  # B36: theirs, mentions of them included
         prepare.forget_name(conn, p["name"])  # B36: others' plans that name them, from conversations they weren't in
+        from .privacy import forget_words
+        forget_words(conn, p["id"])  # L9: their lines read "(forgotten)"; the reviews that read them wait for a redo
         conn.execute("DELETE FROM voiceprints WHERE person_id=?", (p["id"],))
         conn.execute("DELETE FROM commitments WHERE by_person=? OR to_person=?", (p["id"], p["id"]))  # B14: both ways
         conn.execute("DELETE FROM intentions WHERE person_id=?", (p["id"],))  # B15: open and taken

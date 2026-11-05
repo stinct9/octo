@@ -20,7 +20,12 @@ const busy = ref(false)
 const error = ref('')
 
 const gap = (s: number) => (s < 90 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`)
-const people = (who: string[]) => (who.length ? `with ${who.slice(0, 3).join(', ')}${who.length > 3 ? '…' : ''}` : 'nobody else named')
+const people = (who: string[]) => (who.length ? `, with ${who.slice(0, 3).join(', ')}${who.length > 3 ? '…' : ''}` : '')
+// "Joins the next recording (12 s later)", or "Overlaps" when the two recordings run at once (review 5 Nov, item 7)
+const offerText = (o: PartOffer) => {
+  const which = o.side === 'after' ? 'next' : 'one before'
+  return o.gap_s < 0 ? `Overlaps the ${which} recording` : `Joins the ${which} recording (${gap(o.gap_s)} ${o.side === 'after' ? 'later' : 'before'})`
+}
 const WHY: Record<string, string> = {
   hour: 'the hour limit cut it there, and the same people carried on',
   pause: 'the same people carried on after the pause',
@@ -69,9 +74,9 @@ const redo = () => act(async () => { await lab.redoReview(head.value); return { 
   </section>
   <section v-else-if="offers.length" class="parts small muted" aria-label="One discussion with a neighbour">
     <p v-if="!asking">
-      <template v-for="(o, i) in offers" :key="o.side"><template v-if="i"> · </template><button type="button" class="link"
-        @click="asking = o">One discussion with the one {{ o.side }}</button> ({{ gap(o.gap_s) }} apart, {{ o.minutes }} min,
-        {{ people(o.who) }}<template v-if="o.ungrouped">; you said they weren't</template>)</template>
+      <template v-for="(o, i) in offers" :key="o.side"><template v-if="i"> · </template>{{ offerText(o) }}: {{ mss(o.duration_s) }}{{ people(o.who) }}<template
+        v-if="o.ungrouped">; you said they weren't one discussion</template>. <button type="button" class="link"
+        @click="asking = o">Read them as one</button></template>
     </p>
     <p v-else class="ask" role="alertdialog">
       Read this and the one {{ asking.side }} it as one discussion? Each keeps its recording and transcript; one review reads

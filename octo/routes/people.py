@@ -9,7 +9,6 @@ from pydantic import BaseModel
 from .. import corrections as C
 from .. import voice as V
 from ..db import load_json, row, rows
-from ..pipeline import current
 from .common import Lab, NAME, OwnerWords, same_origin
 
 
@@ -67,14 +66,9 @@ def add(router: APIRouter, lab: Lab) -> None:
             raise HTTPException(422, "type their name to confirm")
         if p["is_self"]:
             raise HTTPException(409, "that's you: re-enrol instead of forgetting")
-        from ..parts import with_groups  # B35: the review of a whole discussion they were in names them too
-        named = with_groups(conn, [r["session_id"] for r in rows(
-            conn, "SELECT DISTINCT session_id FROM session_speakers WHERE person_id=?", p["id"])])
+        # Their words go from every stored run; the reviews that read them are held for Redo the review, never redone
+        # by themselves (L9, Jay 5 Nov: his reviews don't re-run unasked).
         forget_person(conn, p["name"])
-        # Their name is in what those reviews say: redo them, rated or not (planning.pinned_review).
-        for sid in named:
-            if ins := current(conn, sid, "insight"):
-                conn.execute("UPDATE sessions SET redo_review=? WHERE id=?", (ins["id"], sid))
         processor.kick()
         return {"forgotten": p["name"]}
 

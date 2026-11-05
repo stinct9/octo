@@ -33,6 +33,7 @@ class Choice:
     ollama: str | None = None       # an Ollama model that must be installed
     claude: bool = False            # runs through Claude Code: the `claude` command must be installed
     provider: str | None = None     # runs on one of the owner's connections (octo/providers.py, 7 Oct)
+    plain: str | None = None        # `why` for any lab but the first, where it's notebook (review 5 Nov, item 1)
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,10 @@ class Step:
     choices: tuple[Choice, ...] = ()
     fixed: str | None = None        # why it can't be switched here
     tried: tuple[str, ...] = field(default_factory=tuple)
+    plain: str | None = None        # `why` for any lab but the first, which also gets no `tried` (review 5 Nov, item 1)
+
+
+TESTED = "Tested on real recordings before release."
 
 
 # The two ways to Claude (31 Oct), told apart wherever they're shown.
@@ -62,7 +67,8 @@ STEPS: tuple[Step, ...] = (
          "Silero VAD",
          "Sensitive on purpose (threshold 0.1 on louder audio): over a fan it found 6.1 of about 7 s of "
          "speech with no false detections (30 Sep). Missing a conversation is worse than a little noise.",
-         fixed="Nothing else has been tested."),
+         fixed="Nothing else has been tested.",
+         plain="Sensitive on purpose: missing a conversation is worse than a little noise. " + TESTED),
     Step("transcribe", "Transcribe",
          "Decides the language, then writes down the words with their timings.",
          "Language: Whisper large-v3, among English, Hindi, Kannada and Gujarati",
@@ -71,15 +77,21 @@ STEPS: tuple[Step, ...] = (
          "conversation. Tested with Claude Opus 5.5 on real conversations: preferred 6 of 9 times in a blind test, "
          "with no words that weren't said; the pipeline's per-segment form isn't blind-tested yet. Kannada and "
          "Gujarati get no transcript yet.",
+         plain="English: the choice below. Hindi and mixed conversations get two local drafts, merged from their text "
+               "(never the audio) by the review's model once you're confirmed in the conversation. Kannada and Gujarati "
+               "get no transcript yet. " + TESTED,
          choices=(
              Choice("qwen3-asr-1.7b", "Qwen3-ASR 1.7B", {"model": "Qwen/Qwen3-ASR-1.7B"},
                     "Won a blind test on real meetings 7–3 (2 Oct). Where it won, Whisper had dropped "
                     "about a tenth of the words. No word confidence: ⚠ marks only unsure speakers.",
-                    hf=QWEN_ASR + WHISPER),
+                    hf=QWEN_ASR + WHISPER,
+                    plain="Preferred over Whisper in a blind test on real recordings. No word confidence: ⚠ marks only "
+                          "unsure speakers."),
              Choice("whisper-large-v3", "Whisper large-v3", {"model": "mlx-community/whisper-large-v3-mlx"},
                     "Used until 2 Oct. Lost 3–7 to Qwen on English. Gives word confidence, so ⚠ also marks "
                     "unsure words.",
-                    hf=WHISPER),
+                    hf=WHISPER,
+                    plain="Preferred less often than Qwen in that test. Gives word confidence, so ⚠ also marks unsure words."),
          ),
          tried=("On a real Hindi conversation, Whisper, Qwen3-ASR and Whisper Hinglish (Trelis): none usable on 9 of 9 stretches (2 Oct)",
                 "Same 9 stretches, 4 Oct: Opus merge 6, Qwen told Hindi 3, Whisper told Hindi 0",
@@ -89,6 +101,7 @@ STEPS: tuple[Step, ...] = (
          "Works out who spoke when, as Speaker A, B, C…, from the audio alone.",
          "",
          "Scored on 7 real conversations with confirmed speakers (2 Oct).",
+         plain="Tested on real recordings with confirmed speakers before release.",
          choices=(
              Choice("pyannote-3.1", "pyannote 3.1",
                     {"model": "pyannote/speaker-diarization-3.1", "clustering_threshold": 0.705},
@@ -99,7 +112,9 @@ STEPS: tuple[Step, ...] = (
                     {"model": "pyannote/speaker-diarization-community-1", "clustering_threshold": None},
                     "Merged two people into one speaker in a family conversation, and lost one person in a short clip (2 Oct). "
                     "Otherwise agreed with 3.1 on 99% of confirmed speech.",
-                    hf=("pyannote/speaker-diarization-community-1",)),
+                    hf=("pyannote/speaker-diarization-community-1",),
+                    plain="In testing it sometimes put two people on one speaker, which is harder to fix than a split. "
+                          "Otherwise it agreed with 3.1 on nearly all speech."),
          ),
          tried=("Nemotron 3 Diarization (NVIDIA): merged two colleagues, at most 8 speakers, needs its own environment (2 Oct)",
                 "pyannoteAI Precision-2 and -3: cloud only, ruled out")),
@@ -109,7 +124,8 @@ STEPS: tuple[Step, ...] = (
          "No model of its own; ResNet34 voice match for the gaps",
          "pyannote left whole stretches of clear speech with no one: 37 lines of up to 13 s in one 32-min "
          "conversation. Matching their voice agreed with pyannote on all ~550 held-out lines it took (2 Oct).",
-         fixed="Nothing to choose: it follows the two steps before it."),
+         fixed="Nothing to choose: it follows the two steps before it.",
+         plain="Matching the voice fills the stretches the step before leaves with no one. " + TESTED),
     Step("identify", "Recognise voices",
          "Matches each speaker against the voiceprints of people you've named.",
          "WeSpeaker ResNet293 voiceprints",
@@ -119,7 +135,8 @@ STEPS: tuple[Step, ...] = (
          fixed="Switching rebuilds every voiceprint from your labels (`octo reprint` in a terminal).",
          tried=("ResNet34 (WeSpeaker): used until 2 Oct; close behind (EER 0.8% vs 0.0% on 60 s of speech)",
                 "CAM++ (3D-Speaker): close behind ResNet34; TitaNet-Large (NVIDIA): last",
-                "Score normalisation against the other people you've labelled: worse on every model, too few people")),
+                "Score normalisation against the other people you've labelled: worse on every model, too few people"),
+         plain="Names a speaker only at a clear margin over everyone else; in testing that gave no wrong names. " + TESTED),
     Step("numbers", "Count",
          "Talk time, turns, questions and interruptions per speaker.",
          "No model",
@@ -139,7 +156,9 @@ STEPS: tuple[Step, ...] = (
              Choice("qwen3-8b", "qwen3:8b (local)", {"model": "qwen3:8b"},
                     "In use 1–2 Oct. Stays on the Mac, one principle at a time. Timed out on every conversation "
                     "over about 25 minutes (2 Oct).",
-                    ollama="qwen3:8b"),
+                    ollama="qwen3:8b",
+                    plain="Stays on the Mac, one principle at a time. In testing it timed out on conversations over "
+                          "about 25 minutes."),
              Choice("gemma3-12b", "gemma3:12b (local)", {"model": "gemma3:12b"},
                     "Not compared on real conversations. Bigger (8 GB): slower than qwen3:8b, and tight "
                     "next to the other models in 16 GB.",
@@ -154,6 +173,8 @@ STEPS: tuple[Step, ...] = (
          "A step of its own (B14, 19 Oct), so the review stays as it was. One call per conversation, from conversations "
          "of the 14 days before it came and every one since. The model you choose gets the same transcript text as the "
          "review. Not yet checked by eye: the first ten go in learnings.",
+         plain="A step of its own after the review, so the review stays as it was. One call per conversation; the model "
+               "you choose gets the same transcript text as the review. The newest step: check what it finds on Progress.",
          choices=(
              Choice("claude-opus-5-5", CLAUDE_CODE_LABEL, {"model": "claude-opus-5-5", "effort": "high"},
                     "The review's model. " + CLAUDE_CODE_WHY, claude=True),
@@ -279,6 +300,8 @@ def choose(conn, stage: str, choice_id: str) -> Choice:
     choice = next((c for c in choices(conn, step) if c.id == choice_id), None)
     if not choice:
         raise ValueError(f"no choice {choice_id!r} for {stage}")
+    if choice.ollama and _ollama_models() is None:
+        _start_ollama()
     missing = unavailable(choice)
     if missing:
         raise ValueError(missing)
@@ -305,8 +328,18 @@ def _ollama_models() -> set[str] | None:
         return None
 
 
-def unavailable(choice: Choice, ollama: Callable[[], set[str] | None] | None = None) -> str | None:
-    """Why this choice can't run on this Mac right now, or None."""
+def _start_ollama(wait_s: float = 15) -> None:
+    """A local model chosen: Ollama's login item is installed only while one is (octo/login_item.py), so start it."""
+    from .login_item import start_ollama
+    if start_ollama():
+        end = time.time() + wait_s
+        while _ollama_models() is None and time.time() < end:
+            time.sleep(0.5)
+
+
+def unavailable(choice: Choice, ollama: Callable[[], set[str] | None] | None = None, startable: bool = False) -> str | None:
+    """Why this choice can't run on this Mac right now, or None. `startable`: Ollama stopped but on this Mac counts as
+    available, since choosing a local model starts it (choose(), then asked again)."""
     ollama = ollama or _ollama_models
     if choice.provider:
         c = PV.connection(choice.provider)
@@ -325,7 +358,11 @@ def unavailable(choice: Choice, ollama: Callable[[], set[str] | None] | None = N
     if choice.ollama:
         have = ollama()
         if have is None:
-            return "Ollama isn't running"
+            from .login_item import has_ollama
+            if startable and has_ollama():
+                return None
+            return ("Ollama isn't running yet: try again in a moment (octo login-item install starts it while a local model "
+                    "is chosen)") if has_ollama() else "Ollama isn't on this Mac: install it from ollama.com, then choose this again"
         if choice.ollama not in have:
             return f"not installed in Ollama (ollama pull {choice.ollama})"
     return None
@@ -350,7 +387,7 @@ def counts(conn, stage: str) -> dict:
             continue
         last = row(conn, "SELECT status FROM stage_runs WHERE target=? AND stage=? ORDER BY queued_at DESC LIMIT 1",
                    t["id"], stage)
-        cur = row(conn, "SELECT id, status, coalesce(output, '') != '' AS output, stale FROM stage_runs "
+        cur = row(conn, "SELECT id, target, status, coalesce(output, '') != '' AS output, stale FROM stage_runs "
                   "WHERE target=? AND stage=? AND is_current=1",
                   t["id"], stage)
         if last and last["status"] == "failed":
@@ -396,19 +433,22 @@ def impact(conn, stage: str) -> dict:
 
 
 def describe(conn) -> list[dict]:
+    from . import labconfig
     have = _ollama_models()  # one call for the page
+    first = labconfig.origin(conn) == labconfig.FIRST  # the first lab reads its notebook; any other the plain copy
     out = []
     for i, step in enumerate(STEPS, start=1):
         sel = selected(conn, step)
         here = choices(conn, step)
         stage = STAGES[step.stage]
         out.append({
-            "stage": step.stage, "n": i, "name": step.name, "does": step.does, "why": step.why,
-            "model": step.model, "fixed": step.fixed, "tried": list(step.tried), "version": stage.version,
+            "stage": step.stage, "n": i, "name": step.name, "does": step.does,
+            "why": step.why if first else step.plain or step.why,
+            "model": step.model, "fixed": step.fixed, "tried": list(step.tried) if first else [], "version": stage.version,
             "params": params_for(stage, overrides(conn, step.stage)),
             "selected": sel.id if sel else None,
-            "choices": [{"id": c.id, "label": c.label, "why": c.why, "default": c is default(step),
-                         "provider": c.provider, "unavailable": unavailable(c, lambda: have)} for c in here],
+            "choices": [{"id": c.id, "label": c.label, "why": c.why if first else c.plain or c.why, "default": c is default(step),
+                         "provider": c.provider, "unavailable": unavailable(c, lambda: have, startable=True)} for c in here],
             "blocked": review_blocked(conn) if step.stage == "insight" else
                        "No model chosen for commitments yet" if step.stage == "commitments" and sel is None else None,
             "counts": counts(conn, step.stage),

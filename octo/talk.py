@@ -26,7 +26,7 @@ from . import insight as IN
 from . import owner as O
 from . import review_any as RA
 from . import sessions as SV
-from .db import config, load_json, row, rows, tx
+from .db import calling, config, load_json, row, tx
 from .rehearse import _ask, _owner, _reader_of
 from .rehearse import why_not as model_why_not
 
@@ -139,10 +139,26 @@ def user_prompt(conn, sid: str, owner: str, profile: dict, items: list[dict], ls
              f"Its review, as {owner} read it:\n{review_text(rv)}",
              f"How it went, in {owner}'s own words (written after it): \"{refl['text']}\"" if refl else "",
              RA.marks_text(owner, profile, marks, started).strip() if marks else "",
+             solved_text(conn, started, owner, their),
              f"Transcript, one line per utterance ([line] time speaker: words):\n{IN.transcript(ls, names)}",
              "The talk so far:\n" + "\n".join(f"{owner if t['by'] == 'me' else 'You'}: {t['text']}" for t in turns),
              f"Answer {owner}'s last message."]
     return "\n\n".join(p for p in parts if p)
+
+
+def solved_text(conn, started: float | None, owner: str, their: str) -> str:
+    """B38: who has solved this, on the focus active during the conversation, as the owner wrote it; else ""."""
+    from .focus import at
+    from .solved import get, text
+    f = at(conn, started)
+    so = f and get(conn, focus_id=f["id"])
+    if not so:
+        return ""
+    w = so["who"]
+    return (f"{owner}'s focus then was \"{f['text']}\". Who has solved this, as {owner} noted it: {text(so, owner)}. "
+            f"Where it helps {their} question, say what {w} would do here, only from {owner}'s words about {w} and these lines, "
+            f"as {their} account of {w} (\"from what you wrote, …\"), never what {w} actually thinks. Add nothing you know or "
+            f"guess about {w}, or about any book or talk. Only what fits {their} principles; never winning the room.")
 
 
 SCHEMA = {"type": "object", "properties": {
@@ -227,7 +243,8 @@ def run(conn, sid: str) -> dict:
         if not rv or not who:
             raise TalkError("its review, or the model for reviews, went while it was asked")
         prompt = user_prompt(conn, sid, owner, profile, IN.principles(rubric), ls, sp, t["turns"], rv)
-        raw, usage = _ask(who, effort(conn), system_prompt(owner, profile, IN.review_rules(rubric)), prompt, SCHEMA)
+        with calling(conn, "talk"):  # no ref: a thread is the conversation's
+            raw, usage = _ask(who, effort(conn), system_prompt(owner, profile, IN.review_rules(rubric)), prompt, SCHEMA)
         moments, dropped = check(raw, ls, sp, owner)
     except Exception as e:  # noqa: BLE001 - kept, so a usage limit holds Claude's steps; shown on the page
         msg = str(e)[:2000] or type(e).__name__
@@ -257,7 +274,7 @@ def run_in_background(db, sid: str) -> None:
 # ---- the page, the count, deleting ----------------------------------------------------------------------
 
 def view(conn, sid: str) -> dict:
-    from .pipeline import limit_reset
+    from .runs import limit_reset
     why = why_not(conn, sid)
     t = _talk(conn, sid) or {"turns": [], "status": "idle", "error": None, "error_at": None}
     return {"turns": [{k: x[k] for k in ("by", "text", "at", "moments", "dropped") if k in x} for x in t["turns"]],
@@ -269,12 +286,6 @@ def clear(conn, sid: str) -> dict:
     """Start over: the thread is gone (a reply being asked lands nowhere)."""
     conn.execute("DELETE FROM talks WHERE session_id=?", (sid,))
     return view(conn, sid)
-
-
-def calls_since(conn, since: float, which) -> int:
-    """Its calls for the day's count (pipeline._calls_since): each reply made since `since`."""
-    return sum(1 for r in rows(conn, "SELECT turns FROM talks WHERE updated_at >= ?", since)
-               for x in load_json(r["turns"]) or [] if x.get("reader") and x["at"] >= since and which(x["reader"]))
 
 
 def drop_for(conn, session_ids: list[str]) -> None:

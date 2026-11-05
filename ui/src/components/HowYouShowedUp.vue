@@ -2,7 +2,7 @@
 // How you showed up (B10, 15 Oct: "speak clearly without hesitation like a CEO"): six delivery numbers
 // for this conversation, each against his usual. One ink, no colour for good or bad: a row says where the
 // number sits in his own spread. Each row opens in place to what it counted, and can become his focus.
-// Listening (B13, 19 Oct) is a group under the six: patience, turns, their longest stretch; folded on a phone.
+// Listening (B13, 19 Oct) is a group under the six: patience, turns, their longest stretch.
 // Voice (B27, 21 Oct) a group under Listening, from the stored audio: pitch range, loudness, both when pushed back.
 import { computed, ref } from 'vue'
 import { DELIVERY_NAME, deliveryValue, spreadText, stateWord, usualText } from '../lab/delivery'
@@ -25,16 +25,19 @@ const LISTENING: DeliveryMeasure[] = ['patience', 'turns', 'their_longest']
 const VOICE: DeliveryMeasure[] = ['pitch_range', 'loudness', 'pushed_pitch', 'pushed_loudness']
 const PUSHED: DeliveryMeasure[] = ['pushed_pitch', 'pushed_loudness']
 const all = computed(() => [...props.d.rows, ...(props.d.listening ?? []), ...(props.d.voice ?? [])])
-// Each group's heading sits above its first row; on a phone the group folds under it.
-const GROUPS: Partial<Record<DeliveryMeasure, { name: string; what: string }>> = {
-  patience: { name: 'Listening', what: 'patience, turns, their longest stretch' },
-  pitch_range: { name: 'Voice', what: 'pitch range, loudness, when pushed back' },
-}
-const unfolded = ref<Record<string, boolean>>({})
+// What moved first (28 Oct review, item 8): rows above or below his usual; the rest fold under one line.
+const moved = computed(() => all.value.filter((r) => r.state === 'low' || r.state === 'high'))
+const rest = computed(() => all.value.filter((r) => r.state !== 'low' && r.state !== 'high'))
+const restOpen = ref(false)
+// Each group's heading sits above its first row among the rest.
+const GROUPS: { name: string; sub?: string; of: DeliveryMeasure[] }[] = [
+  { name: 'Listening', of: LISTENING },
+  { name: 'Voice', sub: 'from the audio, not checked by ear yet', of: VOICE },
+]
+const heading = (r: DeliveryRow) => GROUPS.find((g) => g.of.includes(r.measure) && rest.value.find((x) => g.of.includes(x.measure)) === r)
 // A short conversation: every row would say "too short to tell", so one line says it instead (UX review, 21 Oct).
 const allShort = computed(() => props.d.rows.length > 0 && props.d.rows.every((r) => r.state === 'short'))
 const showAnyway = ref(false)
-const fold = (name: string) => { unfolded.value = { ...unfolded.value, [name]: !unfolded.value[name] } }
 const count = (r: DeliveryRow) => (r.value == null ? 0 : Math.round(r.value * props.d.words / 100))
 const words = (n: number) => n.toLocaleString('en-GB')
 const list = (by: Record<string, number>) => Object.entries(by).map(([k, n]) => `${k} ×${n}`).join(' · ')
@@ -86,15 +89,14 @@ async function setHedge(phrase: string, on: boolean) {
   <section class="hy" aria-labelledby="hy-h">
     <h3 id="hy-h">How you showed up</h3>
     <p v-if="allShort && !showAnyway" class="small muted">Too short to tell: under {{ d.min_words }} of your words here ({{ words(d.words) }}).
-      <button type="button" class="anyway" @click="showAnyway = true">Show anyway</button></p>
+      <button type="button" class="anyway" @click="showAnyway = true; restOpen = true">Show anyway</button></p>
     <ul v-else class="rows">
-      <template v-for="r in all" :key="r.measure">
-        <li v-if="GROUPS[r.measure]" class="group">
-          <h4>{{ GROUPS[r.measure]!.name }}<span v-if="r.measure === 'pitch_range'" class="sub"> · from the audio, not checked by ear yet</span></h4>
-          <button type="button" class="fold" :aria-expanded="!!unfolded[GROUPS[r.measure]!.name]" @click="fold(GROUPS[r.measure]!.name)">
-            <span class="fn">{{ GROUPS[r.measure]!.name }}</span><span class="muted small">{{ GROUPS[r.measure]!.what }}</span><span class="fc" aria-hidden="true">›</span></button>
+      <li v-if="!moved.length" class="none small muted">Nothing moved from your usual here.</li>
+      <template v-for="r in [...moved, ...(restOpen ? rest : [])]" :key="r.measure">
+        <li v-if="restOpen && heading(r)" class="group">
+          <h4>{{ heading(r)!.name }}<span v-if="heading(r)!.sub" class="sub"> · {{ heading(r)!.sub }}</span></h4>
         </li>
-        <li :class="{ open: open === r.measure, folds: (LISTENING.includes(r.measure) && !unfolded.Listening) || (VOICE.includes(r.measure) && !unfolded.Voice) }">
+        <li :class="{ open: open === r.measure }">
           <button type="button" class="row" :aria-expanded="open === r.measure" :aria-controls="`hy-${r.measure}`" @click="toggle(r.measure)">
             <span class="name">{{ DELIVERY_NAME[r.measure] }}</span>
             <span class="val">{{ deliveryValue(r.measure, r.value) }}</span>
@@ -193,6 +195,11 @@ async function setHedge(phrase: string, on: boolean) {
           </div>
         </li>
       </template>
+      <li v-if="rest.length">
+        <button type="button" class="fold" :aria-expanded="restOpen" @click="restOpen = !restOpen">
+          <span class="fn">{{ restOpen ? 'Fold' : moved.length ? `${rest.length} more` : `All ${rest.length}` }}</span><span
+            class="muted small">about usual, or can't tell yet</span><span class="fc" aria-hidden="true">›</span></button>
+      </li>
     </ul>
     <p v-if="!allShort || showAnyway" class="small muted">Counted from the transcript, which drops some of what's said<template v-if="d.voice?.length">, and Voice
       from the audio</template>; none of these is checked by ear yet.
@@ -216,7 +223,12 @@ h3 { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
 .note { margin: -4px 0 6px 2px; }
 .group h4 { margin: 14px 0 4px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .group h4 .sub { font-weight: 400; }
-.fold { display: none; }
+.fold { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) 1rem; gap: 10px; align-items: center; border: 0;
+  background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: left; padding: 8px 2px; min-height: 40px; cursor: pointer; }
+.fn { font-weight: 500; color: var(--accent); }
+.fc { color: var(--muted); transition: transform 0.15s; }
+.fold[aria-expanded='true'] .fc { transform: rotate(-90deg); }
+.none { padding: 8px 2px; }
 .detail { padding: 2px 2px 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .detail p { margin: 0; }
 p { margin: 0; }
@@ -231,7 +243,8 @@ p { margin: 0; }
 .add input { font: inherit; font-size: 14px; color: var(--ink); background: var(--ground); border: 1px solid var(--line); border-radius: 9px; padding: 4px 10px; min-height: 34px; }
 .practise { font: inherit; font-size: 13px; font-weight: 500; border: 1px solid var(--accent); background: var(--surface); color: var(--accent);
   padding: 5px 12px; min-height: 36px; border-radius: 10px; cursor: pointer; }
-.anyway { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+.anyway { border: 0; background: none; font: inherit; color: var(--accent); cursor: pointer;
+  display: inline-block; padding: 12px 6px; margin: -12px -6px; }  /* a 44 px tap area that doesn't move the line */
 .small { font-size: 13px; }
 .muted { color: var(--muted); }
 .error { color: var(--fail); }
@@ -242,13 +255,6 @@ p { margin: 0; }
   .name { grid-area: name; } .state { grid-area: state; text-align: right; } .chev { grid-area: chev; }
   .val { grid-area: val; color: var(--ink-2); } .usual { grid-area: usual; text-align: right; }
   .mini, .practise, .add input { min-height: 44px; }
-  /* Listening and Voice fold under their own headings on a phone. */
-  .group h4 { display: none; }
-  .fold { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) 1rem; gap: 10px; align-items: center; border: 0;
-    background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: left; padding: 8px 2px; min-height: 44px; cursor: pointer; }
-  .fn { font-weight: 600; }
-  .fc { color: var(--muted); transition: transform 0.15s; }
-  .fold[aria-expanded='true'] .fc { transform: rotate(90deg); }
-  .folds { display: none; }
+  .fold { min-height: 44px; }
 }
 </style>

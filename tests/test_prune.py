@@ -29,6 +29,12 @@ def lab(tmp_path, monkeypatch):
     monkeypatch.setattr(DL, "DEMO", tmp_path / "data" / "demo")
     monkeypatch.setattr(DL, "DB", tmp_path / "data" / "demo" / "octo.db")
     DL.build()
+    # The pages carry ETAs (eta.forecast). While the demo's running step is inside its estimate the ETA is its start +
+    # the estimate, steady; ~40 s after build it's past it and the ETA becomes now + the rest, different on every read.
+    # eta.cached also keeps one forecast 5 s for whichever database asked first. So the before/after compares failed on
+    # a slow runner (CI, 4 Nov; reproduced with a 40 s pause). One clock, and this lab's own forecast, for every read.
+    at = time.time()
+    monkeypatch.setattr(E, "cached", lambda c: E.forecast(c, now=at))
     conn = connect(DL.DB)
     old_at = time.time() - 30 * DAY
     conn.execute("UPDATE stage_runs SET queued_at=100")

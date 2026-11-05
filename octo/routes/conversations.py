@@ -12,6 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from .. import aside as AS
+from .. import frame as FR
 from .. import audio as A
 from .. import review as R
 from .. import parts as PT
@@ -50,7 +51,8 @@ def add(router: APIRouter, lab: Lab) -> None:
             found = [s for s in found if when(s) >= cut]
             response.headers["X-Older"] = str(len(older))
         response.headers["X-Aside"] = str(AS.count(conn))  # set aside as not conversations (B5): folded at the end
-        return [SV.summary(conn, s) for s in found]
+        with FR.reading(conn):  # every row's state from a few set-based queries (review 5 Nov, risk 5)
+            return [SV.summary(conn, s) for s in found]
 
     @router.get("/sessions/changed")
     def sessions_changed() -> dict:
@@ -109,26 +111,37 @@ def add(router: APIRouter, lab: Lab) -> None:
         sent = {}
         conn = db()
         for t in SV.open_tasks(conn):
-            if t["ticktick"]:
+            if t["ticktick"] and t["kind"] == "step":  # a promise's TickTick task is the commitment's own
                 sent[f"{t['session_id']}/{t['item']}"] = TT.sent(conn, t["run"])[t["item"]]
         return {"done": TT.done(sent)}
 
-    @router.get("/progress")
-    def progress() -> dict:
-        from ..insight import principles
-        from ..rubric import text as rubric_text
-        conn = db()
-        out = R.progress(conn, principles(rubric_text()))
-        # Where every conversation is, so what's waiting on the owner is visible (review 4 Oct, M03).
+    def states(conn) -> dict:
+        """Where every conversation is, so what's waiting on the owner is visible (review 4 Oct, M03); on the list's
+        footer since 5 Nov (review item 8)."""
         group = {"reviewed": "reviewed", "review": "to_review", "confirm": "waiting_on_you", "failed": "failed",
                  "processing": "processing", "short": "cant_count", "not_you": "cant_count", "paused": "cant_count"}
-        states = {k: 0 for k in ("reviewed", "to_review", "waiting_on_you", "failed", "processing", "cant_count", "not_counted")}
+        out = {k: 0 for k in ("reviewed", "to_review", "waiting_on_you", "failed", "processing", "cant_count", "not_counted")}
         later = {sid for sid, head in PT.heads(conn).items() if sid != head}  # B35: a discussion in parts is one
         for s in rows(conn, "SELECT id, in_gate FROM sessions WHERE status='active'"):
             if s["id"] in later:
                 continue
-            states["not_counted" if not s["in_gate"] else group.get(SV.todo(conn, s["id"])["kind"], "processing")] += 1
-        out["states"] = states
+            out["not_counted" if not s["in_gate"] else group.get(SV.todo(conn, s["id"])["kind"], "processing")] += 1
+        return out
+
+    @router.get("/progress/states")
+    def progress_states() -> dict:
+        return states(db())
+
+    @router.get("/progress")
+    def progress() -> dict:
+        conn = db()
+        with FR.reading(conn):  # every conversation's state from a few set-based queries (review 5 Nov, risk 5)
+            return _progress(conn)
+
+    def _progress(conn) -> dict:
+        from ..insight import principles
+        from ..rubric import text as rubric_text
+        out = R.progress(conn, principles(rubric_text()))
         from ..drills import progress as drill_line
         out["drills"] = drill_line(conn)  # B18: its own line, never in the counts above
         # A buyer's lab shows the beta's card; the first lab is the owner's own, not a tester's.

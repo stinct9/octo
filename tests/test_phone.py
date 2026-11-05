@@ -369,3 +369,18 @@ def test_step_eight_is_done_once_reached_through_tailscale_and_says_when_that_wa
     unasked = PH.tailscale_status(ask=lambda cli: (1, ""), exists=lambda p: True, ips=[])
     assert "Connect" in PH.away_setup(unasked, True, reached, None)["note"]
     assert "Allow my phone" in PH.away_setup(running, False, reached, None)["note"]
+
+
+ASK_TAILSCALE = PH._ask_tailscale  # before conftest's fixture swaps it out
+
+
+def test_tailscale_is_asked_with_a_terminal_type(monkeypatch):
+    """The app's binary run with no TERM, as launchd starts the lab, hangs to the 5 s timeout (5 Nov)."""
+    seen = {}
+    monkeypatch.delenv("TERM", raising=False)
+    monkeypatch.setattr(PH.subprocess, "run",
+                        lambda cmd, **k: seen.update(k) or type("R", (), {"returncode": 0, "stdout": "{}"})())
+    assert ASK_TAILSCALE("/x/tailscale") == (0, "{}") and seen["env"]["TERM"] == "dumb"
+    monkeypatch.setenv("TERM", "xterm-256color")
+    ASK_TAILSCALE("/x/tailscale")
+    assert seen["env"]["TERM"] == "xterm-256color"

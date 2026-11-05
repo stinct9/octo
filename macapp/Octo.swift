@@ -4,7 +4,7 @@
 // server on 127.0.0.1:8765 that the com.octo.lab login item runs, and this app never starts or owns it.
 //
 // Getting in (the Mac's key, octo/mackey.py): the app finds the lab the login item runs, asks it to prove it holds
-// the key (/mac-hello, an HMAC of a random challenge), and only then opens /let-in?k=… in an in-memory web view, so
+// the key (/mac-hello, an HMAC of a random challenge), and only then opens /let-in?c=<one-time code> in an in-memory web view, so
 // the server sets its HttpOnly cookie as for a browser and nothing is written to disk. Nothing about the owner is in
 // this bundle: /Applications is readable by every user on the Mac.
 import AppKit
@@ -183,9 +183,14 @@ enum Lab {
         return true
     }
 
+    /// A one-time code for /let-in, never the key (security review L4): when.nonce.HMAC(key, label + when.nonce), as
+    /// octo/mackey.py let_in_code. The lab takes it once, within a minute.
     static func letIn(_ key: String, to page: String) -> URL {
-        LAB.appendingPathComponent("let-in").appending(queryItems: [URLQueryItem(name: "k", value: key),
-                                                                    URLQueryItem(name: "to", value: "/#" + page)])
+        let text = "\(Int(Date().timeIntervalSince1970))." + (0..<12).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
+        let mac = HMAC<SHA256>.authenticationCode(for: Data(("octo-let-in:" + text).utf8), using: SymmetricKey(data: Data(key.utf8)))
+        let code = text + "." + Data(mac).map { String(format: "%02x", $0) }.joined()
+        return LAB.appendingPathComponent("let-in").appending(queryItems: [URLQueryItem(name: "c", value: code),
+                                                                           URLQueryItem(name: "to", value: "/#" + page)])
     }
 
     /// `launchctl kickstart -k`: the login item starts the lab again (this app never runs the lab itself).
@@ -376,11 +381,15 @@ final class LabWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUIDel
         return url.scheme == LAB.scheme && url.host == LAB.host && url.port == LAB.port
     }
 
+    /// What the default browser or Mail may be handed, from a link or from target=_blank (security review L10): never
+    /// another app's URL scheme or a file.
+    static func opensOutside(_ url: URL) -> Bool { ["http", "https", "mailto", "macappstore"].contains(url.scheme) }
+
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         if action.shouldPerformDownload { return decisionHandler(.download) }
         if Self.isLab(action.request.url) { return decisionHandler(.allow) }
-        if let url = action.request.url, ["http", "https", "mailto", "macappstore"].contains(url.scheme) { NSWorkspace.shared.open(url) }
+        if let url = action.request.url, Self.opensOutside(url) { NSWorkspace.shared.open(url) }
         decisionHandler(.cancel)
     }
 
@@ -435,7 +444,7 @@ final class LabWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUIDel
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = action.request.url { NSWorkspace.shared.open(url) }
+        if let url = action.request.url, Self.opensOutside(url) { NSWorkspace.shared.open(url) }
         return nil
     }
 
@@ -604,7 +613,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
     @objc func restartLab() { Lab.restart(); DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.refresh() } }
     @objc func openPage(_ sender: NSMenuItem) { lab.show(sender.representedObject as? String) }
 
-    /// `octo open`: the default browser let in with the key (it goes in that browser's history, as it always has).
+    /// `octo open`: the default browser let in with a one-time code (in its history, spent).
     @objc func openBrowser() {
         Task { @MainActor in
             guard case .success(let key) = Lab.key(), await Lab.proven(key) else { return lab.show(nil) }

@@ -170,3 +170,15 @@ def test_set_aside_keeps_the_conversations_under_another_name_and_says_when_they
     assert mac["lab"] not in seen[0] and not mac["lab"].exists()  # kept, not removed
     [aside] = EX.asides(mac["base"])
     assert (aside / "data" / "octo.db").exists() and "Last export:" in U.last_export(aside)
+
+
+def test_a_versioned_install_goes_whole(mac):
+    """Since 5 Nov the one-line install keeps versions/<v>, `current` and `previous` (octo/deploy.py `switch`)."""
+    base = mac["base"]
+    v1, v2 = base / "versions" / "2026.11.05-1+a", base / "versions" / "2026.11.05-2+b"
+    v1.mkdir(parents=True), v2.mkdir()
+    (base / "current").symlink_to("versions/2026.11.05-2+b")
+    (base / "previous").symlink_to("versions/2026.11.05-1+a")
+    removed, kept, _ = make(mac, keep_data=True, code=(base / "current").resolve())
+    assert {base / "current", base / "previous", base / "versions", mac["code"]} <= set(removed)
+    assert mac["lab"] in kept

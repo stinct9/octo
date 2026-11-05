@@ -304,7 +304,14 @@ LATEST_NOTE = {
                "nothing to say about whether practising it is changing anything.",
     "limits": "Two reviews this week carry nearly all of this; the everyday ones say little, and one voice in sprint planning "
               "isn't named. Tone is inferred from words, not heard. Treat it as a pattern to test, not a finding.",
+    # B38: pretend, from the demo's made-up note on the focus (SOLVED); kept only while that note is there
+    "would": "From what you wrote, Leela would tell Asha the date had moved the day you knew, and that the plan would follow "
+             "by Friday: the news first, the plan after.",
 }
+# B38: the owner's note on the demo's focus, made up (never a real person, book or talk)
+SOLVED = {"who": "Leela, my first manager",
+          "what": "She told the team bad news the same day, then said when she'd have a plan. Nobody had to chase her.",
+          "source": None}
 COACH_USAGE = {"cost_usd_equivalent": 0.62, "duration_ms": 71000, "input_tokens": 23000, "output_tokens": 900}
 
 
@@ -563,6 +570,8 @@ def build(now: float | None = None, new_lab: bool = False) -> Path:
     _drills(conn, now)
     _rehearsal(conn, now, pid["Asha"], items)
     _events(conn, today, now)
+    from octo import solved as SO
+    SO.put(conn, **SOLVED, focus_id="foc_demo")
     _coach(conn, now)
     conn.close()
     return DB
@@ -841,8 +850,8 @@ def serve(port: int, new_lab: bool = False, phone_port: int | None = None, mac_k
     from octo.phone_api import security_headers
     security_headers(app)  # as the real lab, so a page that breaks under it breaks here first
     if mac_key:
-        # As the real lab: /api only with the Mac's key. The demo's own key, beside it; let in with
-        # http://127.0.0.1:PORT/let-in?k=<data/demo/mac.key>
+        # As the real lab: /api only with the Mac's key. The demo's own key, beside it (data/demo/mac.key); let in
+        # with the link `octo.mackey.let_in_url` makes once MK.FILE points there, or the Octo app (OCTO_LAB_URL).
         from octo import mackey as MK
         from octo import phone_api as PA
         MK.FILE = DEMO / "mac.key"

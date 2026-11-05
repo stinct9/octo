@@ -95,6 +95,7 @@ def add(router: APIRouter, lab: Lab) -> None:
     # the Hindi merge and the coach can run on. Keys go in, never out: the page sees their last four.
     def providers_view() -> dict:
         from .. import claude_code as CC
+        from .. import labconfig
         from .. import providers as PV
         conn = db()
         sel = ST.selected(conn, ST.BY_STAGE["insight"])
@@ -102,7 +103,8 @@ def add(router: APIRouter, lab: Lab) -> None:
         return {"connections": PV.listing(), "claude_code": {**CC.status(), "in_use": bool(sel and sel.claude)},
                 "claude_models": [{"id": k, "label": v["label"], "price": v["price"], "why": v["why"]}
                                   for k, v in PV.CLAUDE_MODELS.items()],
-                "review": sel.id if sel else None, "blocked": ST.review_blocked(conn)}
+                "review": sel.id if sel else None, "blocked": ST.review_blocked(conn),
+                "first_lab": labconfig.origin(conn) == labconfig.FIRST}  # the page's lead (review 5 Nov, item 1)
 
     @router.get("/settings/providers")
     def providers_list() -> dict:

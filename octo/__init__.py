@@ -23,7 +23,16 @@ os.environ.setdefault("DISABLE_ERROR_REPORTING", "1")
 if os.environ.get("OCTO_ALLOW_DOWNLOAD") != "1":
     os.environ["HF_HUB_OFFLINE"] = "1"
 
+# Heavy work (the pipeline's runner and workers, drills, filler training) starts at background priority:
+# efficiency cores and throttled I/O, inherited by its children, so it slows neither the owner's apps nor the
+# lab's pages, which run at normal priority (5 Nov: the whole server was Background, every page ~6x slower).
+BACKGROUND = ["/usr/sbin/taskpolicy", "-b"] if os.path.exists("/usr/sbin/taskpolicy") else []
+
 ROOT = Path(__file__).resolve().parent.parent  # the code
+# A release install runs from versions/<v>, reached through the `current` link beside it (octo/deploy.py `switch`):
+# what's started from it later (the login items, the Octo app, commands it prints) names `current`, so it follows an
+# update. Elsewhere (a clone, the live copy) it's the code itself.
+LIVE = ROOT.parent.parent / "current" if ROOT.parent.name == "versions" else ROOT
 HOME_FILE = ROOT / ".octo-home"  # gitignored: one line, the folder the live lab keeps its data in
 
 
@@ -45,3 +54,9 @@ DB_PATH = DATA / "octo.db"
 AUDIO = HOME / "audio" / "lab"  # gitignored: recordings and per-session clips
 NOTES = HOME / "notes"  # gitignored: markdown notes
 RATE = 16000
+
+
+def bin_path(name: str) -> Path:
+    """A command of this install's environment, by the path that outlives an update (LIVE)."""
+    import sys
+    return LIVE / ".venv" / "bin" / name if LIVE != ROOT else Path(sys.executable).parent / name

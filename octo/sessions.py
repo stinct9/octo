@@ -24,16 +24,16 @@ from . import intention as IN
 from . import marks as MK
 from . import models as MD
 from . import parts as PT
-from . import pipeline as P
+from . import runs as RN
 from . import questions as QS
 from . import review as R
 from . import split as S
 from . import ticktick as TT
 from .asr import language_paused, language_unsure, other_language
+from . import frame as FR
 from .db import load_json, row, rows
 from .labconfig import flag
-from .pipeline import current
-from .planning import MERGE_MIN_JAY_S, jay_talk_s, pinned_review, settled_speakers
+from .runs import MERGE_MIN_JAY_S, current, jay_talk_s, pinned_review, review_held, settled_speakers
 from .privacy import RAW_AUDIO_DAYS
 from .stages import STAGES, dropped
 
@@ -56,20 +56,12 @@ def speakers(conn, session_id: str) -> list[dict]:
     dz = current(conn, session_id, "diarize", output=False)
     if not dz or dz["status"] != "done":
         return []
-    fixes = C.for_run(conn, session_id, dz["id"])
-    key = json.dumps(fixes, sort_keys=True, default=str)
-    run = (_lab(conn), dz["id"])
-    hit = _TALK.get(run)
-    if not hit or hit[0] != key:  # a run's output is written once: only the corrections can change these
-        full = C.apply(load_json(row(conn, "SELECT output FROM stage_runs WHERE id=?", dz["id"])["output"]), fixes)
-        hit = _TALK[run] = (key, {"speakers": full["speakers"], "talk_s": full["talk_s"]})
-    out = hit[1]
-    ident = current(conn, session_id, "identify")
-    matches = {s["speaker"]: s for s in (load_json(ident["output"])["speakers"]
-                                         if ident and ident["status"] == "done" else [])}
-    known = {r["speaker"]: r for r in rows(
+    out = _talk(conn, session_id, dz["id"])
+    matches = {s["speaker"]: s for s in (_identified(conn, session_id) or {}).get("speakers") or []}
+    every = FR.session_speakers(conn)  # the list's request: every conversation's, read once
+    known = {r["speaker"]: r for r in (every.get(session_id, []) if every is not None else rows(
         conn, "SELECT ss.speaker, ss.state, ss.diarize_run, p.id AS person_id, p.name, p.is_self FROM session_speakers ss "
-              "LEFT JOIN people p ON p.id = ss.person_id WHERE ss.session_id=?", session_id)}
+              "LEFT JOIN people p ON p.id = ss.person_id WHERE ss.session_id=?", session_id))}
     total = sum(out["talk_s"].values()) or 1.0
     result = []
     for letter in out["speakers"]:
@@ -89,7 +81,43 @@ def speakers(conn, session_id: str) -> list[dict]:
     return result
 
 
-_TALK: dict[tuple[str, str], tuple[str, dict]] = {}  # diarize run → its speakers and talk time with the corrections (28 Oct)
+def _talk(conn, session_id: str, dz_id: str) -> dict:
+    """Its speakers and talk time with the corrections, read from the diarize output only when the run or the corrections
+    change (a run's output is written once)."""
+    fixes = C.for_run(conn, session_id, dz_id)
+    key = (FR.lab(conn), session_id)
+    made = (dz_id, json.dumps(fixes, sort_keys=True, default=str))
+    hit = _TALK.get(key)
+    if not hit or hit[0] != made:
+        full = C.apply(load_json(row(conn, "SELECT output FROM stage_runs WHERE id=?", dz_id)["output"]), fixes)
+        hit = _TALK[key] = (made, {"speakers": full["speakers"], "talk_s": full["talk_s"]})
+    return hit[1]
+
+
+# conversation → (its diarize run and corrections, its speakers and talk time) (28 Oct): one per conversation, so a run
+# superseded is dropped when its successor is read (review 5 Nov)
+_TALK: dict[tuple[str, str], tuple[tuple[str, str], dict]] = {}
+
+
+def _identified(conn, session_id: str) -> dict | None:
+    """The current identify run's matches and whether the owner was heard ({upstream, speakers, jay_present}), read with
+    json_extract: not its whole output (architecture review 5 Nov, risk 5). None until it's done."""
+    ident = current(conn, session_id, "identify", output=False)
+    if not ident or ident["status"] != "done":
+        return None
+    if (f := FR.get(conn)) is not None:  # the list asks twice a row: once a request
+        key = ("identified", ident["id"])
+        if key not in f:
+            f[key] = _read_identified(conn, ident)
+        return f[key]
+    return _read_identified(conn, ident)
+
+
+def _read_identified(conn, ident: dict) -> dict:
+    got = row(conn, "SELECT json_extract(output, '$.speakers') sp, json_extract(output, '$.jay_present') jp FROM stage_runs "
+                    "WHERE id=?", ident["id"])
+    return {"upstream": ident["upstream"], "speakers": load_json(got["sp"]) or [],
+            "jay_present": None if got["jp"] is None else bool(got["jp"])}
 
 
 def display(sp: dict) -> str:
@@ -110,22 +138,25 @@ def paused(tr: dict | None, conn=None) -> str | None:
         return None
     if conn is None or "id" not in tr.keys():
         return language_paused(load_json(tr["output"]))
-    key = (_lab(conn), tr["id"])
-    if key in _PAUSED:  # a done run's output is written once (worker.py), so its answer never changes
-        return _PAUSED[key]
+    key = (_lab(conn), tr["target"]) if "target" in tr.keys() else (_lab(conn), tr["id"])
+    if key in _PAUSED and _PAUSED[key][0] == tr["id"]:  # a done run's output is written once (worker.py)
+        return _PAUSED[key][1]
     got = row(conn, "SELECT json_extract(output, '$.language', '$.language_votes', '$.merged') f FROM stage_runs WHERE id=?",
               tr["id"])
     language, votes, merged = json.loads(got["f"]) if got else (None, None, None)
-    why = _PAUSED[key] = language_paused({"language": language, "language_votes": votes, "merged": merged})
+    why = language_paused({"language": language, "language_votes": votes, "merged": merged})
+    _PAUSED[key] = (tr["id"], why)
     return why
 
 
 def _lab(conn) -> str:
     """Which database: another lab (a test's, the demo's) has its own runs under the same ids."""
-    return row(conn, "PRAGMA database_list")["file"]
+    return FR.lab(conn)
 
 
-_PAUSED: dict[tuple[str, str], str | None] = {}  # transcribe run → paused: json_extract still parses the whole transcript (28 Oct)
+# conversation → (its transcribe run, paused): json_extract still parses the whole transcript (28 Oct); one per conversation,
+# so a superseded run is dropped when its successor is read (review 5 Nov)
+_PAUSED: dict[tuple[str, str], tuple[str, str | None]] = {}
 
 
 def todo(conn, session_id: str) -> dict:
@@ -152,27 +183,35 @@ def todo(conn, session_id: str) -> dict:
 
 
 def _todo(conn, session_id: str, g: list[dict] | None = None) -> dict:
-    aside = row(conn, "SELECT aside FROM sessions WHERE id=? AND status='set_aside'", session_id)
+    asides = FR.set_aside(conn)  # the list's request: read once for every row
+    aside = ({"aside": asides[session_id]} if session_id in asides else None) if asides is not None else \
+        row(conn, "SELECT aside FROM sessions WHERE id=? AND status='set_aside'", session_id)
     if aside:  # not a conversation, as the owner marked it (B5): nothing left to do
         return {"kind": "aside", "what": aside["aside"]}
-    runs = {name: current(conn, session_id, name, output=name == "insight") for name in SESSION_STAGES}
-    pending = [name for name in SESSION_STAGES if row(
-        conn, "SELECT id FROM stage_runs WHERE target=? AND stage=? AND status IN ('queued','running')", session_id, name)]
+    runs = {name: current(conn, session_id, name, output=False) for name in SESSION_STAGES}
+    waits = FR.pending(conn)
+    pending = [name for name in SESSION_STAGES if ((session_id, name) in waits if waits is not None else row(
+        conn, "SELECT id FROM stage_runs WHERE target=? AND stage=? AND status IN ('queued','running')", session_id, name))]
     if pending:
         step = SESSION_STAGES.index(pending[0]) + 1
         live = row(conn, "SELECT progress FROM stage_runs WHERE target=? AND stage=? AND status='running'", session_id, pending[0])
         detail = live["progress"] if live else None
         waiting = row(conn, "SELECT * FROM stage_runs WHERE target=? AND stage=? AND status='queued'", session_id, pending[0])
-        blocked = P.claude_blocked_until(conn)
-        if not live and waiting and blocked and P.uses_claude(waiting):
-            capped = P.claude_calls_since(conn, P._midnight(time.time())) >= P.DAILY_CLAUDE_CALLS
-            detail = (P.SIGN_IN if P.claude_signed_out(conn) is not None else
-                      f"today's {P.DAILY_CLAUDE_CALLS} Claude calls are used · resumes after midnight" if capped else
+        blocked = RN.claude_blocked_until(conn)
+        if not live and waiting and blocked and RN.uses_claude(waiting):
+            capped = RN.claude_calls_since(conn, RN._midnight(time.time())) >= RN.DAILY_CLAUDE_CALLS
+            detail = (RN.SIGN_IN if RN.claude_signed_out(conn) is not None else
+                      f"today's {RN.DAILY_CLAUDE_CALLS} Claude calls are used · resumes after midnight" if capped else
                       f"waiting for Claude's usage limit to reset (about {_clock(blocked - 60)})")
+        elif not live and waiting and waiting["stage"] in RN.HEAVY_STAGES and (held := RN.heavy_held(conn)):
+            detail = f"waiting: {held['why']} · tries again after {_clock(held['until'])}"  # review 5 Nov, risk 6
         elif not live and waiting and (models := MD.missing_for(conn, waiting["stage"])):
             detail = "waiting for the speech models: Set up Octo shows how far they've come" if models else None
-        elif not live and waiting and (c := (P.run_reader(waiting) or {}).get("connection")) \
-                and P.budget_blocked_until(conn, c):
+        elif not live and waiting and (c := (RN.run_reader(waiting) or {}).get("connection")) \
+                and RN.connection_refused(conn, c):
+            detail = f"waiting: the key for this model was refused · {RN.KEY_FIX}"
+        elif not live and waiting and (c := (RN.run_reader(waiting) or {}).get("connection")) \
+                and RN.budget_blocked_until(conn, c):
             from . import providers as PV
             budget = (PV.connection(c) or {})
             detail = f"today's {budget.get('daily_calls')} calls on {budget.get('label') or c} are used · resumes after midnight"
@@ -183,19 +222,22 @@ def _todo(conn, session_id: str, g: list[dict] | None = None) -> dict:
                 "detail": detail, "queued": live is None, "eta": when.get("at"), "late": bool(when.get("late")),
                 "then": when.get("then")}
     # A failed run is never "current" (run_pending un-currents it), so look at the latest attempt.
+    failed = FR.failed_last(conn)
     for name in SESSION_STAGES:
-        last = row(conn, "SELECT status, error, input_hash, finished_at FROM stage_runs WHERE target=? AND stage=? "
-                         "ORDER BY queued_at DESC LIMIT 1", session_id, name)
+        last = failed.get((session_id, name)) if failed is not None else \
+            row(conn, "SELECT status, error, input_hash, finished_at FROM stage_runs WHERE target=? AND stage=? "
+                      "ORDER BY queued_at DESC LIMIT 1", session_id, name)
         if last and last["status"] == "failed":
             err = last["error"] or ""
-            reset = P.limit_reset(err, last["finished_at"])
+            reset = RN.limit_reset(err, last["finished_at"])
             hint = ("Ollama isn't running: start it, or install the login item (octo login-item install)"
                     if name == "insight" and ("Connection refused" in err or "urlopen error" in err) else
-                    P.SIGN_IN if P.signed_out(err) else
+                    RN.SIGN_IN if RN.signed_out(err) else
+                    f"The key was refused: {RN.KEY_FIX}" if RN.key_refused(err) else
                     None if reset is None else
                     f"Claude's usage limit was reached · tries again after {_clock(reset - 60)}" if reset > time.time() else
                     "Claude's usage limit has reset · trying again shortly")
-            due = P.due_at(conn, name, session_id, last["input_hash"])
+            due = RN.due_at(conn, name, session_id, last["input_hash"])
             return {"kind": "failed", "stage": name, "error": err, "hint": hint, "auto_retry": due != math.inf}
     why = paused(runs.get("transcribe"), conn)
     if why:
@@ -219,7 +261,7 @@ def _todo(conn, session_id: str, g: list[dict] | None = None) -> dict:
         # Not queued yet: it will be on the runner's next pass.
         return {"kind": "processing", "stage": "insight", "step": len(SESSION_STAGES), "of": len(SESSION_STAGES),
                 "queued": True}
-    out = load_json(ins["output"])
+    out = _review_shape(conn, ins["id"])
     if out["skipped"]:
         return {"kind": "short", "reason": skip_text(out["skipped"])}
     if not any(it["kind"] != "question" for it in R.items(out)):
@@ -232,26 +274,41 @@ def _todo(conn, session_id: str, g: list[dict] | None = None) -> dict:
     return {"kind": "review"}
 
 
+# What the list reads of a review: whether it was skipped and what there is to answer (R.items); not its memo or text.
+_SHAPE = ("skipped", "kind", "one_thing", "reading", "between", "conduct", "next", "beneath")
+
+
+def _review_shape(conn, run_id: str) -> dict:
+    fields = f"json_extract(output, {', '.join(repr('$.' + k) for k in _SHAPE)})"
+    every = FR.once(conn, "review_shapes", lambda: {r["id"]: r["f"] for r in rows(
+        conn, f"SELECT id, {fields} f FROM stage_runs WHERE stage='insight' AND is_current=1 AND status='done'")})
+    got = every.get(run_id) if every is not None and run_id in every else \
+        row(conn, f"SELECT {fields} f FROM stage_runs WHERE id=?", run_id)["f"]
+    return {k: v for k, v in zip(_SHAPE, json.loads(got)) if v is not None or k == "skipped"}
+
+
 def without_jay(conn, session_id: str) -> bool:
     """Nothing left to answer, and the owner isn't in it: no suggestion waiting, no speaker confirmed as
     them, and either every speaker confirmed as someone else or no voice that sounds like them. Such
     a conversation keeps its transcript and numbers but gets no review, so it isn't asking the owner for
     anything (review 4 Oct, M18). Read at display time: the planner and the review don't change,
     and it isn't the D10 filter (nothing is dropped). Naming a speaker as them undoes it."""
-    dz, out, _ = diarized(conn, session_id)
-    if not dz:
+    dz = current(conn, session_id, "diarize", output=False)
+    if not dz or dz["status"] != "done":
         return False
-    got = {r["speaker"]: r for r in rows(conn, "SELECT ss.speaker, ss.state, p.is_self FROM session_speakers ss "
-                                               "LEFT JOIN people p ON p.id = ss.person_id "
-                                               "WHERE ss.session_id=? AND ss.diarize_run=?", session_id, dz["id"])}
+    out = _talk(conn, session_id, dz["id"])
+    every = FR.session_speakers(conn)
+    got = {r["speaker"]: r for r in every.get(session_id, []) if r["diarize_run"] == dz["id"]} if every is not None else \
+        {r["speaker"]: r for r in rows(conn, "SELECT ss.speaker, ss.state, p.is_self FROM session_speakers ss "
+                                             "LEFT JOIN people p ON p.id = ss.person_id "
+                                             "WHERE ss.session_id=? AND ss.diarize_run=?", session_id, dz["id"])}
     mine = [got.get(k) or {} for k in out["speakers"]]
     if any(g.get("state") in ("suggested", "ambiguous") or (g.get("state") in ("confirmed", "auto") and g.get("is_self")) for g in mine):
         return False
     if mine and all(g.get("state") in ("confirmed", "auto") for g in mine):  # auto: named without asking (4.4)
         return True
-    ident = current(conn, session_id, "identify")
-    return bool(ident and ident["status"] == "done" and ident["upstream"] and dz["id"] in load_json(ident["upstream"])
-                and (load_json(ident["output"]) or {}).get("jay_present") is False)
+    ident = _identified(conn, session_id)
+    return bool(ident and ident["upstream"] and dz["id"] in load_json(ident["upstream"]) and ident["jay_present"] is False)
 
 
 def skip_text(text: str) -> str:
@@ -386,7 +443,8 @@ def detail(conn, sess: dict) -> dict:
         "numbers": load_json(num["output"]) if num and num["status"] == "done" and not num["stale"] else None,
         "insights": _shown_insights(shown),
         "insight_run": shown["id"] if shown else None,
-        "review_outdated": bool(shown and P.review_outdated(conn, session_id)),
+        # review_outdated: the planner's to say (pipeline.review_outdated), added by the route (risk 8)
+        "review_forgotten": bool(shown and review_held(conn, session_id, shown["id"])),  # L9: it read someone forgotten
         "feedback": feedback_view(conn, ins["id"]) if ins else {},
         # The one question, "What here was new to you?" (since 6 Oct), as answered on the review shown.
         "answer": R.answer_for(conn, shown["id"]) if shown else None,
@@ -453,24 +511,27 @@ def claude_usage(conn, since: float) -> dict:
     return {"calls": calls, "minutes": round(secs / 60, 1), "tokens": tokens, "unrecorded_calls": unknown}
 
 
-def shown_review(conn, session_id: str) -> dict | None:
+def shown_review(conn, session_id: str, output: bool = True) -> dict | None:
     """The review the page shows: done and up to date, or rated and kept until the owner asks for a redo. A later part
-    of one discussion has none of its own once the whole one is shown on the first (B35): one review per discussion."""
-    ins = _shown(conn, session_id)
+    of one discussion has none of its own once the whole one is shown on the first (B35): one review per discussion.
+    output=False leaves the review's text out (Progress asks only which is shown)."""
+    ins = _shown(conn, session_id, output)
     g = PT.group(conn, session_id) if ins else []
-    return None if g and g[0]["id"] != session_id and PT.is_whole(_shown(conn, g[0]["id"])) else ins
+    return None if g and g[0]["id"] != session_id and PT.is_whole(_shown(conn, g[0]["id"], False)) else ins
 
 
-def _shown(conn, session_id: str) -> dict | None:
-    ins = current(conn, session_id, "insight")
+def _shown(conn, session_id: str, output: bool = True) -> dict | None:
+    ins = current(conn, session_id, "insight", output=output)
     return ins if ins and ins["status"] == "done" and (not ins["stale"] or pinned_review(conn, session_id)) else None
 
 
 def open_tasks(conn) -> list[dict]:
     """Every "What to do" step from the reviews shown now that the owner hasn't marked done or let go, for
     the home page (review 4 Oct, M01): until then the only way to mark one acted was inside each past
-    conversation. Due first (soonest at the top), then the rest, newest conversation first."""
-    out = []
+    conversation. Since 5 Nov (review item 5) the owner's own open commitments too, as "you promised"
+    (`kind` "promise"), each once: one that is the same promise as a step is the step (`promise` names it).
+    Due first (soonest at the top), then the rest, newest conversation first."""
+    out, paired = [], set()
     for s in rows(conn, "SELECT s.id, s.start_s, s.in_gate, s.reviewed_at, r.started_at FROM sessions s "
                         "JOIN recordings r ON r.id = s.recording_id WHERE s.status='active'"):
         ins = shown_review(conn, s["id"])
@@ -479,16 +540,27 @@ def open_tasks(conn) -> list[dict]:
             continue
         fb = R.feedback_for(conn, ins["id"])
         sent = TT.sent(conn, ins["id"])
+        pairs = CM.paired_in(conn, s["id"], review)
+        paired |= {c["id"] for c in pairs.values()}
         for i, t in enumerate(review["next"]):
             item = f"n{i}"
             if (fb.get(item) or {}).get("acted") or (fb.get(item) or {}).get("let_go_at"):
                 continue  # done, or let go (6 Oct): either way, off the list
-            out.append({"session_id": s["id"], "run": ins["id"], "item": item,
+            out.append({"kind": "step", "session_id": s["id"], "run": ins["id"], "item": item,
                         "at": s["started_at"] + s["start_s"] if s["started_at"] else None,
                         "title": t.get("title") or t.get("action") or "", "due": t.get("due"),
                         "rated": R.is_rated({"kind": "try"}, fb.get(item)),
                         "counts": bool(s["in_gate"]),
-                        "ticktick": sent[item]["url"] if item in sent else None})
+                        "ticktick": sent[item]["url"] if item in sent else None,
+                        "promise": pairs[item]["id"] if item in pairs else None})
+    for c in rows(conn, CM._SELECT + "WHERE c.by_self=1 AND c.state IS NULL AND s.status='active'"):
+        if c["id"] in paired:
+            continue
+        v = CM.view(c)
+        out.append({"kind": "promise", "session_id": v["session_id"], "run": None, "item": v["id"], "at": v["at"],
+                    "title": v["what"], "due": v["due"], "to": v["to"], "rated": False,
+                    "counts": bool(row(conn, "SELECT in_gate FROM sessions WHERE id=?", v["session_id"])["in_gate"]),
+                    "ticktick": (v["ticktick"] or {}).get("url"), "promise": v["id"]})
     out.sort(key=lambda t: -(t["at"] or 0))
     out.sort(key=lambda t: t["due"] or "9999")  # stable: due dates first, ties stay newest first
     return out

@@ -11,7 +11,7 @@ For what search (B12, octo/search.py) can't do: meaning rather than exact words.
   without one says so.
 - **What leaves the Mac** (21 Oct): the question and the picked lines of several conversations at once, other
   people's words in them, to the owner's model (settings.reader, as the coach's).
-- **Calls:** one per question, in the day's DAILY_CLAUDE_CALLS (pipeline._calls_since counts done asks); a usage-limit
+- **Calls:** one per question, in the day's DAILY_CLAUDE_CALLS (a row in model_calls, pipeline._calls_since); a usage-limit
   failure holds the pipeline until it resets, as the coach's does.
 - **What's kept:** an asks row per question, with no words: when, the model, its usage or error (for the day's count).
   The question, the answer and what was sent stay in this process's memory for LIVE_S, never on disk, unless the
@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 
 from . import insight as IN
 from . import sessions as SV
-from .db import load_json, new_id, row, rows, tx
+from .db import calling, load_json, new_id, row, rows, tx
 from .search import readable
 
 # Lines sent per question. A review sends one whole conversation: in the first lab (27 Oct, 60 conversations) the median is
@@ -279,7 +279,7 @@ def _sweep(now: float) -> None:
 def why_not(conn, now: float | None = None) -> str | None:
     """Why a question can't be asked right now, or None."""
     from . import claude_code as CC
-    from . import pipeline as P
+    from . import runs as RN
     from .settings import reader
     now = time.time() if now is None else now
     conn.execute("UPDATE asks SET status='failed', finished_at=?, error=? WHERE status='running' AND created_at < ?",
@@ -288,13 +288,13 @@ def why_not(conn, now: float | None = None) -> str | None:
         return "a question is being answered now"
     who = reader(conn)
     if who is None:
-        return "choose a model for reviews first (Pipeline page)"
+        return "choose a model for reviews first (Settings → Models and keys)"
     if who["kind"] == "claude-code":
         if not CC.claude_bin():
             return "Claude Code isn't installed (the `claude` command)"
-        if why := P.claude_waits(conn, now):
+        if why := RN.claude_waits(conn, now):
             return why
-    elif who.get("connection") and P.budget_blocked_until(conn, who["connection"], now):
+    elif who.get("connection") and RN.budget_blocked_until(conn, who["connection"], now):
         return "today's calls for this model are used: after midnight"
     return None
 
@@ -345,8 +345,9 @@ def run(conn, ask_id: str, ask=None) -> dict:
     owner = (me["name"] if me else None) or "the owner"
     prompt, keys = _prompt(live["question"], live.pop("_picked"), owner)
     try:
-        raw, usage = ask(who.get("model") or "claude-opus-5-5", who.get("effort") or "high",
-                         SYSTEM.format(name=owner), prompt, SCHEMA)
+        with calling(conn, "ask", ask_id):
+            raw, usage = ask(who.get("model") or "claude-opus-5-5", who.get("effort") or "high",
+                             SYSTEM.format(name=owner), prompt, SCHEMA)
         answer = check(raw, keys, owner)
     except Exception as e:  # noqa: BLE001 - stored, and shown on the page
         msg = "it took too long: ask again" if isinstance(e, subprocess.TimeoutExpired) else (str(e) or type(e).__name__)

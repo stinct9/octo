@@ -122,7 +122,7 @@ const plural = (k: number, one: string, many: string) => (k === 1 ? one : many)
             <li v-for="c in pick.with" :key="c.session_id">
               <a :href="href.conversation(c.session_id)">{{ c.at ? when(c.at) : 'Date unknown' }}</a>
               <span class="muted small"> · {{ c.lines ? `${c.lines} lines${c.whole ? ', all of it' : ''}` : "doesn't fit" }}</span>
-              <details v-if="c.going?.length" class="going"><summary class="small">The lines that go</summary>
+              <details v-if="c.going?.length" class="going"><summary class="small" :aria-label="`The ${c.going.length} lines that go from ${c.at ? when(c.at) : 'the conversation with no date'}`">The lines that go</summary>
                 <p v-for="g in c.going" :key="g.line" class="small"><span class="who">{{ g.who }}</span> {{ g.text }}</p></details>
             </li>
           </ul>
@@ -145,7 +145,7 @@ const plural = (k: number, one: string, many: string) => (k === 1 ? one : many)
                 </span>
               </label>
               <a class="hear small" :href="href.line(m.session_id, m.shown[0]?.line ?? null)">Hear it</a>
-              <details v-if="m.ticked && m.going?.length" class="going full"><summary class="small">All {{ m.going.length }} lines that go</summary>
+              <details v-if="m.ticked && m.going?.length" class="going full"><summary class="small" :aria-label="`All ${m.going.length} lines that go from ${m.at ? when(m.at) : 'the conversation with no date'}`">All {{ m.going.length }} lines that go</summary>
                 <p v-for="g in m.going" :key="g.line" class="small"><span class="who">{{ g.who }}</span> {{ g.text }}</p></details>
             </li>
           </ul>
@@ -276,7 +276,7 @@ const plural = (k: number, one: string, many: string) => (k === 1 ? one : many)
 .back { font-size: 14px; text-decoration: none; align-self: flex-start; }
 h1 { margin: 0; font-size: 26px; font-weight: 600; }
 h2 { margin: 0; font-size: 17px; font-weight: 600; }
-h2:focus, span:focus { outline: none; }
+h2:focus:not(:focus-visible), span:focus:not(:focus-visible) { outline: none; }  /* focused by the page, not the keyboard */
 h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
 .sub { margin-top: 4px; font-size: 14px; }
 p { margin: 0; }

@@ -19,6 +19,8 @@ const props = defineProps<{
   connected?: boolean
   canHear?: boolean
   playing?: string | null
+  /** On a person's page: the owner's own already listed with the steps above, as "you promised" (5 Nov): not again. */
+  skip?: string[]
 }>()
 const emit = defineEmits<{ play: [item: string, start: number, end: number] }>()
 
@@ -58,7 +60,8 @@ async function copy() {
   } catch { error.value = "Couldn't reach the clipboard here" }
 }
 const overdue = (c: Commitment) => !!c.due && !c.state && c.due < today()
-const shown = computed(() => !!items.value.length || (!props.person && !!props.block && props.block.status !== 'old'))
+const listed = computed(() => items.value.filter((c) => !props.skip?.includes(c.id)))
+const shown = computed(() => !!listed.value.length || (!props.person && !!props.block && props.block.status !== 'old'))
 const NOW: Record<string, string> = {
   waiting: 'Looked for after the review.', queued: 'Looking for commitments soon…', running: 'Looking for commitments…',
 }
@@ -70,12 +73,12 @@ const NOW: Record<string, string> = {
       <h2 id="cm-h">{{ person ? `Open commitments with ${name ?? 'them'}` : 'Commitments' }}</h2>
       <span class="muted small">both ways</span>
       <span class="grow" />
-      <button v-if="items.length" type="button" class="link small" @click="copy">{{ copied ? 'Copied' : 'Copy what we agreed' }}</button>
+      <button v-if="listed.length" type="button" class="link small" @click="copy">{{ copied ? 'Copied' : 'Copy what we agreed' }}</button>
     </div>
     <p v-if="block && !items.length" class="muted small">{{ block.status === 'done' ? 'No promise of anything concrete heard here.'
       : block.status === 'failed' ? `Couldn't look for them: ${block.error ?? 'it failed'}. It's tried again later.` : NOW[block.status] ?? '' }}</p>
-    <ul v-if="items.length" class="list">
-      <li v-for="c in items" :key="c.id" :class="{ quiet: !!c.state }">
+    <ul v-if="listed.length" class="list">
+      <li v-for="c in listed" :key="c.id" :class="{ quiet: !!c.state }">
         <div class="row">
           <button v-if="canHear" type="button" class="hear" :aria-pressed="playing === `c-${c.id}`" :title="`Hear it at ${mss(c.start)}`"
                   @click="emit('play', `c-${c.id}`, c.start, c.end)">▶</button>

@@ -2,6 +2,7 @@
 A fake board answers like the firmware's USB commands (P and N); nothing touches a real port."""
 
 import json
+import time
 
 import pytest
 
@@ -118,6 +119,20 @@ def test_an_older_recorder_on_wifi_is_named_not_suspected(monkeypatch):
     monkeypatch.setattr(D.Device, "from_config", classmethod(lambda cls: WifiDev(fw="rec-11")))
     with pytest.raises(D.OldFirmware):  # and not a USB attempt after it
         D.networks("list")
+
+
+def test_settings_answers_at_once_while_the_recorder_was_just_unreachable(tmp_path, monkeypatch):
+    """Settings waited 16 s (lock, four tries) for a recorder the 30 s check had just failed to reach (5 Nov)."""
+    from tests.test_fillers import _client
+    monkeypatch.setattr(D, "load_config", lambda: {"key": "k", "host": "h"})
+    monkeypatch.setattr(D.Device, "from_config", classmethod(lambda cls: WifiDev()))
+    monkeypatch.setattr(D, "last_status", lambda: {"error": "No route to host", "checked_at": time.time() - 20})
+    monkeypatch.setattr(D, "networks_wifi", lambda dev, cmd: pytest.fail("asked the recorder"))
+    got = _client(tmp_path).get("/api/octo/settings/recorder").json()
+    assert got["networks"] is None and got["error"] == "not reachable on Wi-Fi now (No route to host)"
+    monkeypatch.setattr(D, "last_status", lambda: {"error": "No route to host", "checked_at": time.time() - 200})
+    monkeypatch.setattr(D, "networks_wifi", lambda dev, cmd: ["Home"])  # an old failure: ask again
+    assert _client(tmp_path).get("/api/octo/settings/recorder").json()["networks"] == ["Home"]
 
 
 class SigningBoard(FakeBoard):

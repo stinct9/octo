@@ -39,6 +39,7 @@ REVIEWED = {
     ("GET", "/api/octo/coach"): A,
     ("GET", "/api/octo/coach/{note_id}"): A,
     ("GET", "/api/octo/progress"): A,
+    ("GET", "/api/octo/progress/states"): A,
     ("GET", "/api/octo/incoming"): A,
     ("GET", "/api/octo/aside"): A,
     ("GET", "/api/octo/questions"): A,
@@ -69,6 +70,7 @@ REVIEWED = {
     ("POST", "/api/octo/delivery/hedges"): A,
     ("POST", "/api/octo/focus"): A,
     ("POST", "/api/octo/focus/stop"): A,
+    ("PUT", "/api/octo/focus/{focus_id}/solved"): A,  # B38: the owner's words, like the focus
     ("POST", "/api/octo/coach"): A,
     ("POST", "/api/octo/ask"): A,  # B24: as the coach, a call on the Mac within the day's 60
     ("POST", "/api/octo/ask/{ask_id}/keep"): A,
@@ -79,6 +81,7 @@ REVIEWED = {
     ("POST", "/api/octo/people/{person_id}/prepare"): A, ("POST", "/api/octo/people/{person_id}/prepare/delete"): A,
     ("POST", "/api/octo/people/prepare"): A,  # someone new, by name, to prepare for
     ("POST", "/api/octo/coach/{note_id}/feedback"): A,
+    ("PUT", "/api/octo/coach/{note_id}/solved"): A,
     ("POST", "/api/octo/coach/{note_id}/focus"): A,
     ("POST", "/api/octo/coach/{note_id}/seen"): A,
     ("POST", "/api/octo/people/{person_id}/consent"): A,

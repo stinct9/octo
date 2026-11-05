@@ -4,13 +4,14 @@
 // the surface. It asks the one question too (the owner, E2 in docs/coach-plan.md; one card since 4 Nov: the owner read a
 // headline in the question, then scrolled here for what it meant): "What here was new to you?" is a tick on each row.
 // Ticks, or "Nothing new this time", count the conversation as reviewed; the items ticked are what Progress counts as
-// "something new". Answers can be changed later.
+// "something new". Answers can be changed later. The steps (What to do) aren't listed here since 5 Nov (review item 4):
+// they're ticked on their own rows above, through `picked` and `asking`, and count exactly as before.
 import { computed, ref, watch } from 'vue'
 import HeldMark from '../HeldMark.vue'
 import ReviewItem from '../ReviewItem.vue'
 import type { FeedbackChange } from '../../lab/api'
 import { pref } from '../../lab/remembered'
-import { entries, heldCounts, itemQuote, newToYouEntries } from '../../lab/review'
+import { answerItems, entries, heldCounts, itemQuote, newToYouEntries } from '../../lab/review'
 import type { Answer, Evidence, Insights, ItemFeedback, Quote } from '../../lab/types'
 
 const props = defineProps<{
@@ -50,19 +51,23 @@ const askable = computed(() => newToYouEntries(props.ins))
 // Ticked to start with: the answer given, or what was marked new item by item before 6 Oct.
 const initial = () => new Set(props.answer ? props.answer.new
   : askable.value.filter((e) => props.feedback[e.id]?.novelty === 'new').map((e) => e.id))
-const picked = ref<Set<string>>(initial())
+// Shared with the What to do rows (TaskList), which tick the steps' ids into it while `asking`.
+const picked = defineModel<Set<string>>('picked', { default: () => new Set() })
+picked.value = initial()
 const editing = ref(!props.answer)
 // A new or changed answer (by content: the one shown for a review rated before 6 Oct is worked out
 // afresh on every refresh, and a refresh mustn't close the list while it's being changed).
 watch(() => JSON.stringify(props.answer), () => { picked.value = initial(); if (props.answer) editing.value = false })
 const asking = computed(() => props.ask && editing.value)
+const askingOut = defineModel<boolean>('asking', { default: false })
+watch(asking, (v) => { askingOut.value = v }, { immediate: true })
 function tick(id: string, on: boolean) {
   const x = new Set(picked.value)
   if (on) x.add(id)
   else x.delete(id)
   picked.value = x
 }
-function done() { if (picked.value.size) emit('submit', askable.value.filter((e) => picked.value.has(e.id)).map((e) => e.id), false) }
+function done() { if (picked.value.size) emit('submit', answerItems(props.ins, picked.value), false) }
 function nothing() { emit('submit', [], true) }
 function change() { picked.value = initial(); editing.value = true }
 function cancel() { picked.value = initial(); editing.value = false }
@@ -113,7 +118,6 @@ function ratedBefore(fb: ItemFeedback | undefined): string {
   return [fb.verdict, fb.novelty === 'new' ? 'new to you' : fb.novelty === 'knew' ? 'knew it' : null].filter(Boolean).join(' · ')
 }
 const play = (start: number) => emit('play', start)
-const stepBody = (why: string, detail?: string) => (detail ? `${detail} Why: ${why}` : why)
 </script>
 
 <template>
@@ -198,14 +202,6 @@ const stepBody = (why: string, detail?: string) => (detail ? `${detail} Why: ${w
                     @toggle="toggleItem(`t${f.principle}`)" @play="play" @change="emit('change', `t${f.principle}`, $event)" />
       </ul>
     </div>
-    <div v-if="ins?.next?.length" class="group">
-      <h3 class="sub">What to do</h3>
-      <ul class="items">
-        <ReviewItem v-for="(t, i) in ins.next" :key="`n${i}`" :item="`n${i}`" eyebrow="" :title="t.title ?? t.action ?? ''"
-                    :body="stepBody(t.why, t.detail)" :open="isOpen(`n${i}`)" :name-of="who" :color="color" no-answers
-                    v-bind="q(`n${i}`)" @tick="tick(`n${i}`, $event)" @toggle="toggleItem(`n${i}`)" @play="play" />
-      </ul>
-    </div>
     <div v-if="ins?.beneath.length" class="group">
       <h3 class="sub">Beneath the surface <span class="muted small">· questions, not findings</span></h3>
       <ul class="items">
@@ -218,7 +214,7 @@ const stepBody = (why: string, detail?: string) => (detail ? `${detail} Why: ${w
       <p v-if="error" class="error small" role="alert">{{ error }}</p>
       <div class="answer">
         <button type="button" class="btn btn-primary" :disabled="!picked.size || saving" @click="done">
-          {{ saving ? 'Saving…' : picked.size ? `Done · ${picked.size} new to me` : 'Done' }}</button>
+          {{ saving ? 'Saving…' : picked.size ? `Save · ${picked.size} new to me` : 'Save' }}</button>
         <button type="button" class="btn" :disabled="picked.size > 0 || saving"
                 :title="picked.size ? 'Untick the items first' : undefined" @click="nothing">Nothing new this time</button>
         <button v-if="answer" type="button" class="link" @click="cancel">Cancel</button>

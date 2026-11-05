@@ -31,6 +31,8 @@ def no_real_claude(monkeypatch):
     answer replace claude_code.ask themselves."""
     from octo import claude_code as CC
     monkeypatch.setattr(CC, "claude_bin", lambda: None)
+    from octo import db as DB
+    monkeypatch.setattr(DB, "CALLS_DB", None)  # a call made outside `db.calling` never reaches the lab's own database
 
 
 @pytest.fixture(autouse=True)
@@ -100,6 +102,14 @@ def models_downloaded(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_real_time_machine(monkeypatch):
+    """Tests never ask this Mac's tmutil (octo/backup.py): as if Time Machine backed the lab up, so nothing nags.
+    tests/test_backup_off_mac.py passes its own answers."""
+    from octo import backup as B
+    monkeypatch.setattr(B, "time_machine", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
 def no_mac_key(monkeypatch):
     """Tests call the Mac's routes without the Mac's key (octo/mackey.py); tests/test_mac_key.py turns it on.
     Never the real data/mac.key either."""
@@ -119,3 +129,11 @@ def no_real_voice_numbers(tmp_path, monkeypatch):
     """The voice numbers kept by octo/tone.py (B27) go in the test's own folder."""
     from octo import tone as T
     monkeypatch.setattr(T, "CACHE", tmp_path / "tone.json")
+
+
+@pytest.fixture(autouse=True)
+def mac_has_room(monkeypatch):
+    """Heavy steps wait while this Mac is short of memory or disk (pipeline.short_of): never on the test machine's own
+    state; tests/test_pipeline_holds.py sets it."""
+    from octo import pipeline as P
+    monkeypatch.setattr(P, "short_of", lambda: None)

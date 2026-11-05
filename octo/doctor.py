@@ -213,6 +213,7 @@ def home(conn, agents=None) -> list[Check]:
     gone = sum(1 for r in rows if not (HOME / r[0]).exists())
     out.append(Check(FAIL if gone else OK, "Recordings where the database says", f"{len(rows) - gone} of {len(rows)}",
                      "" if not gone else f"{gone} missing under {HOME}: was the folder moved without OCTO_HOME?"))
+    out.append(off_mac(conn))
     plist = (agents or AGENTS) / "com.octo.lab.plist"
     if plist.exists():
         try:
@@ -221,10 +222,21 @@ def home(conn, agents=None) -> list[Check]:
             item = {}
         cwd = item.get("WorkingDirectory")
         set_home = (item.get("EnvironmentVariables") or {}).get("OCTO_HOME")
-        same = cwd == str(ROOT) and (set_home is None or os.path.realpath(set_home) == str(HOME))
+        same = cwd is not None and os.path.realpath(cwd) == str(ROOT) and (set_home is None or os.path.realpath(set_home) == str(HOME))
         out.append(Check(OK if same else WARN, "The login item runs this copy", cwd or "?",
                          "" if same else "octo login-item install, from the copy that should run"))
     return out
+
+
+def off_mac(conn) -> Check:
+    """Whether anything copies the lab off this Mac (tech review 5 Nov, risk 9): data/backups/ is on the same disk."""
+    from . import backup as BK
+    why = BK.off_mac(conn)
+    if why is None:
+        return Check(OK, "A copy off this Mac", "Time Machine" if BK.time_machine() is None else "exported this month")
+    return Check(WARN, "A copy off this Mac", f"none: {why}. A dead or lost Mac would lose the whole lab",
+                 "Turn on Time Machine with a backup disk (System Settings → General → Time Machine), or export the lab "
+                 "each month: File → Export Lab… in the Octo app, or octo export")
 
 
 # ---- what macOS may refuse without saying (open-source plan §3.1, F8–F13) ---------------------------------------

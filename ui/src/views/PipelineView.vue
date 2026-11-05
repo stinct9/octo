@@ -57,12 +57,14 @@ async function confirm(s: PipelineStep) {
   }
 }
 const selectedChoice = (s: PipelineStep) => s.choices.find((c) => c.id === s.selected)
+// The review's model is chosen in one place, Models and keys' Review with (review 5 Nov, item 9): not again here.
+const elsewhere = (s: PipelineStep) => s.stage === 'insight'
 </script>
 
 <template>
-  <main class="page">
+  <!-- Settings → Models → Each step (advanced) since 5 Nov (review item 9); #/pipeline opens it there -->
+  <div class="page">
     <div>
-      <h1>Pipeline</h1>
       <p class="muted">What happens to every recording, in order, and the model each step uses. Everything runs on this Mac except the
         review (with the Hindi merge and the coach), which sends the transcript's text to the model you choose.</p>
       <p v-if="usage" class="muted small">Model calls for reviews, Hindi merges and the coach<template v-if="usage.claude_code"> (Claude Code:
@@ -100,11 +102,13 @@ const selectedChoice = (s: PipelineStep) => s.choices.find((c) => c.id === s.sel
           </div>
 
           <p v-if="s.blocked" class="warn" role="status">{{ s.blocked }}:
-            <template v-if="s.choices.length">choose one with <b>Change model…</b> below, or </template>
-            <a href="#/settings">connect one in Settings</a>.</p>
+            <template v-if="elsewhere(s)">choose one in <b>Review with</b>, under Models and keys above.</template>
+            <template v-else><template v-if="s.choices.length">choose one with <b>Change model…</b> below, or </template>
+              connect one in Models and keys above.</template></p>
+          <p v-else-if="elsewhere(s)" class="muted small">Chosen in <b>Review with</b>, under Models and keys above.</p>
           <p v-if="done[s.stage]" class="note small" role="status">{{ done[s.stage] }}</p>
 
-          <div v-if="s.choices.length && open !== s.stage" class="actions">
+          <div v-if="s.choices.length && !elsewhere(s) && open !== s.stage" class="actions">
             <button type="button" class="btn btn-small" @click="startChange(s)">Change model…</button>
           </div>
 
@@ -146,12 +150,11 @@ const selectedChoice = (s: PipelineStep) => s.choices.find((c) => c.id === s.sel
         </section>
       </li>
     </ol>
-  </main>
+  </div>
 </template>
 
 <style scoped>
-.page { width: 100%; max-width: 860px; margin: 0 auto; padding: 28px 28px 48px; display: flex; flex-direction: column; gap: 18px; }
-h1 { margin: 0; font-size: 26px; font-weight: 600; }
+.page { display: flex; flex-direction: column; gap: 18px; }
 p { margin: 4px 0 0; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
@@ -201,7 +204,6 @@ legend { padding: 0 0 6px; }
 .tried li { margin: 3px 0; }
 
 @media (max-width: 640px) {
-  .page { padding: 20px 16px 40px; }
   .step { grid-template-columns: 24px minmax(0, 1fr); gap: 10px; }
   .num { width: 24px; height: 24px; font-size: 12px; }
   .step:not(:last-child)::before { left: 11px; top: 26px; }

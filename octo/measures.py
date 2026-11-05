@@ -41,7 +41,7 @@ BEFORE_MIN = 60.0  # "before" pools about this many minutes of talk before the m
 def _one(conn, s: dict) -> dict | None:
     """One conversation's record (s: a sessions row with its recording's started_at), or None when
     the owner isn't confirmed in it or its numbers aren't ready."""
-    from .pipeline import current
+    from .runs import current
     from .sessions import speakers
     sp = speakers(conn, s["id"])
     mine = {x["letter"] for x in sp if x["self"]}

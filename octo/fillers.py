@@ -23,6 +23,7 @@ import time
 from datetime import date, datetime
 from functools import lru_cache
 
+from . import frame as FR
 from .db import config, load_json, new_id, row, rows
 
 DEFAULTS = ("um", "uh", "ah", "er", "hmm", "you know", "kind of", "sort of")  # stages.FILLERS, as of 6 Oct
@@ -258,7 +259,7 @@ def memoized(conn, memo: dict, make, *more) -> list[dict]:
     changed (made_from): every page with a usual read every conversation in full, ~0.7 s with 70 (28 Oct). `memo` is
     the caller's own; shallow copies go out, so a caller adding to a record doesn't change the kept one."""
     out, seen = [], set()
-    more = (row(conn, "PRAGMA database_list")["file"], *more)  # another lab (a test's, the demo's) is another record
+    more = (FR.lab(conn), *more)  # another lab (a test's, the demo's) is another record
     for s in rows(conn, "SELECT s.*, r.started_at FROM sessions s JOIN recordings r ON r.id = s.recording_id "
                         "WHERE s.status='active'"):
         seen.add(s["id"])
@@ -543,7 +544,7 @@ def recorder_cues(conn, sess: dict, lines: list[dict]) -> list[dict] | None:
     with the boot's milliseconds, placed by the boot's clock as its chunks are), each with the transcript line it most
     likely followed: the line under the moment just before it, else the last one to start before it. None when it
     isn't a recorder conversation or the recorder flashed none in it."""
-    from .device import wall_clock
+    from .marks import wall_clock
     if sess.get("source") != "device" or not sess.get("started_at"):
         return None
     a, b = sess["started_at"] + sess["start_s"], sess["started_at"] + sess["end_s"]

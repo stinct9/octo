@@ -68,7 +68,7 @@ def test_changing_the_schema_needs_a_new_version():
     seen = hashlib.sha256((DB.SCHEMA + inspect.getsource(DB._migrate)).encode()).hexdigest()[:16]
     assert {1: "1c51cdf3f06d1522", 2: "54686faa5b108404", 3: "ea5edcb9f747cfed", 4: "e3aaf20b56b01f00", 5: "d29d1c5660c19823",
             6: "39d396643d83f0a9", 7: "ecb012df8aa45162", 8: "90169815ed0e2e6d", 9: "0695602aa7936b11", 10: "8a5bae1a291c8db0", 11: "4e00a1248b00861c", 12: "b2108a075833d24a", 13: "ebdabdd6bba688b4",
-            14: "1c9fdad7bcd03498", 15: "e5a3924225090778", 16: "4dfc8acc087835cc", 17: "8b8134991b9f6c6d", 18: "ff6ee1fbf2df50ca", 19: "aadd92d97a5fe083", 20: "0273e559d957842d", 21: "a2da785ec2e2ec61"}.get(DB.SCHEMA_VERSION) == seen, f"bump SCHEMA_VERSION; then expect {seen}"
+            14: "1c9fdad7bcd03498", 15: "e5a3924225090778", 16: "4dfc8acc087835cc", 17: "8b8134991b9f6c6d", 18: "ff6ee1fbf2df50ca", 19: "aadd92d97a5fe083", 20: "0273e559d957842d", 21: "a2da785ec2e2ec61", 22: "8c20410e4bd5b573", 23: "b551e7e1f3cad28a", 24: "904bb2ca52cc226f"}.get(DB.SCHEMA_VERSION) == seen, f"bump SCHEMA_VERSION; then expect {seen}"
 
 
 @pytest.fixture

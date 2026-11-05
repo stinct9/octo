@@ -45,7 +45,7 @@ def test_the_card_covers_the_week_before_in_local_time(tmp_path):
     got = W.current(conn, now)
     assert got["week"] == "2026-10-05" and got["current"]
     assert got["counts"] == {"heard": 2, "reviewed": 2, "acted": 1}
-    assert got["coach"] is None and got["focus"] is None and got["commitments"] == {"mine": 0, "theirs": 0, "due": []}
+    assert got["coach"] is None and got["focus"] is None and got["commitments"] == {"mine": 0, "theirs": 0, "due": [], "unnamed": 0, "unnamed_session": None}
     # An earlier week on Progress: counts, no what's-open-now.
     old = W.card(conn, date(2026, 9, 28), now)
     assert old["counts"]["heard"] == 1 and not old["current"] and "quiet" not in old
@@ -111,15 +111,20 @@ def test_muted_people_are_left_off_the_card(tmp_path):
 def test_open_and_due_commitments_and_the_coach_theme(tmp_path):
     conn = _lab(tmp_path)
     sid = _conv(conn, 1, at(2026, 10, 7, 10))
-    for i, (mine, due, state) in enumerate(((1, "2026-10-14", None), (1, "2026-10-30", None), (0, None, None), (0, "2026-10-10", "did"))):
+    rows_ = ((1, None, "2026-10-14", None), (1, None, "2026-10-30", None), (0, "p_han", None, None),
+             (0, "p_han", "2026-10-10", "did"), (0, "p_han", "2026-10-16", None), (0, None, "2026-10-12", None))
+    for i, (mine, by, due, state) in enumerate(rows_):
         conn.execute("INSERT INTO commitments (id, session_id, run_id, by_self, by_person, to_person, by_name, to_name, what, line, "
                      "quote, start_s, end_s, due, state, created_at) VALUES (?, ?, 'r', ?, ?, ?, 'x', 'y', ?, 0, 'q', 0, 1, ?, ?, 0)",
-                     (f"com_{i}", sid, mine, None if mine else "p_han", "p_han" if mine else None, f"w{i}", due, state))
+                     (f"com_{i}", sid, mine, by, "p_han" if mine else None, f"w{i}", due, state))
     conn.execute("INSERT INTO coach_notes (id, created_at, status, model, output) VALUES ('n1', 1, 'done', 'm', ?)",
                  (json.dumps({"work_on": {"theme": "You answer early"}}),))
     got = W.current(conn, at(2026, 10, 13, 9))
-    assert got["commitments"]["mine"] == 2 and got["commitments"]["theirs"] == 1
-    assert [c["what"] for c in got["commitments"]["due"]] == ["w0"]  # by this Sunday (18 Oct), still open
+    assert got["commitments"]["mine"] == 2 and got["commitments"]["theirs"] == 2
+    # Promises to you due by this Sunday (18 Oct), still open; yours are on home's From your reviews (5 Nov, item 5)
+    assert [c["what"] for c in got["commitments"]["due"]] == ["w4"]
+    # Someone not named yet: counted, with a conversation to name them in, never listed by a speaker's letter
+    assert got["commitments"]["unnamed"] == 1 and got["commitments"]["unnamed_session"] == sid
     assert got["coach"] == {"note_id": "n1", "at": 1, "theme": "You answer early"}
 
 

@@ -19,7 +19,6 @@ import FillersView from './views/FillersView.vue'
 import PeopleView from './views/PeopleView.vue'
 import PersonView from './views/PersonView.vue'
 import PhoneView from './views/PhoneView.vue'
-import PipelineView from './views/PipelineView.vue'
 import PracticeView from './views/PracticeView.vue'
 import ProgressView from './views/ProgressView.vue'
 import RehearseView from './views/RehearseView.vue'
@@ -37,30 +36,59 @@ if (typeof window !== 'undefined') window.addEventListener(LET_IN, onLetIn)
 onUnmounted(() => window.removeEventListener(LET_IN, onLetIn))
 // Inside the Octo app (macapp/Octo.swift registers this handler): About Octo is in its Octo menu instead
 const inApp = !!(window as unknown as { webkit?: { messageHandlers?: { octo?: unknown } } }).webkit?.messageHandlers?.octo
+// Four tabs (review 5 Nov, item 9 and 28 Oct item 5): Coach holds Practice, Rehearse and Fillers, a row of their own
+// under the bar, and stays lit while any of them is open.
 const tabs = [
   { name: 'conversations', label: 'Conversations', href: href.conversations },
   { name: 'people', label: 'People', href: href.people },
-  { name: 'practice', label: 'Practice', href: href.practice },
+  { name: 'coach', label: 'Coach', href: href.coach },
   { name: 'progress', label: 'Progress', href: href.progress },
+]
+const coachTabs = [
+  { name: 'coach', label: 'Coach', href: href.coach },
+  { name: 'practice', label: 'Practice', href: href.practice },
+  { name: 'rehearse', label: 'Rehearse', href: href.rehearse },
+  { name: 'fillers', label: 'Fillers', href: href.fillers },
 ]
 // The Mac-only tools, used rarely, sit under one menu so the bar holds what's used daily; the builder's tools under a
 // Hardware line, and About Octo last (22 Oct). On a phone there's no menu: About Octo is at the foot of Conversations.
+// Since 5 Nov (item 9): the Pipeline is in Settings (Each step), Bench and the case only once a bench board has been
+// seen (a run kept, or a board on USB now), and Set up Octo goes to the bottom once it's done.
 interface MenuItem { name: string; label: string; hint: string; href: string; external?: boolean; line?: string }
-const setup: MenuItem[] = onMac ? [
-  { name: 'setup', label: 'Set up Octo', hint: 'Who the reviews are about, your principles, the model', href: href.setup },
+const setupDone = ref(false)
+const benchSeen = ref(false)
+if (onMac) {
+  fetch('/api/octo/settings/setup').then((r) => (r.ok ? r.json() : null)).then((s) => { setupDone.value = !!s?.complete }).catch(() => {})
+  Promise.all([fetch('/api/runs?limit=1').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    fetch('/api/status').then((r) => (r.ok ? r.json() : {})).catch(() => ({})) as Promise<{ port?: string | null }>])
+    .then(([runs, st]) => { benchSeen.value = (Array.isArray(runs) && runs.length > 0) || !!st?.port })
+}
+const setupItem: MenuItem = { name: 'setup', label: 'Set up Octo', hint: 'Who the reviews are about, your principles, the model', href: href.setup }
+const setup = computed<MenuItem[]>(() => onMac ? [
+  ...(setupDone.value ? [] : [setupItem]),
   { name: 'mac', label: 'This Mac', hint: 'Its checks, a test notification, calls', href: href.mac },
-  { name: 'pipeline', label: 'Pipeline', hint: 'Each step\'s model, and why', href: href.pipeline },
-  { name: 'settings', label: 'Settings', hint: 'Models and keys, the recorder, TickTick', href: href.settings },
+  { name: 'settings', label: 'Settings', hint: 'Models, each step, the recorder, TickTick', href: href.settings },
   { name: 'phone', label: 'Phone', hint: 'Review on the iPhone at home', href: href.phone },
-  { name: 'bench', label: 'Bench', hint: 'Test the recorder board', href: href.bench, line: 'Hardware' },
-  { name: 'case', label: 'Recorder case', hint: 'The table case\'s design', href: '/case', external: true },
-  ...(inApp ? [] : [{ name: 'about', label: 'About Octo', hint: 'What Octo is, for people who ask', href: '/about', external: true, line: '' }]),
-] : []
+  ...(benchSeen.value ? [
+    { name: 'bench', label: 'Bench', hint: 'Test the recorder board', href: href.bench, line: 'Hardware' },
+    { name: 'case', label: 'Recorder case', hint: 'The table case\'s design', href: '/case', external: true },
+  ] : []),
+  ...(setupDone.value ? [{ ...setupItem, hint: 'Done: change who you are, your principles or the model', line: '' }] : []),
+  ...(inApp ? [] : [{ name: 'about', label: 'About Octo', hint: 'What Octo is, for people who ask', href: '/about', external: true, line: setupDone.value ? undefined : '' }]),
+] : [])
 
-const active = computed(() => (route.current.name === 'conversation' || route.current.name === 'coach' || route.current.name === 'sort' || route.current.name === 'ask' || route.current.name === 'calendar' ? 'conversations'
-  : route.current.name === 'fillers' || route.current.name === 'fillercheck' || route.current.name === 'questioncheck' || route.current.name === 'commitmentcheck' ? 'progress' : route.current.name === 'person' || route.current.name === 'prepare' ? 'people'
-    : route.current.name === 'rehearse' ? 'practice' : route.current.name))
-const inSetup = computed(() => setup.some((t) => t.name === active.value))
+const COACH = ['coach', 'practice', 'rehearse', 'fillers', 'fillercheck']
+const sub = computed(() => (route.current.name === 'fillercheck' ? 'fillers' : route.current.name))
+const active = computed(() => {
+  const n = route.current.name
+  if (['conversation', 'sort', 'ask', 'calendar'].includes(n)) return 'conversations'
+  if (COACH.includes(n)) return 'coach'
+  if (n === 'questioncheck' || n === 'commitmentcheck') return 'progress'
+  if (n === 'person' || n === 'prepare') return 'people'
+  if (n === 'pipeline') return 'settings'
+  return n
+})
+const inSetup = computed(() => setup.value.some((t) => t.name === active.value))
 const setupOpen = ref(false)
 const setupEl = ref<HTMLElement | null>(null)
 function closeOutside(e: Event) { if (setupOpen.value && !setupEl.value?.contains(e.target as Node)) setupOpen.value = false }
@@ -164,6 +192,10 @@ watch(() => route.current, checkStatus, { immediate: true })
         <DeviceChip />
       </div>
     </header>
+    <nav v-if="active === 'coach'" class="sub" aria-label="Coach">
+      <a v-for="t in coachTabs" :key="t.name" :href="t.href" :aria-current="sub === t.name ? 'page' : undefined"
+         :class="{ on: sub === t.name }">{{ t.label }}</a>
+    </nav>
     <main v-if="letIn" class="let-in">
       <section class="card pad">
         <h1>Let this browser in</h1>
@@ -195,10 +227,10 @@ watch(() => route.current, checkStatus, { immediate: true })
     <PracticeView v-else-if="route.current.name === 'practice'" :take="route.current.take" />
     <RehearseView v-else-if="route.current.name === 'rehearse'" :id="route.current.id" :person="route.current.person"
                   :key="route.current.id ?? `new-${route.current.person ?? ''}`" />
-    <PipelineView v-else-if="route.current.name === 'pipeline' && onMac" />
     <PhoneView v-else-if="route.current.name === 'phone' && onMac" />
     <BenchView v-else-if="route.current.name === 'bench' && onMac" />
-    <SettingsView v-else-if="route.current.name === 'settings' && onMac" />
+    <SettingsView v-else-if="(route.current.name === 'settings' || route.current.name === 'pipeline') && onMac"
+                  :key="route.current.name" :steps="route.current.name === 'pipeline'" />
     <SetupView v-else-if="route.current.name === 'setup' && onMac" />
     <ThisMacView v-else-if="route.current.name === 'mac' && onMac" />
     <ConversationsView v-else />
@@ -230,6 +262,8 @@ nav a:hover { color: var(--ink); }
 .restart { border: 0; font: inherit; cursor: default; padding: 5px 12px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); font-size: 13px; white-space: nowrap; }
 .restart.reload { cursor: pointer; }
 .restart.bad { background: var(--fail-soft); color: var(--fail); }  /* nothing is being saved, or nothing more pulled */
+.sub { padding: 6px 28px; gap: 4px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.sub a { min-height: 40px; padding: 6px 12px; font-size: 14px; }
 nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
 .setup { position: relative; flex-shrink: 0; }
 .setup-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; min-height: 44px; border: 0; border-radius: 8px;
@@ -247,7 +281,8 @@ nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 50
 @media (max-width: 640px) {
   .setup-menu { left: 0; max-width: calc(100vw - 24px); }
   .nav { padding: 6px 12px; gap: 4px 12px; height: auto; min-height: 56px; flex-wrap: wrap; }
-  nav { flex: 1 1 100%; }  /* a row of its own; past the screen's width the tabs scroll, not the page */
+  nav { flex: 1 1 100%; }
+  .sub { padding: 4px 12px; }  /* a row of its own; past the screen's width the tabs scroll, not the page */
   .right { margin-left: 0; }
   .brand { display: none; }
   nav a { padding: 8px 10px; }

@@ -141,7 +141,9 @@ def test_the_pipeline_drains_on_a_fake_model(lab, monkeypatch, pick):
     before = {r["id"] for r in rows(conn, "SELECT id FROM stage_runs")}
     counts = P.run_pending(conn, log=lambda m: None, execute=execute)
     assert counts["done"] > 0 and counts["failed"] == 0
-    assert rows(conn, "SELECT stage, status FROM stage_runs WHERE status IN ('queued', 'running', 'failed')") == []
+    # The demo's step shown "running" was left so by no runner: counted as stopped, tried again after the wait (review 5 Nov).
+    assert rows(conn, "SELECT stage, status FROM stage_runs WHERE status IN ('queued', 'running', 'failed') "
+                      "AND coalesce(error, '') != ?", P.STOPPED) == []
     review = row(conn, "SELECT id, output FROM stage_runs WHERE target=? AND stage='insight' AND is_current=1", sid)
     assert review["id"] not in before and json.loads(review["output"])["summary"] == "A made-up review."
     whole = row(conn, "SELECT id, params, upstream FROM stage_runs WHERE target=? AND stage='insight' AND is_current=1", head)

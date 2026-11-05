@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // Your week (B17): on home from Monday until dismissed or replaced by the next Monday's, about the seven days
-// before; on Progress, an earlier week's counts and focus (`week`). Read from what's stored, no model call.
+// before; on Progress, an earlier week's counts and focus (`week`). Read from what's stored, no model call. The coach's theme
+// is home's Working on card's, not this one's (28 Oct review, item 4).
 import { onMounted, ref } from 'vue'
 import { lab } from '../lab/api'
-import { day, dueDay } from '../lab/format'
+import { dueDay } from '../lab/format'
 import { href } from '../lab/router'
 import type { WeekCard } from '../lab/types'
 import { countsLine, focusLine, weekRange } from '../lab/week'
@@ -12,7 +13,6 @@ import FoldToggle from './FoldToggle.vue'
 const props = defineProps<{ week?: string }>()
 const c = ref<WeekCard | null>(null)
 const error = ref('')
-const asked = ref(false)
 const open = ref(true)
 onMounted(async () => {
   try { c.value = await lab.week(props.week) } catch { /* the page works without it */ }
@@ -20,9 +20,6 @@ onMounted(async () => {
 async function dismiss() {
   if (!c.value) return
   try { await lab.dismissWeek(c.value.week); c.value = null } catch (e) { error.value = e instanceof Error ? e.message : String(e) }
-}
-async function ask() {
-  try { await lab.askCoach(); asked.value = true; error.value = '' } catch (e) { error.value = e instanceof Error ? e.message : String(e) }
 }
 </script>
 
@@ -37,18 +34,18 @@ async function ask() {
     <template v-if="open || week">
     <p v-if="c.focus" class="small">Your focus: {{ c.focus.text }}<template v-if="focusLine(c.focus)"><br>
       <span class="muted">{{ focusLine(c.focus) }}</span></template></p>
-    <template v-if="!week && c.commitments && (c.commitments.mine || c.commitments.theirs)">
-      <p class="small">Open commitments: {{ c.commitments.mine }} yours, {{ c.commitments.theirs }} to you</p>
+    <!-- Promises to you (yours are with the steps, From your reviews, since 5 Nov); never a speaker's letter -->
+    <template v-if="!week && c.commitments && (c.commitments.theirs || c.commitments.unnamed)">
+      <p v-if="c.commitments.theirs" class="small">Promised to you: {{ c.commitments.theirs }} open</p>
       <ul v-if="c.commitments.due.length" class="list small">
-        <li v-for="m in c.commitments.due" :key="m.id">{{ m.mine ? 'You' : m.by }}: {{ m.what }} · by {{ dueDay(m.due!) }}</li>
+        <li v-for="m in c.commitments.due" :key="m.id">{{ m.by }}: {{ m.what }} · by {{ dueDay(m.due!) }}</li>
       </ul>
+      <p v-if="c.commitments.unnamed && c.commitments.unnamed_session" class="small"><a :href="href.conversation(c.commitments.unnamed_session)">{{
+        c.commitments.unnamed }} from someone not named yet</a></p>
     </template>
     <ul v-if="!week && c.quiet?.length" class="list small">
       <li v-for="q in c.quiet" :key="q.person_id"><a :href="href.person(q.person_id)">{{ q.text }}</a></li>
     </ul>
-    <p v-if="!week && c.coach?.theme" class="small">The coach, {{ day(c.coach.at) }}: <a :href="href.coach">{{ c.coach.theme }}</a>
-      · <button v-if="!asked" type="button" class="link small" @click="ask">Ask again</button>
-      <span v-else class="muted" role="status">Asked: the coach's card says when it's read them</span></p>
     </template>
     <p v-if="error" class="error small" role="alert">{{ error }}</p>
   </section>

@@ -35,7 +35,8 @@ from . import focus as F
 from . import intention as IN
 from . import measures as M
 from . import review as R
-from .db import load_json, new_id, row, rows, tx
+from . import solved as SO
+from .db import calling, load_json, new_id, row, rows, tx
 from . import parts as PT
 from .insight import MATERIAL, principles
 from .rubric import text as rubric_text
@@ -302,7 +303,7 @@ def _material(conn, now: float | None, profile: dict) -> dict:
     last = row(conn, "SELECT * FROM coach_notes WHERE status='done' ORDER BY created_at DESC LIMIT 1")
     return {"me": me["name"] if me else (profile.get("name") or "you"), "today": now, "principles": principles(text), "conversations": convs,
             "ids": ids, "left_out": left_out, "focus": fs, "trend": _trend_lines(conn),
-            "last": _last_note(conn, last) if last else None,
+            "last": _last_note(conn, last) if last else None, "solved": SO.for_coach(conn),
             "read": {"conversations": len(convs), "answered": sum(1 for c in convs if c["answered"]),
                      "items": len(ids), "left_out": left_out,
                      "from": min((c["at"] for c in convs), default=None), "to": max((c["at"] for c in convs), default=None)}}
@@ -428,6 +429,17 @@ def _user_prompt(m: dict, me: str, P: dict) -> str:
     else:
         parts.append("There's no earlier note: this is the first.")
 
+    if so := m.get("solved"):  # B38: the owner's words about who has solved this, never more than they wrote
+        on = (f"{P['their']} focus, \"{so['about']}\"" if so["on"] == "focus"
+              else f"what the last note said to work on, \"{so['about']}\"")
+        parts.append(f"Who has solved this, as {me} noted it on {on}: {SO.text(so, me)}. This is {P['their']} account of "
+                     f"{so['who']}, not what {so['who']} actually thinks.\n"
+                     f"- would: one or two sentences answering \"What would {so['who']} do here?\" for the pattern you "
+                     f"chose to work on, only from {me}'s words about {so['who']} above and the conversations here. Add "
+                     f"nothing you know or guess about {so['who']}, or about any book or talk; say it as {P['their']} account "
+                     f"(\"From what you wrote, …\"). Only what fits {P['their']} principles, never positioning or winning the "
+                     f"room; if {P['their']} words about {so['who']} conflict with the principles, say that instead.")
+
     convs = m["conversations"]
     head = f"Conversations, newest first ({len(convs)} with a review"
     head += f"; {m['left_out']} item{'s' if m['left_out'] != 1 else ''} {P['they']} marked not right left out):" if m["left_out"] else "):"
@@ -498,7 +510,21 @@ def check(raw: dict, m: dict) -> dict:
     return {"work_on": work, "keep": themed(raw.get("keep") or {}, "keep"),
             "also": [a for a in (themed(x, "also") for x in (raw.get("also") or [])[:2]) if a],
             "changed": (raw.get("changed") or "").strip(), "limits": (raw.get("limits") or "").strip(),
-            "dropped": dropped, "unknown_evidence": unknown}
+            "would": _would(raw, m), "dropped": dropped, "unknown_evidence": unknown}
+
+
+def _would(raw: dict, m: dict) -> dict | None:
+    """B38: the line on what they'd do, kept only when the owner wrote a note about them; who is the owner's, not the model's."""
+    so, line = m.get("solved"), " ".join(str(raw.get("would") or "").split())
+    return {"who": so["who"], "source": so.get("source"), "on": so["on"], "text": line} if so and line else None
+
+
+def schema(m: dict) -> dict:
+    """The answer's shape: with a line on who has solved this only when the owner noted one (B38)."""
+    if not m.get("solved"):
+        return SCHEMA
+    return {**SCHEMA, "properties": {**SCHEMA["properties"], "would": {"type": "string"}},
+            "required": [*SCHEMA["required"], "would"]}
 
 
 # ---- asking, and the notes --------------------------------------------------------------------
@@ -511,19 +537,19 @@ def _stop_stale(conn, now: float) -> None:
 
 def why_not(conn, now: float | None = None, n_reviews: int | None = None) -> str | None:
     """Why the coach can't be asked right now, or None."""
-    from . import pipeline as P
+    from . import runs as RN
     now = now or time.time()
     _stop_stale(conn, now)
     if row(conn, "SELECT 1 FROM coach_notes WHERE status='running'"):
         return "the coach is reading your reviews now"
     if (len(reviews(conn)) if n_reviews is None else n_reviews) < MIN_CONVERSATIONS:
         return f"the coach needs reviews of at least {MIN_CONVERSATIONS} conversations"
-    if why := P.claude_waits(conn, now):
+    if why := RN.claude_waits(conn, now):
         return why
     from .settings import reader
     who = reader(conn)
     if who is None:  # a new lab whose owner hasn't chosen a model yet (product plan 4.1)
-        return "choose a model for reviews first (Pipeline page)"
+        return "choose a model for reviews first (Settings → Models and keys)"
     if who["kind"] == "claude-code" and not CC.claude_bin():
         return "Claude Code isn't installed (the `claude` command)"
     return None
@@ -565,7 +591,8 @@ def run(conn, note_id: str, ask=None, now: float | None = None) -> dict:
             conn.executemany("INSERT OR IGNORE INTO coach_sources (note_id, session_id) VALUES (?, ?)",
                              [(note_id, c["session_id"]) for c in m["conversations"]])
             conn.execute("UPDATE coach_notes SET read=? WHERE id=?", (json.dumps(m["read"]), note_id))
-        raw, usage = ask(MODEL, EFFORT, system_prompt(m["me"], m.get("owner"), reviewer), user_prompt(m), SCHEMA)
+        with calling(conn, "coach", note_id):
+            raw, usage = ask(MODEL, EFFORT, system_prompt(m["me"], m.get("owner"), reviewer), user_prompt(m), schema(m))
         out = check(raw, m)
     except Exception as e:
         msg = (f"Claude took longer than {CC.TIMEOUT_S // 60} minutes: ask again" if isinstance(e, subprocess.TimeoutExpired)
@@ -665,7 +692,7 @@ def view(conn, n: dict) -> dict:
     know = out["work_on"]["know"]["measure"] if out and out["work_on"] else None
     return {"id": n["id"], "created_at": n["created_at"], "finished_at": n["finished_at"], "status": n["status"],
             "error": n["error"], "model": n["model"], "read": load_json(n["read"]), "note": out,
-            "feedback": feedback(conn, n["id"]), "seen": n["seen_at"] is not None,
+            "feedback": feedback(conn, n["id"]), "seen": n["seen_at"] is not None, "solved": SO.get(conn, note_id=n["id"]),
             "focus": {"id": foc["id"], "text": foc["text"], "started_at": foc["started_at"], "active": foc["ended_at"] is None,
                       "tally": F.tally(conn, foc["id"])} if foc else None,
             # How he'll know: that number since this note, against before it.

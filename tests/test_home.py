@@ -79,6 +79,19 @@ def test_the_login_item_keeps_what_it_writes_private_and_names_the_home(tmp_path
     assert "EnvironmentVariables" not in LI._plists()["com.octo.lab"]
 
 
+def test_the_server_runs_at_normal_priority_and_its_heavy_work_in_the_background(monkeypatch):
+    """5 Nov (tech review 1): every login item was Background, so every page took ~6x its code's time."""
+    plists = LI._plists()
+    assert plists["com.octo.lab"]["ProcessType"] == "Standard"
+    assert plists["com.octo.ollama"]["ProcessType"] == plists["com.octo.relay"]["ProcessType"] == "Background"
+    assert octo.BACKGROUND == ["/usr/sbin/taskpolicy", "-b"]  # every Mac has it; no root needed
+    from octo import pipeline as P
+    seen = []
+    monkeypatch.setattr(P.subprocess, "run", lambda cmd, **k: seen.append(cmd) or type("R", (), {"returncode": 0, "stderr": ""})())
+    P._in_worker("run1")
+    assert seen[0][:2] == octo.BACKGROUND and seen[0][-2:] == ["octo.worker", "run1"]
+
+
 # What the database stores is relative to HOME, and what the lab records lives under it: a stored path joined to
 # or made relative to ROOT (the code) works only while the two are the same folder, and breaks Delete and Forget
 # the day they aren't. (The recorder's secrets.h files are code-side: firmware is built from them.)

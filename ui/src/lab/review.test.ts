@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { entries, heldCounts, itemQuote, itemText, newToYouEntries } from './review'
+import { answerItems, entries, heldCounts, itemQuote, itemText, newToYouEntries } from './review'
 import type { Insights, Quote } from './types'
 
 const q = (line: number, speaker: string, start = line * 10): Quote => ({ line, start, speaker, text: `t${line}`, uncertain: false })
@@ -34,6 +34,11 @@ describe('entries', () => {
     const withQuestion = { ...review, beneath: [{ question: 'Was she waiting for you?', quotes: [] }] }
     expect(newToYouEntries(withQuestion).map((e) => e.id)).toEqual(['o', 'r0', 'l0', 'p3', 'p8', 'n0'])
     expect(newToYouEntries(review)[0]).toEqual({ id: 'o', group: 'one', eyebrow: 'The one thing', title: 'Tell Asha early' })
+  })
+  it('a step ticked on its own row counts in the answer as it did in the list (review 5 Nov, item 4)', () => {
+    expect(answerItems(review, new Set(['n0', 'p3']))).toEqual(['p3', 'n0'])
+    expect(answerItems(review, new Set(['n0']))).toEqual(['n0'])
+    expect(answerItems(review, new Set(['x9']))).toEqual([])  // nothing the review doesn't have
   })
   it('practise starts from the item\'s own words', () => {
     expect(itemText(review, 'o')).toBe('Tell Asha early')

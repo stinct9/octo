@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from octo import corrections as C
 from octo import pipeline as P
+from octo import runs as RN  # the holds and the day's calls (risk 8, 5 Nov)
 from octo import planning as PL
 from octo import sessions as SV
 from octo.db import connect, row, rows
@@ -91,7 +92,7 @@ SIGNED_OUT = ("RuntimeError: Claude Code: Failed to authenticate: OAuth session 
 def test_signed_out_is_not_an_attempt_and_holds_claude_steps_until_signed_in(tmp_path, monkeypatch):
     conn = connect(tmp_path / "q.db")
     signed = {"in": False}
-    monkeypatch.setattr(P, "signed_in", lambda now=None: signed["in"])
+    monkeypatch.setattr(RN, "signed_in", lambda now=None: signed["in"])
     claude = json.dumps({"model": "claude-opus-5-5"})
     for i, at in enumerate((ist(1), ist(2), ist(3), ist(4))):
         _failed(conn, f"f{i}", "insight", "s1", at, error=SIGNED_OUT, params=claude)
@@ -116,7 +117,7 @@ def test_signed_out_is_not_an_attempt_and_holds_claude_steps_until_signed_in(tmp
 def test_the_list_says_to_sign_in_and_the_mac_is_told_once(lab):  # noqa: F811
     from octo import notify as N
     conn = lab["conn"]
-    lab["mp"].setattr(P, "signed_in", lambda now=None: False)
+    lab["mp"].setattr(RN, "signed_in", lambda now=None: False)
     P.add_recording(conn, lab["wav"], "bench")
     lab["run"]()
     sid = rows(conn, "SELECT id FROM sessions ORDER BY start_s")[0]["id"]

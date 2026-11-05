@@ -11,9 +11,11 @@
   POST /api/octo/people/rename           {"name", "to", "merge"?}: everywhere; merge if `to` exists
   POST /api/octo/sessions/{id}/feedback  {"run", "item", "verdict"?, "novelty"?, "useful"?, "acted"?, "note"?}
   GET  /api/octo/progress                reviewed / new / acted, principle coverage, weekly numbers
+  GET  /api/octo/progress/states         where every conversation is (the list's footer)
   GET  /api/octo/focus                   what the owner is practising, and the ones before (octo/focus.py)
   POST /api/octo/focus                   {"text", "session_id"?, "run"?, "item"?}: practise this (ends the last)
   POST /api/octo/focus/stop              no focus for now
+  PUT  /api/octo/focus/{id}/solved       {"who", "what", "source"?}: who has solved this, in the owner's words (B38)
   POST /api/octo/sessions/{id}/focus     {"focus_id", "answer": "did"|"missed"|"na"|null}: did it come up here?
   POST /api/octo/sessions/{id}/reflection   {"text"}: how it went, in the owner's words ("" clears it; B15)
   POST /api/octo/people/{id}/intention   {"text"}: next time with them, I want to… ("" clears it; B15)
@@ -78,6 +80,7 @@
   POST /api/octo/coach/{id}/feedback     {"part", "verdict"?, "novelty"?}: the owner's marks on it
   POST /api/octo/coach/{id}/focus        {"text"?, "measure"?}: practise what it says to work on
   POST /api/octo/coach/{id}/seen         the owner opened it
+  PUT  /api/octo/coach/{id}/solved       {"who", "what", "source"?}: who has solved its "work on" (B38)
   GET  /api/octo/ask                     answers on the page (memory only) and kept ones (octo/ask.py, B24)
   POST /api/octo/ask                     {"question"}: pick its lines on the Mac, then one model call in the background
   GET  /api/octo/ask/{id}                one answer
@@ -136,7 +139,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from . import DATA, ROOT
+from . import BACKGROUND, DATA, ROOT
 from . import device as D
 from . import files as FL
 from .db import connect, row
@@ -203,7 +206,7 @@ class Processor:
                 for name in ("lab.log", "ollama.log", "relay.log"):  # the login items' (octo/login_item.py)
                     FL.trim_log(DATA / "logs" / name, held=True)
                 with open(DATA / "process.log", "a") as log:
-                    done = subprocess.run([sys.executable, "-m", "octo.cli", "process"], cwd=ROOT, stdout=log, stderr=log)
+                    done = subprocess.run([*BACKGROUND, sys.executable, "-m", "octo.cli", "process"], cwd=ROOT, stdout=log, stderr=log)
                 self.crashed = done.returncode != 0
             except OSError:
                 self.crashed = True

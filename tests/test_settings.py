@@ -76,3 +76,35 @@ def test_the_page_through_the_api(conn, tmp_path):
     assert r.status_code == 200 and r.json()["selected"] == "whisper-large-v3" and kicks == [1]
     assert c.post("/api/octo/pipeline/transcribe", json={"choice": "whisper-large-v3"}).status_code == 200
     assert kicks == [1]  # the same choice again changes nothing
+
+
+def test_choosing_a_local_model_starts_ollama_and_the_login_item_follows_the_choice(conn, tmp_path, monkeypatch):
+    """Tech review 5 Nov, risk 6: Ollama's login item only while a step runs a local model."""
+    import octo.db as DB
+    from octo import login_item as LI
+    monkeypatch.setattr(DB, "connect", lambda *a, **k: connect(tmp_path / "t.db"))
+    monkeypatch.setattr(LI, "AGENTS", tmp_path / "agents")
+    monkeypatch.setattr(LI, "RELAY_COPY", tmp_path / "relay" / "relay.py")
+    monkeypatch.setattr("octo.device.RELAY_KEY", tmp_path / "relay" / "relay.key")
+    monkeypatch.setattr(LI, "has_ollama", lambda: True)
+    monkeypatch.setattr(LI.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr("octo.mackey.key", lambda path: "k")
+    plists = lambda: sorted(p.name for p in (tmp_path / "agents").glob("*.plist"))
+    assert not LI.wants_ollama()  # Claude Code reviews, as in the first lab
+    LI.install()
+    assert plists() == ["com.octo.lab.plist", "com.octo.relay.plist"]
+    # Ollama stopped: the page still offers the local model, and choosing it starts Ollama
+    up = []
+    monkeypatch.setattr(ST, "_ollama_models", lambda: {"qwen3:8b"} if up else None)
+    page = next(s for s in ST.describe(conn) if s["stage"] == "insight")
+    assert next(c for c in page["choices"] if c["id"] == "qwen3-8b")["unavailable"] is None
+    monkeypatch.setattr(LI, "start_ollama", lambda: up.append(1) or True)
+    ST.choose(conn, "insight", "qwen3-8b")
+    assert up and LI.wants_ollama()
+    LI.install()
+    assert plists() == ["com.octo.lab.plist", "com.octo.ollama.plist", "com.octo.relay.plist"]
+    conn.execute("DELETE FROM settings")  # back to Claude Code
+    LI.install()  # no local model left: the next install lets it go
+    assert plists() == ["com.octo.lab.plist", "com.octo.relay.plist"]
+    monkeypatch.setattr(LI, "has_ollama", lambda: False)
+    assert "ollama.com" in ST.unavailable(ST.BY_STAGE["insight"].choices[1], lambda: None, startable=True)

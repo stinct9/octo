@@ -98,6 +98,21 @@ def detect_speech(samples: np.ndarray, params: dict, model: Any) -> list[tuple[f
         torch.from_numpy(samples), model, sampling_rate=RATE, threshold=params["threshold"], return_seconds=True)]
 
 
+def apply_splits(conversations: list[dict], splits: list[float], min_speech_s: float) -> list[dict]:
+    """find_conversations' output, cut at the owner's split points (recording time; octo/split.py)."""
+    out = []
+    for c in conversations:
+        cuts = [s for s in sorted(splits) if c["start"] < s < c["end"]]
+        edges = [c["start"], *cuts, c["end"]]
+        for a, b in zip(edges, edges[1:]):
+            speech = [[max(x, a), min(y, b)] for x, y in c["speech"] if min(y, b) > max(x, a)]
+            speech_s = round(sum(y - x for x, y in speech), 1)
+            if cuts and speech_s < min_speech_s:
+                continue
+            out.append({**c, "start": round(a, 2), "end": round(b, 2), "speech": speech, "speech_s": speech_s})
+    return out
+
+
 def find_conversations(inputs: dict, params: dict) -> dict:
     """Voice-activity detection over the whole recording, in 10-minute blocks so a day-long
     recording never has to fit in memory at once."""
@@ -118,8 +133,7 @@ def find_conversations(inputs: dict, params: dict) -> dict:
         c["start"] = round(max(0.0, c["start"] - pad), 2)
         c["end"] = round(min(total, c["end"] + pad), 2)
     if params.get("splits"):  # The owner's "two discussions here" (octo/split.py)
-        from .split import apply
-        conversations = apply(conversations, params["splits"], params["min_speech_s"])
+        conversations = apply_splits(conversations, params["splits"], params["min_speech_s"])
     return {"speech_s": round(sum(e - s for s, e in speech), 1), "conversations": conversations}
 
 

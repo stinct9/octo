@@ -6,6 +6,7 @@ import pytest
 
 from octo import eta as E
 from octo import pipeline as P
+from octo import runs as RN  # eta reads the hold there (risk 8, 5 Nov)
 from octo import planning as PL
 from octo.db import connect
 
@@ -26,6 +27,7 @@ def test_the_fit():
 def conn(tmp_path, monkeypatch):
     c = connect(tmp_path / "t.db")
     monkeypatch.setattr(P, "claude_blocked_until", lambda conn, now=None: None)
+    monkeypatch.setattr(RN, "claude_blocked_until", lambda conn, now=None: None)
     monkeypatch.setattr(PL, "insight_ready", lambda conn, sid: False)  # speakers not confirmed yet
     return c
 
@@ -80,6 +82,7 @@ def test_the_newest_conversation_comes_first(conn):
 def test_a_review_waits_for_claude(conn, monkeypatch):
     monkeypatch.setattr(PL, "insight_ready", lambda conn, sid: True)
     monkeypatch.setattr(P, "claude_blocked_until", lambda conn, now=None: NOW + 3600)
+    monkeypatch.setattr(RN, "claude_blocked_until", lambda conn, now=None: NOW + 3600)
     _session(conn, "ses_a", 10, NOW - 3600)
     _run(conn, "ses_a", "insight", params={"model": "claude-opus-5-5"})
     a = E.forecast(conn, NOW)["sessions"]["ses_a"]

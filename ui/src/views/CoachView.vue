@@ -8,10 +8,11 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import CoachMarks from '../components/CoachMarks.vue'
 import CoachMoments from '../components/CoachMoments.vue'
 import FocusEditor from '../components/FocusEditor.vue'
+import SolvedFold from '../components/SolvedFold.vue'
 import { lab } from '../lab/api'
 import { day, MEASURE_LABEL, measureValue, tallyText, when } from '../lab/format'
 import { href } from '../lab/router'
-import type { CoachEvidence, CoachMark, CoachNote, CoachPart, CoachSummary, Focus, Measure } from '../lab/types'
+import type { CoachEvidence, CoachMark, CoachNote, CoachPart, CoachSummary, Focus, Measure, SolvedInput } from '../lab/types'
 
 const props = defineProps<{ noteId?: string }>()  // an earlier note, from #/coach/<id>; else the latest
 const sum = ref<CoachSummary | null>(null)
@@ -96,6 +97,11 @@ async function saveFocus(text: string, measure: Measure | null) {
   } catch (e) { focusError.value = e instanceof Error ? e.message : String(e) } finally { focusSaving.value = false }
 }
 
+// B38: who has solved what it says to work on, in the owner's words
+async function saveSolved(s: SolvedInput) {
+  if (note.value) note.value = await lab.coachSolved(note.value.id, s)
+}
+
 // ---- hearing a moment: its line from that conversation's audio, then it stops ------------------
 const audio = ref<HTMLAudioElement | null>(null)
 const playing = ref<string | null>(null)
@@ -119,7 +125,6 @@ function onTime() {
 
 <template>
   <main class="page">
-    <a :href="href.conversations" class="back">← Conversations</a>
     <div class="top">
       <h1>Coach</h1>
       <button v-if="sum && (sum.latest || sum.failed) && !sum.running" type="button" class="btn" :disabled="!sum.can_ask || asking"
@@ -173,6 +178,12 @@ function onTime() {
           <div class="label">Try</div>
           <p>{{ work.focus_text }}</p>
         </div>
+        <div v-if="body.would" class="try">
+          <div class="label">What would {{ body.would.who }} do here?</div>
+          <p>{{ body.would.text }}</p>
+          <p class="small muted">From your note on {{ body.would.on === 'focus' ? 'your focus' : 'the last note' }}<template
+            v-if="body.would.source"> ({{ body.would.source }})</template> only: your account of them, not what they think.</p>
+        </div>
         <div class="know">
           <div class="label">You'll know</div>
           <p>{{ work.know.how }}</p>
@@ -189,6 +200,7 @@ function onTime() {
           </template>
           <button v-else type="button" class="btn btn-primary" @click="editing = true; focusError = ''">Make it my focus</button>
         </div>
+        <SolvedFold :value="note.solved" :save="saveSolved" />
         <CoachMarks :mark="note.feedback.work_on" label="what to work on" :saving="savingMark === 'work_on'" @change="mark('work_on', $event)" />
       </section>
       <section v-else class="card pad">
@@ -262,7 +274,6 @@ function onTime() {
 
 <style scoped>
 .page { width: 100%; max-width: 820px; margin: 0 auto; padding: 20px 24px 56px; display: flex; flex-direction: column; gap: 18px; }
-.back { font-size: 14px; color: var(--accent); text-decoration: none; }
 .top { display: flex; align-items: center; gap: 12px; }
 h1 { margin: 0; font-size: 26px; font-weight: 600; flex: 1; }
 h2 { margin: 0; font-size: 21px; font-weight: 600; line-height: 1.35; }

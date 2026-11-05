@@ -161,7 +161,7 @@ async function setPrompt(text: string, on: boolean) {
           <section v-if="take.point" class="point" aria-labelledby="point-h">
             <h3 id="point-h">Where the point came</h3>
             <p v-if="take.point.state === 'waiting'" class="muted small" role="status">Finding it…</p>
-            <p v-else-if="take.point.state === 'off'" class="muted small">Choose a model for reviews on the Pipeline page to see this.</p>
+            <p v-else-if="take.point.state === 'off'" class="muted small">Choose a model for reviews in Settings → Models and keys to see this.</p>
             <p v-else-if="take.point.state === 'skipped'" class="muted small">Too short to tell ({{ take.point.why }}).</p>
             <p v-else-if="take.point.state === 'failed'" class="error small">It couldn't be found: {{ take.point.error }}</p>
             <template v-else-if="take.point.state === 'done'">

@@ -9,6 +9,7 @@ from octo import audio as A
 from octo import pipeline as P
 from octo import privacy as PV
 from octo.db import connect, row, rows
+from tests.calls import spend
 
 
 @pytest.fixture
@@ -237,9 +238,7 @@ def test_the_60_day_rule_also_takes_stray_recorder_chunks_and_bench_output(lab):
 
 def test_a_deleted_conversations_review_still_counts_in_the_day(lab):  # audit 28 Oct
     conn, _ = lab
-    reader = '{"reader": {"kind": "claude-code", "model": "claude-opus-5-5"}}'
-    conn.execute("UPDATE stage_runs SET output='{\"usage\": {\"output_tokens\": 9}}', params=?, finished_at=? WHERE id='in_s1'",
-                 (reader, time.time()))
+    spend(conn, 1)  # its review's call: a row of its own in model_calls, not read from the run
     today = P._midnight(time.time())
     assert P.claude_calls_since(conn, today) == 1
     PV.delete_session(conn, "s1")

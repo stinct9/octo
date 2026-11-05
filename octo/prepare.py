@@ -36,7 +36,7 @@ from . import ask as AK
 from . import insight as IN
 from . import owner as O
 from . import sessions as SV
-from .db import load_json, new_id, row, rows, tx
+from .db import calling, load_json, new_id, row, rows, tx
 from .rehearse import _owner, _reader_of
 from .rehearse import why_not as model_why_not
 from .search import readable
@@ -328,10 +328,11 @@ def close_first(conn, person_id: str) -> list[dict]:
     from . import commitments as CM
     from .person import with_them
     ids = {s["id"] for s in with_them(conn, person_id)}
-    steps = [{"kind": "step", "text": t["title"], "due": t["due"], "session_id": t["session_id"]}
-             for t in SV.open_tasks(conn) if t["session_id"] in ids]
+    tasks = [t for t in SV.open_tasks(conn) if t["session_id"] in ids and t["kind"] == "step"]
+    steps = [{"kind": "step", "text": t["title"], "due": t["due"], "session_id": t["session_id"]} for t in tasks]
+    same = {t["promise"] for t in tasks if t["promise"]}  # the same promise as a step: once, as the step (5 Nov)
     promised = [{"kind": "commitment", "text": c["what"], "due": c["due"], "session_id": c["session_id"], "mine": c["mine"]}
-                for c in CM.for_person(conn, person_id)]
+                for c in CM.for_person(conn, person_id) if c["id"] not in same]
     return steps + promised
 
 
@@ -452,34 +453,23 @@ def run(conn, person_id: str) -> dict:
         read = readings_of(conn, person_id)[:READINGS]
         minutes = round((r["event_end"] - r["event_start"]) / 60) if r["event_start"] and r["event_end"] else None
         prompt = user_prompt(owner, profile, IN.principles(rubric), picked["person"]["name"], r["about"] or "", read, text, minutes)
-        raw, usage = _ask(who, who.get("effort") or "high", system_prompt(owner, profile, IN.review_rules(rubric)), prompt, SCHEMA)
+        with calling(conn, "prepare", r["id"]):
+            raw, usage = _ask(who, who.get("effort") or "high", system_prompt(owner, profile, IN.review_rules(rubric)), prompt, SCHEMA)
         usage = usage or {}
         plan = check(raw, keys, owner, person_id)
     except Exception as e:  # noqa: BLE001 - kept, so a usage limit holds Claude's steps; shown on the page
         msg = str(e)[:2000] or type(e).__name__
-        _ended(conn, r, who, usage, "UPDATE preparations SET status='failed', error=?, error_at=?, finished_at=?, usage=? WHERE id=?",
-               (msg, time.time(), time.time(), None if usage is None else json.dumps(usage), r["id"]))
+        conn.execute("UPDATE preparations SET status='failed', error=?, error_at=?, finished_at=?, usage=? WHERE id=?",
+                     (msg, time.time(), time.time(), None if usage is None else json.dumps(usage), r["id"]))
         return view(conn, person_id)
     with tx(conn):
-        _ended(conn, r, who, usage, "UPDATE preparations SET status='done', plan=?, usage=?, reader=?, sent=?, finished_at=? "
-               "WHERE id=? AND status='running'", (json.dumps(plan), json.dumps(usage), json.dumps(_reader_of(who)),
-                                                   json.dumps(_stored(picked)), time.time(), r["id"]))
+        conn.execute("UPDATE preparations SET status='done', plan=?, usage=?, reader=?, sent=?, finished_at=? "
+                     "WHERE id=? AND status='running'", (json.dumps(plan), json.dumps(usage), json.dumps(_reader_of(who)),
+                                                         json.dumps(_stored(picked)), time.time(), r["id"]))
         if row(conn, "SELECT 1 FROM preparations WHERE id=? AND status='done'", r["id"]):
             _sources(conn, r["id"], picked, {x["session_id"] for x in read})  # the readings came from these
             conn.execute("DELETE FROM preparations WHERE person_id=? AND id<>?", (person_id, r["id"]))  # the one before
     return view(conn, person_id)
-
-
-def _ended(conn, r: dict, who: dict, usage: dict | None, sql: str, args: tuple) -> None:
-    """Store how a run ended; a call that was made is counted even when its row was deleted (Delete, Forget, a deleted
-    conversation) or stopped meanwhile, so deleting and preparing again can't get past the day's calls."""
-    if conn.execute(sql, args).rowcount or usage is None:
-        return
-    if row(conn, "SELECT 1 FROM preparations WHERE id=?", r["id"]):  # stopped by the sweep: the row counts it
-        conn.execute("UPDATE preparations SET usage=?, reader=?, finished_at=? WHERE id=?",
-                     (json.dumps(usage), json.dumps(_reader_of(who)), time.time(), r["id"]))
-    else:
-        conn.execute("INSERT INTO calls_gone (at, n, reader) VALUES (?, 1, ?)", (time.time(), json.dumps(_reader_of(who))))
 
 
 def run_in_background(db, person_id: str) -> None:
@@ -502,7 +492,7 @@ def next_event(conn, person_id: str, now: float | None = None) -> dict | None:
 
 
 def _plan_view(conn, r: dict) -> dict:
-    from .pipeline import limit_reset
+    from .runs import limit_reset
     at, sid = _began(conn, r) if r["status"] == "done" else (None, None)
     return {"used": {"at": at, "session_id": sid} if at and time.time() >= at else None,"id": r["id"], "status": r["status"], "at": r["created_at"], "finished_at": r["finished_at"],
             "about": r["about"], "names": load_json(r["names"]) or [], "sent": load_json(r["sent"]),
@@ -563,12 +553,6 @@ def planned_for(conn, session_id: str) -> list[dict]:
 
 def delete(conn, person_id: str) -> None:
     conn.execute("DELETE FROM preparations WHERE person_id=?", (person_id,))  # secure_delete; sources cascade
-
-
-def calls_since(conn, since: float, which) -> int:
-    """Its calls for the day's count (pipeline._calls_since): each call made since `since`, the plan made or not."""
-    return sum(1 for r in rows(conn, "SELECT reader FROM preparations WHERE usage IS NOT NULL AND finished_at >= ?", since)
-               if which(load_json(r["reader"]) or {}))
 
 
 def someone_new(conn, name: str, invitee: str | None = None) -> str:

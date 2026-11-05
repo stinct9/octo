@@ -11,8 +11,8 @@ from octo.db import connect, rows
 REFS = ("session_id", "person_id", "by_person", "to_person", "target")
 # What's left on purpose: the conversation's row, as 'deleted', so finding conversations again can't bring it back.
 KEPT_AFTER_DELETE = {"sessions.id"}
-# Forget leaves the steps' stored results as they are (who-is-who matches, the commitments step's inputs): security
-# review L9, the owner's call whether Forget goes further. The reviews that named them are made again (api.py, /people/forget).
+# Forget leaves the steps' ids for them (who-is-who matches, the commitments step's inputs); their words go
+# (L9, Jay 5 Nov: tests/test_forget_words.py), and the reviews that read them wait for Redo the review.
 KEPT_AFTER_FORGET = {"stage_runs.params", "stage_runs.output"}
 
 
@@ -44,7 +44,10 @@ def lab(tmp_path, monkeypatch):
             ("INSERT INTO preparations (id, person_id, status, created_at) VALUES ('prep_t', ?, 'done', 0)", (pid,)),
             ("INSERT INTO preparation_sources (prep_id, session_id) VALUES ('prep_t', ?)", (sid,)),
             # B35: two parts the owner said aren't one discussion, the row kept (undone), naming them both
-            ("INSERT OR IGNORE INTO parts (first_id, second_id, created_at, undone_at) VALUES (?, ?, 0, 1)", (sid, sid2))):
+            ("INSERT OR IGNORE INTO parts (first_id, second_id, created_at, undone_at) VALUES (?, ?, 0, 1)", (sid, sid2)),
+            # B38: who has solved the latest coach note's "work on" (the demo's focus has its own)
+            ("INSERT INTO solved (note_id, who, what, updated_at) "
+             "SELECT id, 'Leela', 'News first.', 0 FROM coach_notes ORDER BY created_at DESC LIMIT 1", ())):
         conn.execute(sql, args)
     return conn
 
@@ -79,3 +82,6 @@ def test_deleting_every_conversation_and_forgetting_everyone_leaves_nothing_of_t
     for sid in sessions:
         PR.delete_session(conn, sid)
     assert _holding(conn, sessions) - KEPT_AFTER_DELETE == set()
+    # B38: the owner's notes go with what they're on: the coach notes that read those conversations, and the demo's
+    # focus, whose words came from one of them.
+    assert rows(conn, "SELECT * FROM solved") == []

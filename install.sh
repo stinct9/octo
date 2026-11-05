@@ -98,16 +98,23 @@ say "uv (Python and its packages)"
 UV="$(command -v uv || true)"
 [ -n "$UV" ] || UV="$HOME/.local/bin/uv"
 if [ ! -x "$UV" ]; then
-  # Astral's own installer, a pinned version, into ~/.local/bin; it leaves your shell's settings alone.
-  curl -LsSf https://astral.sh/uv/0.13.0/install.sh | env UV_INSTALL_DIR="$HOME/.local/bin" UV_NO_MODIFY_PATH=1 sh
+  # Astral's own installer, a pinned version checked against its checksum (it carries uv's own checksums), into
+  # ~/.local/bin; it leaves your shell's settings alone.
+  uv_installer="$(mktemp)"
+  curl -LsSf https://astral.sh/uv/0.13.0/install.sh -o "$uv_installer"
+  echo "283cbef4bdaca819bd896b0dacb8a085c4c05dbc880642aa5001d97bc4db74ba  $uv_installer" | shasum -a 256 -c --status \
+    || { rm -f "$uv_installer"; echo "uv's installer didn't match its checksum; run the same line again."; exit 1; }
+  env UV_INSTALL_DIR="$HOME/.local/bin" UV_NO_MODIFY_PATH=1 sh "$uv_installer"
+  rm -f "$uv_installer"
 fi
 echo "uv: $UV ($("$UV" --version))"
 
 say "The lab's Python environment (.venv)"
 # Python 3.12 from uv (downloaded once if the Mac has none); --seed keeps pip in .venv for `octo deploy`.
 [ -x .venv/bin/python ] || "$UV" venv --clear --seed --python 3.12 .venv
-# The versions the lab was tested with (requirements.lock, the one list of versions), then the lab itself.
-"$UV" pip install --quiet --python .venv/bin/python -r requirements.lock
+# The versions the lab was tested with (requirements.lock, the one list of versions), each checked against its SHA-256
+# there, then the lab itself.
+"$UV" pip install --quiet --require-hashes --python .venv/bin/python -r requirements.lock
 "$UV" pip install --quiet --python .venv/bin/python --no-deps -e .
 echo "$(.venv/bin/python --version) in .venv"
 
@@ -123,6 +130,14 @@ else
   # Its file-by-file listing hidden; shown if the build fails.
   out="$(cd ui && npm ci --no-audit --no-fund --silent 2>&1 && npm run build --silent 2>&1)" || { echo "$out" | tail -30; exit 1; }
   echo "Built ui/dist"
+fi
+
+if [ "$(basename "$(dirname "$PWD")")" = versions ] && [ "${OCTO_SKIP_LOGIN_ITEMS:-}" != "1" ]; then
+  say "This version runs from now on"
+  # A release in versions/<v> (scripts/bootstrap.sh, `octo update`), built: `current` points here in one rename and the
+  # login items below restart the lab through it; the version before is kept for `octo update --back` (octo/deploy.py).
+  .venv/bin/python -c 'from pathlib import Path; from octo import deploy; deploy.switch(Path.cwd())'
+  echo "$PWD"
 fi
 
 say "Speech models (about 10 GB, once)"

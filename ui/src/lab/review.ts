@@ -40,6 +40,12 @@ export function newToYouEntries(ins: Insights | null): Entry[] {
   return [...all.filter((e) => e.group !== 'step'), ...all.filter((e) => e.group === 'step')]
 }
 
+/** The answer to "What here was new to you?": the items ticked, in the question's order. Steps are ticked on the What to do
+ *  rows and the rest in the full review (review 5 Nov, item 4); both go into one answer, so what counts is unchanged. */
+export function answerItems(ins: Insights | null, picked: Set<string>): string[] {
+  return newToYouEntries(ins).filter((e) => picked.has(e.id)).map((e) => e.id)
+}
+
 /** The words an item starts a focus from (Practise this): its headline, title or task. */
 export function itemText(ins: Insights | null, id: string): string {
   return entries(ins).find((e) => e.id === id)?.title ?? ''

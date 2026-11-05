@@ -41,6 +41,13 @@ class FillerWord(BaseModel):
     source: str = "typed"  # typed | suggested
 
 
+class Solved(BaseModel):
+    """B38: who has solved this, in the owner's words; who and what both empty clears it."""
+    who: str = ""
+    what: str = ""
+    source: str | None = None
+
+
 class OwnerWords(BaseModel):
     text: str | None = None
 

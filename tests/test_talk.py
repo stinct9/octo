@@ -21,6 +21,7 @@ from octo.api import make_router
 from octo.db import connect, row
 
 from test_coach import _lab, _three
+from tests.calls import through_reader
 
 CLAUDE = {"kind": "claude-code", "model": "claude-opus-5-5", "effort": "high"}
 REPLY = {"reply": "Kiran wasn't saying no.\n\n- He wanted the dates first.",
@@ -41,7 +42,7 @@ def lab(tmp_path, monkeypatch):
         if isinstance(a, Exception):
             raise a
         return a, {"output_tokens": 40}
-    monkeypatch.setattr(TK, "_ask", ask)
+    monkeypatch.setattr(TK, "_ask", through_reader(ask))
     db = lambda: connect(tmp_path / "t.db")  # noqa: E731
     app = FastAPI()
     app.include_router(make_router(db, processor=SimpleNamespace(kick=lambda: None), talker=started.append))

@@ -33,7 +33,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import DATA, HOME, ROOT
+from . import BACKGROUND, DATA, HOME, ROOT
 from . import device as D
 from . import files as FL
 from . import fillers as FI
@@ -375,7 +375,7 @@ def start_job(target: str) -> subprocess.Popen:
         raise JobRefused(f"this Mac has {free_gb()} GB free: the lab stops below {STOP_GB} GB")
     LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(LOG, "a") as f:
-        pr = subprocess.Popen([sys.executable, "-m", "octo.cli", "filler", "train", "--target", target], cwd=ROOT,
+        pr = subprocess.Popen([*BACKGROUND, sys.executable, "-m", "octo.cli", "filler", "train", "--target", target], cwd=ROOT,
                               stdout=f, stderr=f, start_new_session=True)
     _write(JOB, {"target": target, "pid": pr.pid, "started_at": time.time()})
     return pr

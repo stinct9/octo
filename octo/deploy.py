@@ -20,6 +20,7 @@ while waiting, a failed install) is finished by running it again.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import plistlib
 import re
@@ -152,11 +153,11 @@ def restart(repo: Path, login_items: bool) -> None:
         _run(["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{LAB}"], repo)
 
 
-def deploy(now: bool = False, say=print, agents: Path = AGENTS) -> int:
+def deploy(now: bool = False, say=print, agents: Path = AGENTS, allow_older: bool = False) -> int:
     plist = lab_plist(agents)
     repo = Path(plist["WorkingDirectory"])
     if not (repo / ".git").exists() and (repo / RELEASE).exists():
-        return update_release(repo, now, say)
+        return update_release(repo, now, say, allow_older=allow_older)
     check_clean(repo)
     if (repo / ".node" / "bin").is_dir():  # a clone's own Node (install.sh), for the pages
         os.environ["PATH"] = f"{repo / '.node' / 'bin'}:{os.environ.get('PATH', '')}"
@@ -219,14 +220,33 @@ AGENT = {"User-Agent": "octo-update"}
 KEEP = (".venv", ".node", "ui/node_modules", ".octo-home", RELEASE, PAUSE, "data", "audio", "notes", "runs")
 
 
-def latest(release_url: str, timeout: float = 20) -> str | None:
-    """The version beside the release (version.txt), or None when it can't be read (offline, or no beta release)."""
+def latest(release_url: str, timeout: float = 20) -> tuple[str, str] | None:
+    """What version.txt beside the release says (scripts/release_files.sh): its version and octo.tar.gz's SHA-256 ("" in a
+    release from before 5 Nov), or None when it can't be read (offline, or no release there)."""
     try:
         with urllib.request.urlopen(urllib.request.Request(release_url.rsplit("/", 1)[0] + "/version.txt", headers=AGENT),
                                     timeout=timeout) as r:
-            return r.read(200).decode().strip() or None
+            lines = r.read(500).decode().split("\n")
     except (OSError, ValueError, UnicodeDecodeError):
         return None
+    sha = next((ln.split()[1].lower() for ln in lines[1:] if ln.split()[:1] == ["sha256"] and len(ln.split()) > 1), "")
+    return (lines[0].strip(), sha) if lines[0].strip() else None
+
+
+def order(version: str) -> tuple[int, ...] | None:
+    """2026.11.05-2+3f2a9c1b2d4e (scripts/release_files.sh): the date and that day's counter, or None for a version
+    from before 5 Nov (a content hash alone)."""
+    m = re.fullmatch(r"(\d{4})\.(\d{2})\.(\d{2})-(\d+)(\+\S*)?", version)
+    return tuple(int(g) for g in m.groups()[:4]) if m else None
+
+
+def newer(new: str, old: str) -> bool:
+    """Whether new comes after old. A content hash alone (before 5 Nov) comes before any dated version; two of them
+    only differ."""
+    a, b = order(new), order(old)
+    if a and b:
+        return a > b
+    return bool(a) if a or b else new != old
 
 
 def installed(repo: Path) -> str:
@@ -236,14 +256,95 @@ def installed(repo: Path) -> str:
         return ""
 
 
-def update_release(repo: Path, now: bool = False, say=print, fetch=None) -> int:
+VERSIONS = "versions"
+
+
+def versioned(repo: Path) -> bool:
+    """A release install made by the one-line installer (…/octo/app before 5 Nov, …/octo/current since) with its lab
+    kept outside it: an update goes into versions/<v> beside it and runs only once its own install.sh has built it
+    (`switch`), so a failed install leaves the running version as it was (5 Nov review, risk 3)."""
+    home = repo / ".octo-home"
+    if repo.name not in ("app", "current") or not home.exists():
+        return False
+    return not Path(home.read_text().strip()).expanduser().resolve().is_relative_to(repo.resolve())
+
+
+def _link(link: Path, target: Path) -> None:
+    """link -> target, replaced in one rename: anything that follows it sees the old one or the new, never neither."""
+    tmp = link.with_name(f".{link.name}.new")
+    tmp.unlink(missing_ok=True)
+    os.symlink(os.path.relpath(target, link.parent), tmp)
+    os.replace(tmp, link)
+
+
+def switch(new: Path, base: Path | None = None) -> None:
+    """Make `new` the version that runs: `current` points at it (the login items and the Octo app go through it),
+    `previous` at the one that ran before (`octo update --back`), every other version goes, and `app` (where the code
+    was before 5 Nov) follows `current` once the old folder has gone. install.sh calls this
+    once a versions/<v> is built; `back` with the one before. Never a folder with a lab's data in it."""
+    base = base or new.parent.parent
+    cur = base / "current"
+    old = cur.resolve() if cur.is_symlink() else base / "app" if (base / "app").is_dir() else None
+    new = new.resolve()
+    if old and old != new:
+        _link(base / "previous", old)
+    _link(cur, new)
+    keep = {new, (base / "previous").resolve()}
+    for d in [*sorted((base / VERSIONS).glob("*")), base / "app"]:
+        if d.is_dir() and not d.is_symlink() and d.resolve() not in keep and not (d / "data").exists():
+            shutil.rmtree(d)
+    if not (base / "app").exists() and not (base / "app").is_symlink():
+        (base / "app").symlink_to("current")  # what the docs and older notes name: …/octo/app/.venv/bin/octo
+
+
+def schema_of(code: Path) -> int | None:
+    m = re.search(r"^SCHEMA_VERSION = (\d+)", (code / "octo" / "db.py").read_text(), re.M) if (code / "octo" / "db.py").exists() else None
+    return int(m[1]) if m else None
+
+
+def back(say=print, agents: Path = AGENTS) -> int:
+    """`octo update --back`: the version that ran before this one, unless this one has already moved the database on."""
+    import sqlite3
+    from .uninstall import installed as where
+    repo = Path(lab_plist(agents)["WorkingDirectory"])
+    prev = repo.parent / "previous"
+    if not prev.is_dir():
+        raise DeployError("there's no earlier version kept to go back to (only an install from a release keeps one)")
+    try:
+        conn = sqlite3.connect((where(agents)[1] / "data" / "octo.db").as_uri() + "?mode=ro", uri=True)
+        have = conn.execute("PRAGMA user_version").fetchone()[0]
+        conn.close()
+    except sqlite3.Error:
+        have = 0
+    want = schema_of(prev)
+    if want is not None and have > want:
+        raise DeployError(f"this version moved the lab's database on (schema {have}; {installed(prev)} reads {want}), so "
+                          f"the one before can't open it: nothing was changed. data/backups/pre-schema-{want}.db is the "
+                          "database from before, without what has happened since")
+    switch(prev.resolve(), repo.parent)
+    say("restarting the lab on it")
+    _run([repo / ".venv" / "bin" / "octo", "login-item", "install"], repo)
+    say(f"Octo is back on {installed(repo)}")
+    return 0
+
+
+def update_release(repo: Path, now: bool = False, say=print, fetch=None, allow_older: bool = False) -> int:
     url = (repo / RELEASE).read_text().strip()
-    new = (fetch or latest)(url)
-    if new is None:
+    got_latest = (fetch or latest)(url)
+    if got_latest is None:
         raise DeployError("couldn't reach where Octo was installed from: check this Mac is online, then try again")
+    new, sha = got_latest
     if new == installed(repo):
         say(f"Octo is up to date ({new})")
         return 0
+    if not newer(new, installed(repo)) and not allow_older:
+        raise DeployError(f"the release there ({new}) is older than this one ({installed(repo)}): nothing was changed. "
+                          "`octo update --allow-older` goes back to it")
+    if not sha:
+        raise DeployError("there's no checksum beside the new version to check it against: nothing was changed")
+    if not re.fullmatch(r"[\w+-][\w.+-]*", new):  # it names a folder
+        raise DeployError(f"the release there says its version is {new!r}, which isn't one: nothing was changed")
+    dest = repo.parent / VERSIONS / new if versioned(repo) else repo
     (repo / PAUSE).write_text(f"{os.getpid()}\n")
     try:
         if not now:
@@ -258,18 +359,31 @@ def update_release(repo: Path, now: bool = False, say=print, fetch=None) -> int:
                 raise DeployError(f"the download stopped ({e}): check this Mac is online, then try again") from None
             if got.read_bytes()[:2] != b"\x1f\x8b":
                 raise DeployError("what came down isn't an Octo release: nothing was changed")
+            # Checked against version.txt's SHA-256 before anything is unpacked (5 Nov review, risk 2).
+            if hashlib.sha256(got.read_bytes()).hexdigest() != sha:
+                raise DeployError("the download doesn't match its checksum: nothing was changed. Try again; if it says "
+                                  "this twice, don't update from there")
             (Path(tmp) / "octo").mkdir()
             _run(["tar", "-xzf", got, "-C", Path(tmp) / "octo", "--strip-components", "1"], repo)
             if not (Path(tmp) / "octo" / "install.sh").exists():
                 raise DeployError("that download isn't an Octo release (no install.sh): nothing was changed")
-            # Over the code, files it no longer has removed; the environment, Node and the lab's own folders kept.
-            _run(["rsync", "-a", "--checksum", "--delete", *(f"--exclude=/{k}" for k in KEEP), f"{tmp}/octo/", f"{repo}/"], repo)
+            # Into its own folder beside the running one (a clone or an install elsewhere: over the code, files it no
+            # longer has removed); the environment, Node and the lab's own folders kept.
+            dest.mkdir(parents=True, exist_ok=True)
+            _run(["rsync", "-a", "--checksum", "--delete", *(f"--exclude=/{k}" for k in KEEP), f"{tmp}/octo/", f"{dest}/"], repo)
+            for f in (".octo-home", RELEASE):
+                if dest != repo:
+                    shutil.copyfile(repo / f, dest / f)
     finally:
         (repo / PAUSE).unlink(missing_ok=True)
     say("installing it (packages, the login items, the Octo app if it changed)")
-    proc = subprocess.run([str(repo / "install.sh")], cwd=repo, capture_output=True, text=True,
+    proc = subprocess.run([str(dest / "install.sh")], cwd=dest, capture_output=True, text=True,
                           env={**_env(), "OCTO_UPDATE": "1"})
     if proc.returncode:
+        if dest != repo and dest.resolve() not in (repo.resolve(), (repo.parent / "previous").resolve()):
+            shutil.rmtree(dest, ignore_errors=True)
+            raise DeployError("the new version didn't install, so the one you had is still running:\n"
+                              f"{(proc.stdout + proc.stderr).strip()[-2000:]}")
         raise DeployError(f"the new version didn't install:\n{(proc.stdout + proc.stderr).strip()[-2000:]}")
     say(f"Octo is now on {new}")
     return 0
@@ -282,8 +396,8 @@ _UPDATE = {"at": 0.0, "behind": 0}
 
 
 def update_ready(repo: Path, now=time.time) -> int:
-    """Whether there's something newer, from memory: for a release install, 1 when version.txt beside it differs from
-    this VERSION; for a clone, how many commits its origin/main is ahead. Asked at most hourly, in a thread, so asking
+    """Whether there's something newer, from memory: for a release install, 1 when version.txt beside it is newer than
+    this VERSION (`newer`); for a clone, how many commits its origin/main is ahead. Asked at most hourly, in a thread, so asking
     never waits on the network; offline it says 0. No server of ours: where it was installed from."""
     if now() - _UPDATE["at"] >= CHECK_EVERY_S and ((repo / ".git").exists() or (repo / RELEASE).exists()):
         _UPDATE["at"] = now()
@@ -295,7 +409,7 @@ def _check(repo: Path) -> None:
     if not (repo / ".git").exists():
         new = latest((repo / RELEASE).read_text().strip())
         if new is not None:
-            _UPDATE["behind"] = int(new != installed(repo))
+            _UPDATE["behind"] = int(newer(new[0], installed(repo)))
         return
     try:  # never a prompt: no terminal to answer it in (the clone's own key, core.sshCommand, needs none)
         env = {**_env(), "GIT_TERMINAL_PROMPT": "0"}

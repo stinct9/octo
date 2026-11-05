@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 import time
 
+from .stages import apply_splits as apply  # noqa: F401  (a stage's, since 5 Nov: risk 8)
+
 # A split goes in a pause, never mid-speech. 20 s until 17 Oct: the owner's 16 Oct 20:16 was three calls back to
 # back, 12.7 s and 8.6 s apart with nobody in common, and wasn't offered. At 8 s, across all 36 conversations,
 # those two are the only new suggestions (at 5 s, three more, two of them with shared talk).
@@ -141,21 +143,6 @@ def ended(lines: list[dict], at: float) -> bool:
     return bool(GOODBYE.search(said(at - EDGE_S, at)) and HELLO.search(said(at, at + EDGE_S)))
 
 
-def apply(conversations: list[dict], splits: list[float], min_speech_s: float) -> list[dict]:
-    """find_conversations' output, cut at the owner's split points (recording time)."""
-    out = []
-    for c in conversations:
-        cuts = [s for s in sorted(splits) if c["start"] < s < c["end"]]
-        edges = [c["start"], *cuts, c["end"]]
-        for a, b in zip(edges, edges[1:]):
-            speech = [[max(x, a), min(y, b)] for x, y in c["speech"] if min(y, b) > max(x, a)]
-            speech_s = round(sum(y - x for x, y in speech), 1)
-            if cuts and speech_s < min_speech_s:
-                continue
-            out.append({**c, "start": round(a, 2), "end": round(b, 2), "speech": speech, "speech_s": speech_s})
-    return out
-
-
 def split_now(conn, session: dict, at_s: float, by: str = "owner") -> str:
     """One cut (the lab's, and the owner's single split): see `split_at`. Returns the second part's id."""
     return split_at(conn, session, [at_s], by)[0]
@@ -210,7 +197,7 @@ def auto(conn, session_id: str) -> str | None:
     joined back. Returns the second part's session id, or None."""
     from . import sessions as SV
     from .db import row
-    from .planning import pinned_review
+    from .runs import pinned_review
 
     sess = row(conn, "SELECT * FROM sessions WHERE id=?", session_id)
     if not sess or sess["status"] != "active" or sess["reviewed_at"] or pinned_review(conn, session_id):

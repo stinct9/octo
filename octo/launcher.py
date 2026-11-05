@@ -22,11 +22,10 @@ import plistlib
 import shutil
 import signal
 import subprocess
-import sys
 import time
 from pathlib import Path
 
-from . import ROOT
+from . import ROOT, bin_path
 
 SYSTEM = Path("/Applications") / "Octo.app"
 USER = Path.home() / "Applications" / "Octo.app"
@@ -50,7 +49,7 @@ def found() -> Path | None:
 
 
 def octo_bin() -> Path:
-    return Path(sys.executable).parent / "octo"
+    return bin_path("octo")
 
 
 def script(octo: Path) -> str:

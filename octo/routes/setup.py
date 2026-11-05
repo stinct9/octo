@@ -69,6 +69,8 @@ def add(router: APIRouter, lab: Lab) -> None:
         if N._app_mode == "off":  # the Octo app says the owner turned its banners off: worth knowing, never blocking
             mac.append(DR.Check(DR.WARN, "Notifications", "turned off for Octo, so it can't tell you when a review is ready",
                                 "System Settings → Notifications → Octo → turn on Allow Notifications"))
+        if (copy := DR.off_mac(conn)).mark != DR.OK:  # never blocking: the owner's choice how, but said plainly (risk 9)
+            mac.append(copy)
         devices = PH.devices(conn)
         steps = [
             {"id": "mac", "done": not [c for c in mac if c.mark == DR.FAIL],
@@ -86,8 +88,11 @@ def add(router: APIRouter, lab: Lab) -> None:
         for st in steps:
             st["skipped"] = not st["done"] and st["id"] in skipped
         # A lab with no recordings yet: the page offers to bring in an export first (docs/export-plan.md)
+        from .. import device as D
         return {"steps": steps, "complete": all(st["done"] or st["skipped"] for st in steps),
-                "empty": row(conn, "SELECT 1 FROM recordings LIMIT 1") is None}
+                "empty": row(conn, "SELECT 1 FROM recordings LIMIT 1") is None,
+                # The recorder's card key (risk 9): where it is, never the key, so the owner can keep a copy.
+                "recorder_key": str(D.CONFIG) if (D.load_config() or {}).get("enc_private") else None}
 
     def away(devices: list[dict]) -> dict:
         """Away from home (`phone.away_setup`): done once the app has reached the lab over Tailscale; else the next thing."""

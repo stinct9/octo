@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import smtplib
+import ssl
 import time
 from email.message import EmailMessage
 
@@ -60,7 +61,8 @@ def status() -> dict:
 
 def _login(sender: str, password: str, smtp=None):
     s = (smtp or smtplib.SMTP)(*SMTP, timeout=20)
-    s.starttls()
+    # Google's certificate checked: smtplib's own default context doesn't, and the app password goes next (5 Nov review, 4).
+    s.starttls(context=ssl.create_default_context())
     s.ehlo()
     # One way in: Google answers a refused PLAIN and then hangs up on smtplib's next try (LOGIN), which read as
     # "couldn't reach Gmail" instead of the refusal (4 Nov).

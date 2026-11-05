@@ -23,7 +23,7 @@ rules. The Mac's socket wants the Mac's key on every /api call (`octo/mackey.py`
   POST /api/octo/phone/qr         (Mac) a QR code for the app: a one-time secret, 2 minutes; switches on
   POST /api/octo/phone/unpair     (Mac) {"id"}
   GET  /api/octo/phone/ca.crt     (Mac) the certificate to AirDrop to the iPhone (Safari)
-  GET  /let-in?k=&to=             (Mac) lets this browser in with the Mac's key (`octo open`), then on to `to`
+  GET  /let-in?c=&to=             (Mac) lets this browser in with a one-time code (`octo open`), then on to `to`
 """
 
 from __future__ import annotations
@@ -239,6 +239,7 @@ PHONE_ROUTES: dict[tuple[str, str], str] = {
     ("GET", "/api/octo/coach"): ANYWHERE,
     ("GET", "/api/octo/coach/{note_id}"): ANYWHERE,
     ("GET", "/api/octo/progress"): ANYWHERE,
+    ("GET", "/api/octo/progress/states"): ANYWHERE,
     ("GET", "/api/octo/incoming"): ANYWHERE,
     ("GET", "/api/octo/aside"): ANYWHERE,
     ("GET", "/api/octo/questions"): ANYWHERE,
@@ -282,11 +283,13 @@ PHONE_ROUTES: dict[tuple[str, str], str] = {
     ("POST", "/api/octo/delivery/hedges"): ANYWHERE,  # the same for his hedges (B10)
     ("POST", "/api/octo/focus"): ANYWHERE,
     ("POST", "/api/octo/focus/stop"): ANYWHERE,
+    ("PUT", "/api/octo/focus/{focus_id}/solved"): ANYWHERE,  # B38: the owner's words, like the focus itself
     ("POST", "/api/octo/coach"): ANYWHERE,  # runs on the Mac, counts toward the day's calls
     ("POST", "/api/octo/ask"): ANYWHERE,  # B24: picked on the Mac, one call, counts toward the day's calls
     ("POST", "/api/octo/ask/{ask_id}/keep"): ANYWHERE,  # stores an answer the owner already has on the page
     ("POST", "/api/octo/ask/{ask_id}/delete"): ANYWHERE,  # deletes only an answer, never a conversation
     ("POST", "/api/octo/coach/{note_id}/feedback"): ANYWHERE,
+    ("PUT", "/api/octo/coach/{note_id}/solved"): ANYWHERE,
     ("POST", "/api/octo/coach/{note_id}/focus"): ANYWHERE,
     ("POST", "/api/octo/coach/{note_id}/seen"): ANYWHERE,
     ("POST", "/api/octo/people/{person_id}/consent"): ANYWHERE,  # "They agreed"
@@ -383,15 +386,18 @@ def security_headers(app: FastAPI) -> None:
 def require_mac_key(app: FastAPI) -> None:
     """The Mac's socket answers /api only with the Mac's key (review 8 Oct, finding 4). Before, any program on
     this Mac, or another macOS user, could read every conversation or point the reviews at their own server."""
-    key = MK.key() if REQUIRE_MAC_KEY else None
+    on = REQUIRE_MAC_KEY
+    if on:
+        MK.key()  # made now, not on the first request
     command = MK.open_command()
 
     @app.middleware("http")
     async def mac_key(request: Request, call_next):
         # A phone's request is the phone gate's to check (install, below); with no gate here it needs the key like any
         # other (security review L1, 28 Oct: the demo lab, asked by another host name, answered without one).
-        if key is None or (on_phone_listener(request) and getattr(request.app.state, "phone_server", None)):
+        if not on or (on_phone_listener(request) and getattr(request.app.state, "phone_server", None)):
             return await call_next(request)
+        key = MK.key()  # read each time (a small file): `octo open --rotate` signs everyone out without a restart
         path = request.url.path
         held = request.cookies.get(MK.COOKIE)
         if path.startswith("/api/") and not (held and secrets.compare_digest(held, key)):
@@ -408,19 +414,20 @@ def require_mac_key(app: FastAPI) -> None:
     def mac_hello(request: Request, c: str = ""):
         """The lab proves it holds the key before the Octo app sends it (architecture review, 19 Oct): while the lab
         is down, another user's program could be the one listening on 127.0.0.1:8765."""
-        if key is None or on_phone_listener(request) or not 16 <= len(c) <= 128:
+        if not on or on_phone_listener(request) or not 16 <= len(c) <= 128:
             raise HTTPException(404)
-        return {"proof": MK.proof(c, key)}
+        return {"proof": MK.proof(c)}
 
     @app.get("/let-in", include_in_schema=False)
-    def let_in(request: Request, k: str = "", to: str = "/"):
-        if key is None or on_phone_listener(request):
+    def let_in(request: Request, c: str = "", to: str = "/"):
+        if not on or on_phone_listener(request):
             raise HTTPException(404)
-        if not secrets.compare_digest(k, key):
+        key = MK.key()
+        if not MK.redeem(c[:200], value=key):
             return HTMLResponse("<!doctype html><title>Octo</title><p style='font:17px system-ui;padding:2rem'>"
-                                f"That link is out of date. Open Octo from your Applications folder, or in Terminal: "
-                                f"<code>{command}</code></p>", status_code=403)
-        # 303 to the page: the key leaves the address bar at once (it stays in this browser's history).
+                                f"That link has been used or is out of date. Open Octo from your Applications folder, or "
+                                f"in Terminal: <code>{command}</code></p>", status_code=403)
+        # 303 to the page: the code leaves the address bar at once (it stays in history, spent).
         resp = RedirectResponse(MK.safe_target(to), status_code=303)
         resp.set_cookie(MK.COOKIE, key, max_age=MK.MAX_AGE, httponly=True, samesite="strict", path="/")
         return resp

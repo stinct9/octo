@@ -22,7 +22,7 @@
   octo redo SESSION STAGE               run one step of one conversation again (and what follows)
   octo provisional SESSION --reason R | --clear   its review counts only provisionally until cleared (J9)
   octo notify test|now                  a macOS notification: a test, or what newly needs you
-  octo login-item install|remove|status start Ollama and the web UI when you log in (per-user)
+  octo login-item install|remove|status start the web UI (and Ollama, while a step runs a local model) when you log in
   octo launcher install|remove          the Octo app in Applications: the lab in its own window, the menu bar
   octo uninstall [--keep-data|--delete-data|--set-aside] [--dry-run]  remove everything Octo put on this Mac
   octo export [PATH] [--stop]           the whole lab in one encrypted file (~/Octo exports/)
@@ -645,6 +645,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path)
     p = sub.add_parser("open", help="open the lab in this Mac's browser and let the browser in")
     p.add_argument("page", nargs="?", default="", help="a page, e.g. phone or coach")
+    p.add_argument("--rotate", action="store_true",
+                   help="replace the Mac's key first: every browser and the Octo app's window are signed out")
     p = sub.add_parser("doctor", help="is this Mac ready to run the lab")
     p.add_argument("--json", action="store_true")
     p.add_argument("--fresh", action="store_true", help="just installed: leave out the models and the setup steps")
@@ -679,6 +681,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--password-stdin", action="store_true", help=argparse.SUPPRESS)
     p = sub.add_parser("deploy", aliases=["update"], help="update the lab to origin/main and restart it (a beta clone too)")
     p.add_argument("--now", action="store_true", help="restart without waiting for running steps")
+    p.add_argument("--allow-older", action="store_true", help="a release install: go back to an older release")
+    p.add_argument("--back", action="store_true", help="a release install: run the version kept from before the last update")
     p = sub.add_parser("notify", help="macOS notifications: `test` posts one; `now` checks what needs you")
     p.add_argument("action", choices=["test", "now"])
     p = sub.add_parser("device")
@@ -740,9 +744,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\nocto {args.cmd} stopped; nothing was changed")
             return 1
 
-    if args.cmd == "open":  # no database needed; the link holds the key, so it's opened, never printed
+    if args.cmd == "open":  # no database needed; the link holds a one-time code, opened rather than printed
         import subprocess
         from . import mackey as MK
+        if args.rotate:
+            MK.rotate()
+            print("the Mac's key is new: every browser and the Octo app's window are signed out (quit Octo and open it again)")
         page = args.page.strip("/#")
         subprocess.run(["open", MK.let_in_url(to=f"/#/{page}" if page else "/")], check=False)
         print("opened the lab in your browser" + (f" at #/{page}" if page else ""))
@@ -750,7 +757,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd in ("deploy", "update"):  # the lab's own copy, not this one: no database here
         from . import deploy as DP
         try:
-            return DP.deploy(now=args.now)
+            return DP.back() if args.back else DP.deploy(now=args.now, allow_older=args.allow_older)
         except DP.DeployError as e:
             print(f"not deployed: {e}", file=sys.stderr)
             return 1

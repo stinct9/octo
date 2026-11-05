@@ -1,19 +1,27 @@
-# A ready-built release on every push to main: scripts/release_files.sh (the same build beta testers get) makes
-# octo.tar.gz (its pages built: no git or Node needed), install.sh and version.txt, and they go up as a GitHub Release.
-# Anyone installs with
+# A ready-built release when the maintainer asks for one (workflow_dispatch: `gh workflow run release.yml`, or the
+# Actions tab; merges alone release nothing), and only once the tests have passed on that commit.
+# scripts/release_files.sh (the same build beta testers get) makes octo.tar.gz (its pages built: no git or Node needed),
+# install.sh and version.txt, and they go up as a GitHub Release. Anyone installs with
 #   curl -fsSL https://github.com/<owner>/<repo>/releases/latest/download/install.sh | bash
-# and their lab offers "Octo update ready" when releases/latest/download/version.txt differs from theirs. A push that
-# changes nothing makes no release. A push to release-check makes a draft instead, to try this without publishing.
-# Only this repository's own token: no secrets.
+# and their lab offers "Octo update ready" when releases/latest/download/version.txt is newer than theirs (a version is
+# the date, that day's counter and the content, e.g. 2026.11.05-2+3f2a9c1b2d4e); the installer and `octo update` check
+# octo.tar.gz against the SHA-256 in version.txt before unpacking. Nothing changed since the last release: no release.
+# "draft" makes a draft instead, to try this without publishing. Only this repository's own token: no secrets.
 name: release
 on:
-  push:
-    branches: [main, release-check]
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: A draft, not published
+        type: boolean
+        default: false
 permissions:
   contents: write
+  actions: read
 concurrency: release
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     runs-on: macos-15  # release.sh is BSD tar and the Mac's tools
     timeout-minutes: 30
     steps:
@@ -25,18 +33,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           URL: https://github.com/${{ github.repository }}/releases/latest/download
+          DRAFT: ${{ inputs.draft }}
         run: |
-          version="$(scripts/release_files.sh .)"
-          tag="octo-$version"
-          # A published release with this tag means nothing changed (a draft doesn't count: it has no tag).
-          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" >/dev/null 2>&1; then echo "$tag is out already."; exit 0; fi
-          scripts/release_files.sh . "$RUNNER_TEMP/release" "$URL/octo.tar.gz"
+          # The tests must have passed on this very commit (tests.yml, on its push): a red build never publishes.
+          passed="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?head_sha=$GITHUB_SHA&status=success" --jq .total_count)"
+          if [ "$passed" = 0 ]; then
+            echo "::error::The tests haven't passed on $GITHUB_SHA (still running, or failed): nothing released. Run this again once they're green."
+            exit 1
+          fi
+          hash="$(scripts/release_files.sh .)"
+          prev="$(gh release download --pattern version.txt --output - 2>/dev/null | head -1 || true)"  # the latest published
+          if [ "${prev##*+}" = "$hash" ]; then echo "Nothing has changed since $prev."; exit 0; fi
+          order="$(scripts/release_files.sh --next "$prev")"
+          # A release or draft with this tag already (the same day, run twice): the next counter.
+          while gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name' | grep -qx "octo-$order"; do
+            order="${order%-*}-$((${order##*-} + 1))"
+          done
+          scripts/release_files.sh . "$RUNNER_TEMP/release" "$URL/octo.tar.gz" "$order"
+          sums="$(cd "$RUNNER_TEMP/release" && shasum -a 256 octo.tar.gz install.sh)"
           draft=""
-          [ "$GITHUB_REF" = refs/heads/main ] || draft=--draft
-          gh release create "$tag" $draft --target "$GITHUB_SHA" --title "Octo, $(date -u +'%-d %b %Y') ($version)" \
+          [ "$DRAFT" != true ] || draft=--draft
+          gh release create "octo-$order" $draft --target "$GITHUB_SHA" --title "Octo $order" \
             --notes "Install on an Apple Silicon Mac: open Terminal and paste
           \`\`\`
           curl -fsSL $URL/install.sh | bash
           \`\`\`
-          Step by step: the README. A lab installed this way offers this update itself (Octo update ready)." \
+          Step by step: the README. A lab installed this way offers this update itself (Octo update ready).
+
+          Version $order+$hash. SHA-256 (the installer and \`octo update\` check octo.tar.gz against version.txt):
+          \`\`\`
+          $sums
+          \`\`\`" \
             "$RUNNER_TEMP/release/octo.tar.gz" "$RUNNER_TEMP/release/install.sh" "$RUNNER_TEMP/release/version.txt"

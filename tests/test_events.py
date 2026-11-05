@@ -263,3 +263,21 @@ def test_a_hostile_repeating_invite_stays_cheap():
     t0 = T.time()
     got = EV.parse_ics(ics, NOW - EV.WINDOW_S, NOW + EV.WINDOW_S)
     assert T.time() - t0 < 5 and len(got) <= EV.MAX_REPEATS and {e["uid"] for e in got} <= {"h@x"}
+
+
+def test_the_calendar_fetch_never_goes_to_this_mac_or_the_home_network(monkeypatch):
+    """Security review L5: the pasted link and every redirect must be https to a public address."""
+    import urllib.request
+    addrs = {"cal.example.com": "93.184.215.14", "router.example.com": "192.168.1.1", "me.example.com": "127.0.0.1",
+             "meta.example.com": "169.254.169.254", "v6.example.com": "::ffff:10.0.0.1", "ts.example.com": "100.101.1.2"}
+    monkeypatch.setattr(EV.socket, "getaddrinfo", lambda host, *a, **k: [(0, 0, 0, "", (addrs[host], 443))])
+    EV.check_host("https://cal.example.com/x.ics")
+    for host in ("router", "me", "meta", "v6", "ts"):
+        with pytest.raises(EV.CalendarError, match="home network"):
+            EV.fetch_ics(f"https://{host}.example.com/x.ics")  # refused before anything is sent
+    req = urllib.request.Request("https://cal.example.com/x.ics")
+    hop = EV._Redirects().redirect_request(req, None, 302, "Found", {}, "https://cal.example.com/y.ics")
+    assert hop.full_url == "https://cal.example.com/y.ics"
+    for to in ("http://cal.example.com/y.ics", "https://router.example.com/", "https://me.example.com/"):
+        with pytest.raises(EV.CalendarError):
+            EV._Redirects().redirect_request(req, None, 302, "Found", {}, to)

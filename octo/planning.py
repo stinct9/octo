@@ -13,30 +13,17 @@ import json
 import time
 
 from .asr import language_paused, other_language
-from .corrections import apply, for_run, version
-from .db import row, rows
+from .corrections import apply, version
+from . import commitments as CM
+from .db import load_json, row, rows
+# Pinned reviews and settled speakers live in octo/runs.py since 5 Nov (risk 8): sessions reads them too.
+from .runs import _LETTERS, MERGE_MIN_JAY_S, corrections_now, jay_talk_s, pinned_review, settled_speakers  # noqa: F401
 
 
 def splits_input(conn, target: str) -> dict:
     from . import split
     s = split.for_recording(conn, target)
     return {"splits": s} if s else {}  # nothing when there are none: no re-runs for every recording
-
-
-def pinned_review(conn, session_id: str) -> dict | None:
-    """The current review, once the owner has answered it, rated any of it or sent one of its steps to
-    TickTick. It stays the one shown, and nothing re-runs it, until they ask for a redo
-    (sessions.redo_review). Before 4 Oct a speaker fix, a rename or a newly confirmed voice replaced
-    a rated review with a fresh one, and the page went back to "To rate" (review 4 Oct, M07)."""
-    ins = row(conn, "SELECT id, stale, input_hash FROM stage_runs WHERE target=? AND stage='insight' "
-                    "AND is_current=1 AND status='done'", session_id)
-    if not ins or row(conn, "SELECT 1 FROM sessions WHERE id=? AND redo_review=?", session_id, ins["id"]):
-        return None
-    if row(conn, "SELECT 1 FROM feedback WHERE insight_run=? LIMIT 1", ins["id"]) or \
-            row(conn, "SELECT 1 FROM review_answers WHERE insight_run=? LIMIT 1", ins["id"]) or \
-            row(conn, "SELECT 1 FROM ticktick_tasks WHERE insight_run=? LIMIT 1", ins["id"]):
-        return ins
-    return None
 
 
 def voiceprints_input(conn, target: str) -> dict:
@@ -96,51 +83,8 @@ def voiceprints_settle_at(conn, now: float | None = None) -> float | None:
     return last + REIDENTIFY_SETTLE_S if last is not None and last + REIDENTIFY_SETTLE_S > now else None
 
 
-def corrections_now(conn, session_id: str) -> tuple[str | None, list[dict]]:
-    dz = row(conn, "SELECT id FROM stage_runs WHERE target=? AND stage='diarize' AND is_current=1", session_id)
-    return (dz["id"], for_run(conn, session_id, dz["id"])) if dz else (None, [])
-
-
 def corrections_input(conn, session_id: str) -> dict:
     return {"corrections": version(corrections_now(conn, session_id)[1])}
-
-
-def settled_speakers(conn, session_id: str, need_self: bool = True, with_person: bool = False) -> list[dict] | None:
-    """Who each speaker is, once that's settled for the current diarize run: the owner confirmed, and no
-    suggestion waiting for an answer. Unnamed voices may stay "Speaker C". None if not settled. A part of one
-    discussion (B35) needn't have the owner in it, and says who each named speaker is (`person`)."""
-    dz = row(conn, "SELECT id, output IS NOT NULL AS has_output FROM stage_runs WHERE target=? AND stage='diarize' "
-                   "AND is_current=1", session_id)
-    if not dz or not dz["has_output"]:
-        return None
-    letters = _letters(conn, dz["id"], for_run(conn, session_id, dz["id"]))
-    got = {r["speaker"]: r for r in rows(conn, "SELECT ss.speaker, ss.state, p.id AS person, p.name, p.is_self FROM session_speakers ss "
-                                               "LEFT JOIN people p ON p.id = ss.person_id "
-                                               "WHERE ss.session_id=? AND ss.diarize_run=?", session_id, dz["id"])}
-    if any(got.get(k, {}).get("state") in ("suggested", "ambiguous") for k in letters):
-        return None
-    # The owner only among the speakers still there after the owner's merges: a letter merged away doesn't count (M22).
-    # "auto" (C4): the owner's own voice accepted without asking; it settles like a confirmation.
-    known = lambda k: k in got and got[k]["state"] in ("confirmed", "auto")
-    if need_self and not any(known(k) and got[k]["is_self"] for k in letters):
-        return None
-    return [{"speaker": k, "name": got[k]["name"] if known(k) else f"Speaker {k}",
-             "self": bool(known(k) and got[k]["is_self"]),
-             **({"person": got[k]["person"] if known(k) else None} if with_person else {})} for k in letters]
-
-
-def _letters(conn, dz_id: str, fixes: list[dict]) -> list[str]:
-    """The speakers of a diarize run as corrected. A done run's output is written once, so only the corrections can change
-    them: the list asked this of every conversation, reading and correcting each ~40 KB output every time (4 Nov)."""
-    key, made = (row(conn, "PRAGMA database_list")["file"], dz_id), json.dumps(fixes, sort_keys=True, default=str)
-    hit = _LETTERS.get(key)
-    if not hit or hit[0] != made:
-        out = json.loads(row(conn, "SELECT output FROM stage_runs WHERE id=?", dz_id)["output"])
-        hit = _LETTERS[key] = (made, apply(out, fixes)["speakers"])
-    return list(hit[1])
-
-
-_LETTERS: dict[tuple[str, str], tuple[str, list[str]]] = {}  # (lab, diarize run) → (its corrections, its letters)
 
 
 def hindi_input(conn, session_id: str) -> dict:
@@ -177,22 +121,6 @@ def hindi_input(conn, session_id: str) -> dict:
             return {"hindi": HINDI}
         return {"hindi": {**HINDI, "merge_model": who["model"], "reader": who}}
     return {}
-
-
-MERGE_MIN_JAY_S = 20.0  # the review's own floor (stages.py, insight: min_jay_speech_s)
-
-
-def jay_talk_s(conn, session_id: str) -> float:
-    """Seconds of talk by the speaker(s) confirmed as the owner in the current diarize run, 0 if none."""
-    dz_id, fixes = corrections_now(conn, session_id)
-    dz = row(conn, "SELECT output FROM stage_runs WHERE id=?", dz_id) if dz_id else None
-    if not dz or not dz["output"]:
-        return 0.0
-    talk = apply(json.loads(dz["output"]), fixes)["talk_s"]
-    mine = {r["speaker"] for r in rows(conn, "SELECT ss.speaker FROM session_speakers ss JOIN people p ON p.id = ss.person_id "
-                                             "WHERE ss.session_id=? AND ss.diarize_run=? AND ss.state IN ('confirmed', 'auto') AND p.is_self=1",
-                                       session_id, dz_id)}
-    return sum(talk.get(k, 0.0) for k in mine)
 
 
 def insight_input(conn, session_id: str) -> dict:
@@ -248,12 +176,28 @@ def insight_ready(conn, session_id: str) -> bool:
 
 
 def commitments_input(conn, session_id: str) -> dict:
-    """B14: who's who with their people, the owner's corrections, and the open commitments with them (octo/commitments.py)."""
-    from .commitments import inputs
-    return inputs(conn, session_id)
+    """B14 (octo/commitments.py): who's who (with their people, so a promise lands on the right page), the owner's
+    corrections, and the open commitments with them. That list is taken once: the run made with it keeps it, so marking a
+    commitment in another conversation doesn't send this one round again. Here since 5 Nov (risk 8)."""
+    people = CM.people_in(conn, session_id)
+    speakers = [{**s, "person": people.get(s["speaker"])} for s in settled_speakers(conn, session_id) or []]
+    cur = row(conn, "SELECT params FROM stage_runs WHERE target=? AND stage='commitments' AND is_current=1", session_id)
+    was = load_json(cur["params"]) if cur else None
+    earlier = was["open"] if was and "open" in was else \
+        CM.open_with(conn, session_id, {s["person"] for s in speakers if s["person"] and not s["self"]})
+    return {"speakers": speakers, **corrections_input(conn, session_id), "open": earlier}
 
 
 def commitments_ready(conn, session_id: str) -> bool:
-    """B14: after the review, in the last 14 days' history, until the owner marks one (octo/commitments.py)."""
-    from .commitments import ready
-    return ready(conn, session_id)
+    """B14 (octo/commitments.py): after the review (its current run done; for a part of one discussion, the whole's),
+    within the history, and not once the owner has marked any of this conversation's commitments: like a rated review,
+    those stay as they are. Here since 5 Nov (risk 8)."""
+    from .settings import BY_STAGE, selected
+    if not CM.in_history(conn, session_id) or not insight_ready(conn, session_id) or not selected(conn, BY_STAGE["commitments"]):
+        return False
+    from .parts import group
+    g = group(conn, session_id)  # B35: a part of one discussion waits for the review of the whole, on its first part
+    if not row(conn, "SELECT 1 FROM stage_runs WHERE target=? AND stage='insight' AND is_current=1 AND status='done'",
+               g[0]["id"] if g else session_id):
+        return False
+    return not row(conn, "SELECT 1 FROM commitments WHERE session_id=? AND (state IS NOT NULL OR ticktick IS NOT NULL OR checked IS NOT NULL)", session_id)

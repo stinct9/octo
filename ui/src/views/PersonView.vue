@@ -100,7 +100,7 @@ async function saveIntention(text: string) {
       </section>
 
       <FromReviews v-if="stepSessions.length" :only="stepSessions" :title="`Open steps with ${p.name}`" />
-      <Commitments v-if="!p.self" :person="p.id" :name="p.name" />
+      <Commitments v-if="!p.self" :person="p.id" :name="p.name" :skip="p.steps.map((t) => t.promise ?? '').filter(Boolean)" />
 
       <section v-if="p.readings.length" class="card pad" aria-labelledby="r-h">
         <div class="head"><h2 id="r-h">What the reviews read in {{ p.name }}</h2><span class="muted small">newest first</span></div>

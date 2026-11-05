@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import ipaddress
 import json
 import re
+import socket
 import time
 import urllib.error
 import urllib.parse
@@ -122,10 +124,37 @@ def set_mac(conn, on: bool) -> dict:
 
 # ---- reading a calendar link (RFC 5545, the parts calendars use) -------------------------------------
 
+def check_host(url: str) -> None:
+    """A calendar is on the internet: https, and every address its name has is a public one (security review L5,
+    28 Oct). Checked on the pasted link and on every redirect, so a calendar host can't send the lab to a page on
+    this Mac or the home network. shortcut: the name is resolved again to connect, so a name that changes between the
+    two (DNS rebinding) slips past; pin the address if that ever matters (the answer is parsed as ICS and dropped)."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname:
+        raise CalendarError("The calendar sent Octo to an address that isn't https")
+    try:
+        infos = socket.getaddrinfo(parts.hostname, parts.port or 443, proto=socket.IPPROTO_TCP)
+    except OSError as e:
+        raise CalendarError(f"The calendar couldn't be reached: {e}") from e
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0].split("%")[0])
+        if ip.version == 6 and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        if not ip.is_global:
+            raise CalendarError("That calendar points at this Mac or the home network, not the internet")
+
+
+class _Redirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        check_host(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def fetch_ics(url: str, timeout: float = 20) -> str:
+    check_host(url)
     req = urllib.request.Request(url, headers={"User-Agent": "Octo"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.build_opener(_Redirects).open(req, timeout=timeout) as r:
             data = r.read(MAX_ICS + 1)
     except urllib.error.HTTPError as e:
         raise CalendarError(f"The calendar answered {e.code}: the link may have been reset") from e

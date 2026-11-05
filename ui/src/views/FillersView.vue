@@ -90,7 +90,6 @@ const setLiveCue = (mac: boolean) => act(async () => { liveCue.value = await cal
 <template>
   <main class="page">
     <div>
-      <a :href="href.progress" class="back">← Progress</a>
       <h1>Fillers</h1>
       <p class="muted">Your filler words, and where Octo shows them to you as you say them. How often you say them, over time,
         is on <a :href="href.progress">Progress</a>.</p>
@@ -252,7 +251,6 @@ h2 { margin: 0; font-size: 17px; font-weight: 600; }
 h3 { margin: 6px 0 0; font-size: 14px; font-weight: 600; }
 p { margin: 0; }
 a { color: var(--accent); }
-.back { font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; min-height: 32px; }
 .pad { padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; }
 .row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .muted { color: var(--muted); }
@@ -290,6 +288,6 @@ a.link { display: inline-flex; align-items: center; align-self: flex-start; font
   .pad { padding: 16px; }
   .x { min-height: 44px; min-width: 44px; }
   .add input { width: 150px; min-height: 44px; }
-  .link, .more summary, .back, .check { min-height: 44px; }
+  .link, .more summary, .check { min-height: 44px; }
 }
 </style>

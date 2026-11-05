@@ -126,10 +126,16 @@ def _focus(conn, start: float, end: float) -> dict | None:
 
 
 def _commitments(conn, sunday: date) -> dict:
+    """Open promises to the owner, those due by Sunday listed (the owner's own are on home's From your reviews since
+    5 Nov, review item 5: `mine` is only their count). One from someone not named yet is counted, never listed by a
+    speaker's letter: `unnamed_session` is a conversation to name them in."""
     from . import commitments as CM
     open_ = [CM.view(c) for c in rows(conn, CM._SELECT + "WHERE c.state IS NULL AND s.status='active' ORDER BY c.due, at")]
-    return {"mine": sum(1 for c in open_ if c["mine"]), "theirs": sum(1 for c in open_ if not c["mine"]),
-            "due": [c for c in open_ if c["due"] and c["due"] <= sunday.isoformat()]}
+    theirs = [c for c in open_ if not c["mine"] and c["by_person"]]
+    unnamed = [c for c in open_ if not c["mine"] and not c["by_person"]]
+    return {"mine": sum(1 for c in open_ if c["mine"]), "theirs": len(theirs),
+            "due": [c for c in theirs if c["due"] and c["due"] <= sunday.isoformat()],
+            "unnamed": len(unnamed), "unnamed_session": unnamed[0]["session_id"] if unnamed else None}
 
 
 def _coach(conn) -> dict | None:

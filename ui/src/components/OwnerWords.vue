@@ -1,15 +1,18 @@
 <script setup lang="ts">
 // B15: a few of the owner's own words, saved when they say so: an intention (one line) or a reflection (a box,
 // where the phone's dictation gives voice). Shown as written once saved, with Change; empty clears it.
-import { nextTick, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 
 const props = defineProps<{ label: string; text: string | null; save: (text: string) => Promise<unknown>; multiline?: boolean
-  placeholder?: string; max: number }>()
+  placeholder?: string; max: number
+  /** Opened by a tap (a folded line, review 5 Nov item 4): the box takes the focus. */
+  autofocus?: boolean }>()
 const editing = ref(!props.text)
 const draft = ref(props.text ?? '')
 const saving = ref(false)
 const error = ref('')
 const box = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
+onMounted(() => { if (props.autofocus && editing.value) box.value?.focus() })
 
 async function edit() {
   draft.value = props.text ?? ''

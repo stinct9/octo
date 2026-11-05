@@ -203,3 +203,7 @@ export function searchCount(r: { results: unknown[]; total: number }): string {
   if (r.results.length < r.total) return `${r.results.length} of ${r.total} shown: add a word or a filter to narrow it`
   return `${r.total} match${r.total === 1 ? '' : 'es'}`
 }
+
+/** Where a conversation came from, in the pages' words: the header's and the list's (review 5 Nov, item 6). */
+const SOURCE: Record<string, string> = { device: 'recorder', phone: 'phone memo', call: 'call', bench: 'bench', file: 'file' }
+export const sourceName = (source: string): string => SOURCE[source] ?? source

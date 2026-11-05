@@ -31,9 +31,10 @@ that leaves is a conversation's text when it's reviewed, sent to the model you c
    curl -fsSL https://github.com/stinct9/octo/releases/latest/download/install.sh | bash
    ```
 
-   It downloads the latest release from GitHub (the code with its pages built) into
-   `~/Library/Application Support/octo/app`, keeps what the lab records beside it in `lab.noindex` (only you can open
-   it), and runs `install.sh` there. The script is readable at that address first, if you'd rather look before you run
+   It downloads the latest release from GitHub (the code with its pages built), checks it against the SHA-256 in
+   the release's version.txt, and puts it in its own folder, `~/Library/Application Support/octo/versions/<version>`,
+   keeps what the lab records beside it in `lab.noindex` (only you can open it), and runs `install.sh` there. Once
+   that has built it, `octo/current` points at it (and `octo/app`, where it lived before 5 Nov, at `current`). The script is readable at that address first, if you'd rather look before you run
    it. Updates then come from GitHub's latest release: **Octo update ready** in the octopus menu.
 
    **Beta testers** paste the line they were sent instead: the same installer pointing at the beta's release, and
@@ -114,7 +115,11 @@ then connects on the **Phone** page (a code to scan in the app's Lab tab).
 - **Something not right?** `.venv/bin/octo doctor` checks the Mac, the software, the models, the login
   items, the lab, and what macOS may refuse without saying (its firewall for the phone, Local Network for the
   recorder, another program on port 8765), and says what to do about anything that isn't ready.
-- **Update:** **Octo update ready** in the octopus menu when there is one, or Octo → Update Octo…, or `.venv/bin/octo update` (it waits for a running step, takes the new version and restarts the lab). Your data (in `lab.noindex`, or
+- **Update:** **Octo update ready** in the octopus menu when there is one, or Octo → Update Octo…, or `.venv/bin/octo update` (it waits for a running step, takes the new version and restarts the lab). From the
+  one-line install, each version gets its own folder and runs only once its install has worked, so a failed update leaves
+  the one you had running; the one before is kept, and `octo update --back` goes back to it (unless the newer one has
+  already changed the lab's database: it says so, and changes nothing). A copy of the database from before each such
+  change is kept for 14 days in `data/backups/pre-schema-<n>.db`. Your data (in `lab.noindex`, or
   `data/` in a clone, including your principles in `data/rubric.md`) is never touched by an update.
 - **Uninstall:** in the Octo app, **Octo → Uninstall Octo…**, or in Terminal:
 

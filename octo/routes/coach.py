@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..db import row, tx
-from .common import Lab, same_origin
+from .common import Lab, Solved, same_origin
 
 
 class CoachMark(BaseModel):
@@ -72,6 +72,18 @@ def add(router: APIRouter, lab: Lab) -> None:
         except CO.CoachError as e:
             raise HTTPException(e.status, str(e))
         return {"focus": F.summary(conn), "note": CO.view(conn, note_or_404(conn, note_id))}
+
+    @router.put("/coach/{note_id}/solved", dependencies=[Depends(same_origin)])
+    def coach_solved(note_id: str, body: Solved) -> dict:
+        from .. import coach as CO
+        from .. import solved as SO
+        conn = db()
+        n = note_or_404(conn, note_id)
+        try:
+            SO.put(conn, body.who, body.what, body.source, note_id=note_id)
+        except SO.SolvedError as e:
+            raise HTTPException(422, str(e))
+        return CO.view(conn, n)
 
     @router.post("/coach/{note_id}/seen", dependencies=[Depends(same_origin)])
     def coach_seen(note_id: str) -> dict:

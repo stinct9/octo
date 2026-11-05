@@ -15,12 +15,17 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+import time
 import wave
 from pathlib import Path
 
 import numpy as np
 
 from . import RATE
+
+
+# Longer than any meeting or day out with the phone, and about a thirtieth of what 1 GB of 6 kb/s Opus holds.
+MAX_HOURS = 12
 
 
 def is_board_wav(path: Path, channels: int = 1) -> bool:
@@ -41,10 +46,30 @@ def to_wav(src: Path, dst: Path, channels: int = 1) -> None:
     if is_board_wav(src, channels):
         dst.write_bytes(src.read_bytes())
         return
-    r = subprocess.run(["afconvert", "-f", "WAVE", "-d", f"LEI16@{RATE}", "-c", str(channels), str(src), str(dst)],
-                       capture_output=True, text=True)
-    if r.returncode != 0 or not is_board_wav(dst, channels):
-        raise ValueError(f"couldn't convert {src.name}: {r.stderr.strip() or 'unknown format'}")
+    # At most MAX_HOURS once decoded (security review L10): a 1 GB upload of low-bitrate Opus is hundreds of hours,
+    # tens of GB of WAV. Watched while afconvert writes, so it's stopped before the disk fills, and checked at the end.
+    limit = 44 + MAX_HOURS * 3600 * RATE * 2 * channels
+    too_long = ValueError(f"{src.name} is over {MAX_HOURS} hours long. Octo takes up to {MAX_HOURS} hours at a time: "
+                          "split it into parts and add each")
+    p = subprocess.Popen(["afconvert", "-f", "WAVE", "-d", f"LEI16@{RATE}", "-c", str(channels), str(src), str(dst)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    try:
+        while p.poll() is None:
+            if dst.exists() and dst.stat().st_size > limit:
+                p.kill()
+                p.wait()
+                dst.unlink(missing_ok=True)
+                raise too_long
+            time.sleep(0.25)
+        err = p.stderr.read()
+    finally:
+        p.stderr.close()
+    if p.returncode != 0 or not is_board_wav(dst, channels):
+        raise ValueError(f"couldn't convert {src.name}: {err.strip() or 'unknown format'}")
+    with wave.open(str(dst)) as w:
+        if w.getnframes() > MAX_HOURS * 3600 * RATE:
+            dst.unlink(missing_ok=True)
+            raise too_long
 
 
 def recorded_at(path: Path) -> float | None:

@@ -40,6 +40,7 @@ from typing import Callable
 from . import AUDIO, DATA, HOME, RATE, ROOT
 from . import files as FL
 from .db import row, rows, tx
+from .marks import wall_clock  # noqa: F401  (here until 5 Nov; marks and fillers read it there, risk 8)
 
 CONFIG = DATA / "device.json"
 STATUS = DATA / "device_status.json"
@@ -611,13 +612,6 @@ def parse_manifest(text: str) -> dict:
                                 "start_ms": d.get("start_ms", o.get("start_ms")), "samples": d["samples"],
                                 "sha256": d.get("sha256"), "dropped": d.get("dropped"), "repaired": d.get("repaired", False)}
     return {"info": info, "clock": clock, "chunks": [chunks[k] for k in sorted(chunks)]}
-
-
-def wall_clock(clock: tuple[float, float] | None, start_ms: float | None) -> float | None:
-    """Seconds since 1970 for a moment `start_ms` after boot, if the Mac set the clock in that boot."""
-    if not clock or start_ms is None:
-        return None
-    return (clock[0] - clock[1] + start_ms) / 1000
 
 
 # ---- sync ---------------------------------------------------------------------------------

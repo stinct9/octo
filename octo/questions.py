@@ -30,7 +30,7 @@ def _lines(conn, session_id: str) -> tuple[list[dict], set[str], int]:
     transcript isn't used (a paused language)."""
     from .sessions import diarized, paused, speakers
     _, out, _ = diarized(conn, session_id)
-    tr = row(conn, "SELECT id, output, status FROM stage_runs WHERE target=? AND stage='transcribe' AND is_current=1", session_id)
+    tr = row(conn, "SELECT id, target, output, status FROM stage_runs WHERE target=? AND stage='transcribe' AND is_current=1", session_id)
     if not out or (tr and paused(tr, conn)):
         return [], set(), 0
     mine = {s["letter"] for s in speakers(conn, session_id) if s["self"]}

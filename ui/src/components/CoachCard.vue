@@ -11,7 +11,10 @@ import FoldToggle from './FoldToggle.vue'
 
 const c = ref<CoachSummary | null>(null)
 const asking = ref(false)
-const open = ref(true)
+// Inside home's Working on card (28 Oct review, item 4) that card folds it; alone, its own toggle does.
+const props = defineProps<{ inside?: boolean; shown?: boolean }>()
+const own = ref(true)
+const open = computed(() => (props.inside ? props.shown !== false : own.value))
 const error = ref('')
 let timer: ReturnType<typeof setInterval> | undefined
 async function load() {
@@ -35,7 +38,7 @@ const reviews = (n: number) => `${n} review${n === 1 ? '' : 's'}`
 </script>
 
 <template>
-  <section v-if="c && (c.latest || c.running || c.failed || c.conversations > 0)" class="card coach" aria-labelledby="coach-h">
+  <section v-if="c && (c.latest || c.running || c.failed || c.conversations > 0)" class="coach" :class="inside ? 'inside' : 'card'" aria-labelledby="coach-h">
     <div class="grow">
       <div id="coach-h" class="eyebrow eyebrow-c">The coach<template v-if="latest"> · {{ day(latest.created_at) }}</template>
         <span v-if="latest && !latest.seen" class="badge">New</span></div>
@@ -55,7 +58,7 @@ const reviews = (n: number) => `${n} review${n === 1 ? '' : 's'}`
       <p v-if="c.failed && !c.running" class="error small" role="alert">The coach couldn't finish: {{ c.failed.error }}</p>
       <p v-if="error" class="error small" role="alert">{{ error }}</p>
     </div>
-    <FoldToggle v-model="open" name="coach" label="the coach" />
+    <FoldToggle v-if="!inside" v-model="own" name="coach" label="the coach" />
     <div v-if="open" class="acts">
       <a v-if="latest && !c.running" class="btn btn-small" :href="href.coach">Open the note</a>
       <button v-if="!c.running && (!latest || c.new_since > 0 || c.failed)" type="button" class="btn btn-small"
@@ -68,6 +71,7 @@ const reviews = (n: number) => `${n} review${n === 1 ? '' : 's'}`
 
 <style scoped>
 .coach { padding: 14px 18px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.coach.inside { padding: 2px 0 2px 15px; }
 .grow { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 3px; }
 .eyebrow-c { font-size: 13px; color: var(--accent); font-weight: 500; display: flex; align-items: center; gap: 8px; }
 .badge { text-transform: none; letter-spacing: 0; }

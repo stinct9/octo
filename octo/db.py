@@ -12,7 +12,8 @@ import os
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -254,6 +255,15 @@ CREATE TABLE IF NOT EXISTS coach_feedback (      -- the owner's marks on a note:
     updated_at  REAL NOT NULL,
     PRIMARY KEY (note_id, part)
 );
+CREATE TABLE IF NOT EXISTS solved (              -- B38, goal 2: who has solved this, in the owner's words (octo/solved.py)
+    focus_id    TEXT UNIQUE REFERENCES focus(id) ON DELETE CASCADE,
+    note_id     TEXT UNIQUE REFERENCES coach_notes(id) ON DELETE CASCADE,  -- on that note's "work on"
+    who         TEXT NOT NULL,
+    what        TEXT NOT NULL,
+    source      TEXT,                            -- a book's or a talk's title, if the owner gave one
+    updated_at  REAL NOT NULL,
+    CHECK ((focus_id IS NULL) != (note_id IS NULL))
+);
 CREATE TABLE IF NOT EXISTS commitments (       -- B14: what was promised, both ways (octo/commitments.py)
     id           TEXT PRIMARY KEY,
     session_id   TEXT NOT NULL REFERENCES sessions(id),
@@ -398,66 +408,18 @@ CREATE TABLE IF NOT EXISTS preparation_sources (  -- B36: the conversations a pl
     PRIMARY KEY (prep_id, session_id)
 );
 CREATE INDEX IF NOT EXISTS preparation_sources_session ON preparation_sources (session_id);
--- Model calls whose rows were deleted (Start over, a delete, a Forget), so the day's count (pipeline._calls_since) still
--- has them (audit 28 Oct): the count is read from the rows each call left. The last two days only; no words, no names.
-CREATE TABLE IF NOT EXISTS calls_gone (
-    at      REAL NOT NULL,
-    n       INTEGER NOT NULL,
-    reader  TEXT,                                -- JSON: the model it went to; NULL for a step (its stage and params say)
-    stage   TEXT,
-    params  TEXT
+-- Every call to a model, made or billed (architecture review 5 Nov, risk 7): written by claude_code.ask and providers.ask,
+-- which every call goes through, and counted for the day's calls (pipeline._calls_since). A call refused before any work
+-- (a key refused, a rate limit, an outage, Claude's usage limit) leaves none. `ref` is the row it was for (a run, a note,
+-- a question), never a conversation's or a person's id. No words; kept 30 days.
+CREATE TABLE IF NOT EXISTS model_calls (
+    at       REAL NOT NULL,
+    reader   TEXT NOT NULL,                      -- JSON: {"kind", "model", "connection"?}; never a key
+    purpose  TEXT NOT NULL DEFAULT '',           -- the step or feature: insight, coach, ask, …
+    ref      TEXT,
+    ok       INTEGER NOT NULL                    -- 1 answered; 0 failed after it may have been billed (a timeout, cut off)
 );
-CREATE TRIGGER IF NOT EXISTS stage_runs_calls_gone BEFORE DELETE ON stage_runs
-WHEN OLD.status = 'done' AND OLD.stage IN ('insight', 'transcribe', 'commitments') AND json_valid(OLD.output)
-    AND OLD.finished_at > CAST(strftime('%s', 'now') AS REAL) - 172800
-BEGIN
-    DELETE FROM calls_gone WHERE at < CAST(strftime('%s', 'now') AS REAL) - 172800;
-    INSERT INTO calls_gone (at, n, stage, params) SELECT OLD.finished_at, n, OLD.stage, OLD.params FROM (SELECT CASE OLD.stage
-        WHEN 'transcribe' THEN coalesce(json_extract(OLD.output, '$.merged.calls'), 0)
-        ELSE coalesce(json_extract(OLD.output, '$.usage') NOT IN ('{}', '[]', 0, ''), 0) END AS n) WHERE n > 0;
-END;
-CREATE TRIGGER IF NOT EXISTS talks_calls_gone BEFORE DELETE ON talks
-BEGIN
-    DELETE FROM calls_gone WHERE at < CAST(strftime('%s', 'now') AS REAL) - 172800;
-    INSERT INTO calls_gone (at, n, reader) SELECT json_extract(value, '$.at'), 1, json_extract(value, '$.reader')
-        FROM json_each(CASE WHEN json_valid(OLD.turns) THEN OLD.turns ELSE '[]' END)
-        WHERE json_extract(value, '$.reader') IS NOT NULL AND json_extract(value, '$.at') > CAST(strftime('%s', 'now') AS REAL) - 172800;
-END;
-CREATE TRIGGER IF NOT EXISTS rehearsals_calls_gone BEFORE DELETE ON rehearsals
-BEGIN
-    DELETE FROM calls_gone WHERE at < CAST(strftime('%s', 'now') AS REAL) - 172800;
-    INSERT INTO calls_gone (at, n, reader) SELECT json_extract(value, '$.at'), 1, json_extract(value, '$.reader')
-        FROM json_each(CASE WHEN json_valid(OLD.turns) THEN OLD.turns ELSE '[]' END)
-        WHERE json_extract(value, '$.reader') IS NOT NULL AND json_extract(value, '$.at') > CAST(strftime('%s', 'now') AS REAL) - 172800;
-    INSERT INTO calls_gone (at, n, reader) SELECT OLD.review_at, 1, json_extract(OLD.review, '$.reader')
-        WHERE json_valid(OLD.review) AND json_extract(OLD.review, '$.reader') IS NOT NULL
-        AND OLD.review_at > CAST(strftime('%s', 'now') AS REAL) - 172800;
-END;
-CREATE TRIGGER IF NOT EXISTS coach_notes_calls_gone BEFORE DELETE ON coach_notes
-WHEN OLD.status = 'done' AND OLD.usage IS NOT NULL AND OLD.finished_at > CAST(strftime('%s', 'now') AS REAL) - 172800
-BEGIN
-    DELETE FROM calls_gone WHERE at < CAST(strftime('%s', 'now') AS REAL) - 172800;
-    INSERT INTO calls_gone (at, n, reader) VALUES (OLD.finished_at, 1, '{"kind": "claude-code"}');  -- as _calls_since counts them
-END;
-CREATE TRIGGER IF NOT EXISTS drills_calls_gone BEFORE DELETE ON drills
-WHEN json_valid(OLD.point) AND json_extract(OLD.point, '$.usage') IS NOT NULL AND json_extract(OLD.point, '$.reader') IS NOT NULL
-    AND OLD.point_at > CAST(strftime('%s', 'now') AS REAL) - 172800
-BEGIN
-    DELETE FROM calls_gone WHERE at < CAST(strftime('%s', 'now') AS REAL) - 172800;
-    INSERT INTO calls_gone (at, n, reader) VALUES (OLD.point_at, 1, json_extract(OLD.point, '$.reader'));
-END;
-CREATE TRIGGER IF NOT EXISTS preparations_calls_gone BEFORE DELETE ON preparations
-WHEN OLD.usage IS NOT NULL AND OLD.finished_at > CAST(strftime('%s', 'now') AS REAL) - 172800
-BEGIN
-    DELETE FROM calls_gone WHERE at < CAST(strftime('%s', 'now') AS REAL) - 172800;
-    INSERT INTO calls_gone (at, n, reader) VALUES (OLD.finished_at, 1, OLD.reader);
-END;
-CREATE TRIGGER IF NOT EXISTS asks_calls_gone BEFORE DELETE ON asks
-WHEN OLD.status = 'done' AND OLD.usage IS NOT NULL AND OLD.finished_at > CAST(strftime('%s', 'now') AS REAL) - 172800
-BEGIN
-    DELETE FROM calls_gone WHERE at < CAST(strftime('%s', 'now') AS REAL) - 172800;
-    INSERT INTO calls_gone (at, n, reader) VALUES (OLD.finished_at, 1, OLD.reader);
-END;
+CREATE INDEX IF NOT EXISTS model_calls_at ON model_calls (at);
 CREATE INDEX IF NOT EXISTS coach_sources_session ON coach_sources (session_id);
 CREATE INDEX IF NOT EXISTS stage_runs_target ON stage_runs (target, stage);
 CREATE INDEX IF NOT EXISTS stage_runs_status ON stage_runs (status);
@@ -479,7 +441,7 @@ def new_id(prefix: str) -> str:
 # write lock (review 8 Oct, finding 1). Before, every connection ran both, unguarded: the server opens several
 # at once when it starts, and on a new database (or after an upgrade adding a column) one connection's ALTER
 # raced another's ("duplicate column", reproduced 102 times in 30 new databases).
-SCHEMA_VERSION = 21  # 2: lab_origin (8 Oct, finding 8); 3: splits by the lab, joined back (9 Oct); 4: set aside (13 Oct, B5);
+SCHEMA_VERSION = 24  # 2: lab_origin (8 Oct, finding 8); 3: splits by the lab, joined back (9 Oct); 4: set aside (13 Oct, B5);
 # 5: question checks by ear (13 Oct, B4); 6: commitments, and from when they're looked for (20 Oct, B14);
 # 7: intentions and reflections (21 Oct, B15); 8: marks (21 Oct, B16); 9: drills (21 Oct, B18)
 # 10: the owner's check of each commitment (21 Oct, B14)
@@ -494,6 +456,9 @@ SCHEMA_VERSION = 21  # 2: lab_origin (8 Oct, finding 8); 3: splits by the lab, j
 # 19: plans for the next conversation with someone, and what each read (30 Oct, B36)
 # 20: parts of one discussion, joined at the review; 18's joins carried over and dropped (30 Oct, B35)
 # 21: the first owner's name out of stored values: lab_origin, who split or joined, D10's note (31 Oct, D9)
+# 22: preparations' event columns for a lab made at 19 before B36's fixes (5 Nov, found by tests/test_db_upgrade.py)
+# 23: one row per model call (model_calls), 16's calls_gone and its triggers dropped (5 Nov, architecture review risk 7)
+# 24: who has solved this, on a focus or a coach note (5 Nov, B38)
 
 
 def private() -> None:
@@ -507,14 +472,19 @@ def private() -> None:
         f.chmod(0o600)
 
 
+_made_private = False
+
+
 def connect(path: Path = DB_PATH) -> sqlite3.Connection:
     if path == DB_PATH and not path.exists() and HOME_FROM != "checkout" and os.environ.get("OCTO_NEW_LAB") != "1":
         # A home set on purpose with no lab in it is a typo or a folder that moved, not a new lab: an empty one
         # would start quietly, with a new lab's settings (14 Oct, review of the move out of ~/Downloads).
         raise RuntimeError(f"no lab at {path} ({HOME_FROM} says {HOME}); OCTO_NEW_LAB=1 starts a new one there")
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path == DB_PATH:
+    global _made_private
+    if path == DB_PATH and not _made_private:  # once a process (review 5 Nov): a glob and 8 chmods on every request before
         private()
+        _made_private = True
     conn = sqlite3.connect(path, timeout=30, isolation_level=None)  # autocommit; explicit txns below
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
@@ -522,9 +492,40 @@ def connect(path: Path = DB_PATH) -> sqlite3.Connection:
     # forgotten person or a deleted conversation is gone from this file, not just unlisted. The daily backups
     # keep theirs for up to 14 days (octo/backup.py). Per connection, so every connection sets it.
     conn.execute("PRAGMA secure_delete=ON")
-    if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
+    have = conn.execute("PRAGMA user_version").fetchone()[0]
+    if have > SCHEMA_VERSION:
+        # Made by a newer Octo (an update, then `octo update --back` or an older copy): this code doesn't know its tables,
+        # and would write to them as if it did (5 Nov review, risk 3).
+        conn.close()
+        raise RuntimeError(f"the lab's database ({path}) is from a newer Octo (schema {have}; this code reads up to "
+                           f"{SCHEMA_VERSION}): not opened, nothing changed. Run the newer Octo again (`octo update`)")
+    if have < SCHEMA_VERSION:
+        if have:
+            snapshot(conn, path, have)
         _prepare(conn)
     return conn
+
+
+def snapshot(conn: sqlite3.Connection, path: Path, version: int) -> Path | None:
+    """The database as it was before a migration changes it (5 Nov review, risk 3): data/backups/pre-schema-<n>.db
+    beside the daily copies, swept with them after 14 days (octo/backup.py). A copy made after another connection had
+    already migrated (VACUUM can't run inside the migration's lock) says so in its user_version, and is dropped."""
+    if not path.exists():  # a database in memory
+        return None
+    dest = path.parent / "backups" / f"pre-schema-{version}.db"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}")
+    tmp.unlink(missing_ok=True)
+    conn.execute("VACUUM INTO ?", (str(tmp),))
+    os.chmod(tmp, 0o600)  # it holds voiceprints: readable by the owner only
+    copy = sqlite3.connect(tmp)
+    same = copy.execute("PRAGMA user_version").fetchone()[0] == version
+    copy.close()
+    if not same:
+        tmp.unlink()
+        return None
+    os.replace(tmp, dest)
+    return dest
 
 
 def _statements(script: str) -> Iterator[str]:
@@ -632,6 +633,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for col, kind in (("point", "TEXT"), ("point_error", "TEXT"), ("point_at", "REAL")):  # (B18, 22 Oct) time to point
         if col not in drill_cols:
             conn.execute(f"ALTER TABLE drills ADD COLUMN {col} {kind}")
+    prep_cols = {r["name"] for r in conn.execute("PRAGMA table_info(preparations)")}
+    for col, kind in (("event_title", "TEXT"), ("event_start", "REAL"), ("event_end", "REAL")):
+        # (B36's fixes, 30 Oct, 271b303) added to CREATE TABLE only: a lab made at schema 19 before them had none.
+        # Found by tests/test_db_upgrade.py on 5 Nov.
+        if col not in prep_cols:
+            conn.execute(f"ALTER TABLE preparations ADD COLUMN {col} {kind}")
     # B35 (30 Oct): one discussion in parts, not in one stretch of audio. A join made by 18's octo/join.py becomes two
     # parts again (find_conversations re-runs without it and agrees), grouped; an undone one stays decided.
     if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='joins'").fetchone():
@@ -649,6 +656,83 @@ def _migrate(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE parts SET by='owner' WHERE by != 'lab'")
     conn.execute("UPDATE sessions SET note='Your voice' || substr(note, instr(note, ' voice not heard') + 6) "
                  "WHERE note LIKE '%''s voice not heard%'")
+    # 23 (5 Nov): the day's calls move into model_calls, so today's count carries over; then 16's table and triggers go.
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='calls_gone'").fetchone():
+        conn.executemany("INSERT INTO model_calls (at, reader, purpose, ok) VALUES (?, ?, ?, 1)",
+                         _calls_before_22(conn, time.time() - 2 * 86400))
+        for t in ("stage_runs", "talks", "rehearsals", "coach_notes", "drills", "preparations", "asks"):
+            conn.execute(f"DROP TRIGGER IF EXISTS {t}_calls_gone")
+        conn.execute("DROP TABLE calls_gone")
+
+
+def _calls_before_22(conn: sqlite3.Connection, since: float) -> list[tuple[float, str, str]]:
+    """(at, reader, purpose) for each call the rows before schema 22 recorded since `since`, as pipeline._calls_since
+    counted them then: a review or commitments one, a Hindi merge one per chunk, and the rest one per row or turn."""
+    def run_reader(r: dict) -> dict | None:  # runs.run_reader as it was on 5 Nov, kept here: db imports nothing above it
+        p = json.loads(r["params"] or "{}")
+        if r["stage"] in ("insight", "commitments"):
+            return p.get("reader") or ({"kind": "claude-code"} if str(p.get("model", "")).startswith("claude") else None)
+        if r["stage"] == "transcribe" and "hindi" in p:
+            return p["hindi"].get("reader") or {"kind": "claude-code"}
+        return None
+    out: list[tuple[float, str, str]] = []
+    for r in rows(conn, "SELECT stage, params, finished_at, json_extract(output, '$.usage') AS usage, "
+                        "json_extract(output, '$.merged.calls') AS calls FROM stage_runs WHERE status='done' "
+                        "AND finished_at >= ? AND stage IN ('insight', 'transcribe', 'commitments') AND json_valid(output)",
+                  since):
+        who = run_reader(r)
+        n = (r["calls"] or 0) if r["stage"] == "transcribe" else int(r["usage"] not in (None, "{}", "[]", 0, ""))
+        out += [(r["finished_at"], json.dumps(who), r["stage"])] * (n if who else 0)
+    for sql, purpose in (
+            ("SELECT point_at, json_extract(point, '$.reader') FROM drills WHERE json_valid(point) "
+             "AND json_extract(point, '$.usage') IS NOT NULL AND json_extract(point, '$.reader') IS NOT NULL AND point_at >= ?", "drill"),
+            ("SELECT finished_at, reader FROM asks WHERE status='done' AND usage IS NOT NULL AND finished_at >= ?", "ask"),
+            ("SELECT finished_at, reader FROM preparations WHERE usage IS NOT NULL AND finished_at >= ?", "prepare"),
+            ("SELECT finished_at, '{\"kind\": \"claude-code\"}' FROM coach_notes WHERE status='done' AND usage IS NOT NULL "
+             "AND finished_at >= ?", "coach"),
+            ("SELECT json_extract(value, '$.at'), json_extract(value, '$.reader') FROM talks, json_each(CASE WHEN "
+             "json_valid(turns) THEN turns ELSE '[]' END) WHERE json_extract(value, '$.reader') IS NOT NULL "
+             "AND json_extract(value, '$.at') >= ?", "talk"),
+            ("SELECT json_extract(value, '$.at'), json_extract(value, '$.reader') FROM rehearsals, json_each(CASE WHEN "
+             "json_valid(turns) THEN turns ELSE '[]' END) WHERE json_extract(value, '$.reader') IS NOT NULL "
+             "AND json_extract(value, '$.at') >= ?", "rehearse"),
+            ("SELECT review_at, json_extract(review, '$.reader') FROM rehearsals WHERE json_valid(review) "
+             "AND json_extract(review, '$.reader') IS NOT NULL AND review_at >= ?", "rehearse")):
+        out += [(at, who, purpose) for at, who in conn.execute(sql, (since,)).fetchall() if who]
+    for g in rows(conn, "SELECT * FROM calls_gone WHERE at >= ?", since):  # rows deleted since (16's triggers)
+        who = run_reader(g) if g["stage"] else load_json(g["reader"])
+        out += [(g["at"], json.dumps(who), g["stage"] or "")] * (g["n"] if who else 0)
+    return out
+
+
+# Who a model call is for (model_calls): the database it's counted in, the step or feature, and its row. Set around a call
+# by whoever makes it (`calling`); a call made without one is counted in CALLS_DB, the lab's own.
+_CALLING: ContextVar[tuple[str | None, str, str | None]] = ContextVar("calling", default=(None, "", None))
+CALLS_DB: Path | None = DB_PATH
+CALLS_KEPT_S = 30 * 86400
+
+
+@contextmanager
+def calling(conn: sqlite3.Connection, purpose: str, ref: str | None = None) -> Iterator[None]:
+    token = _CALLING.set((conn.execute("PRAGMA database_list").fetchone()[2], purpose, ref))
+    try:
+        yield
+    finally:
+        _CALLING.reset(token)
+
+
+def model_call(reader: dict, ok: bool) -> None:
+    """One call to a model made, or failed after it may have been billed: a row in model_calls (risk 7, 5 Nov)."""
+    path, purpose, ref = _CALLING.get()
+    path = path or (str(CALLS_DB) if CALLS_DB and CALLS_DB.exists() else None)
+    if not path:
+        return
+    who = {k: reader[k] for k in ("kind", "model", "connection") if reader.get(k)}
+    now = time.time()
+    with closing(sqlite3.connect(path, timeout=30, isolation_level=None)) as c:
+        c.execute("INSERT INTO model_calls (at, reader, purpose, ref, ok) VALUES (?, ?, ?, ?, ?)",
+                  (now, json.dumps(who), purpose, ref, int(ok)))
+        c.execute("DELETE FROM model_calls WHERE at < ?", (now - CALLS_KEPT_S,))
 
 
 @contextmanager

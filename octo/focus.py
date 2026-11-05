@@ -20,6 +20,7 @@ from .db import new_id, row, rows
 # A number a focus can carry (6 Oct): fillers per 100 words, questions and talking over per 10 minutes,
 # share of the talk (octo/measures.py). Shown since the focus started against before; his answer decides.
 from .measures import MEASURES
+from .solved import get as get_solved
 
 ANSWERS = ("did", "missed", "na")
 MAX_TEXT = 300
@@ -112,7 +113,8 @@ def view(conn, f: dict | None, numbers: bool = True) -> dict | None:
         return None
     out = {"id": f["id"], "text": f["text"], "session_id": f["session_id"], "item": f["item"],
            "started_at": f["started_at"], "ended_at": f["ended_at"], "tally": tally(conn, f["id"]),
-           "measure": f.get("measure"), "numbers": None, "coach_note": f.get("coach_note")}
+           "measure": f.get("measure"), "numbers": None, "coach_note": f.get("coach_note"),
+           "solved": get_solved(conn, focus_id=f["id"])}
     if numbers and f.get("measure") in MEASURES:  # since it started, against before: evidence beside his answer
         from .measures import since_before
         out["numbers"] = since_before(conn, f["measure"], f["started_at"], f["ended_at"])

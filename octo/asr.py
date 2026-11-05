@@ -64,6 +64,25 @@ def speech_overlap_ok(a: float, b: float, spans: list[list[float]], params: dict
     return not spans or overlap((a, b), spans) / max(0.01, b - a) >= params["min_speech_overlap"]
 
 
+# MLX in a worker (architecture review 5 Nov, risk 6): its free-buffer cache grew unbounded (a transcription held ~10 GB
+# on a 16 GB Mac, learnings 4 Nov). Capped, a freed buffer goes back to the OS instead of waiting in the cache; the
+# memory limit makes MLX wait for scheduled work before allocating past it. Both measured: docs/learnings.md, 5 Nov.
+MLX_MEMORY_SHARE = 0.5      # of the Mac's RAM
+MLX_CACHE_BYTES = 1 << 30   # 1 GB of freed buffers kept for reuse
+
+
+def cap_mlx() -> tuple[int, int]:
+    """Cap MLX for this process (a worker); returns (memory limit, cache limit) in bytes."""
+    import subprocess
+
+    import mlx.core as mx
+    total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, check=True).stdout)
+    limits = int(total * MLX_MEMORY_SHARE), min(MLX_CACHE_BYTES, int(total * MLX_MEMORY_SHARE))
+    mx.set_memory_limit(limits[0])
+    mx.set_cache_limit(limits[1])
+    return limits
+
+
 def qwen_words(samples: np.ndarray, spans: list[list[float]], language: str, params: dict) -> tuple[list, list]:
     from mlx_qwen3_asr import transcribe as qwen
 

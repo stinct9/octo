@@ -17,7 +17,7 @@ from .. import sessions as SV
 from .. import split as S
 from ..privacy import RAW_AUDIO_DAYS
 from ..db import load_json, row, tx
-from ..pipeline import current, retry
+from ..pipeline import current, retry, review_outdated
 from .common import DeleteSession, Lab, NO_STORE, OwnerWords, SESSION_ID, _TICKTICK, same_origin, session_or_404
 
 
@@ -87,7 +87,9 @@ def add(router: APIRouter, lab: Lab) -> None:
     def session(session_id: str) -> dict:
         conn = db()
         sess = session_or_404(conn, session_id, aside_ok=True)
-        return SV.detail(conn, sess)
+        page = SV.detail(conn, sess)
+        page["review_outdated"] = bool(page["insight_run"] and review_outdated(conn, session_id))  # the planner's to say
+        return page
 
     @router.post("/sessions/{session_id}/join-back", dependencies=[Depends(same_origin)])
     def join_back(session_id: str) -> dict:
@@ -213,6 +215,10 @@ def add(router: APIRouter, lab: Lab) -> None:
         if body.let_go is not None:
             conn.execute("UPDATE feedback SET let_go_at=?, updated_at=? WHERE insight_run=? AND item=?",
                          (time.time() if body.let_go else None, time.time(), run["id"], item["id"]))
+        if body.acted is not None or body.let_go is not None:  # the same promise as a commitment: it follows (5 Nov)
+            from .. import commitments as CM
+            CM.close_paired(conn, CM.paired_in(conn, session_id, load_json(run["output"])).get(item["id"]),
+                            acted=body.acted, let_go=body.let_go)
         R.mark_reviewed_if_done(conn, session_id, run["id"])
         return {"feedback": SV.feedback_view(conn, run["id"]), "todo": SV.todo(conn, session_id)}
 

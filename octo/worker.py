@@ -12,7 +12,7 @@ import time
 import traceback
 
 from . import HOME
-from .db import connect, row, rows
+from .db import calling, connect, row, rows
 from .stages import STAGES
 
 
@@ -73,9 +73,13 @@ def main(run_id: str) -> int:
         return 2
     conn.execute("UPDATE stage_runs SET status='running', started_at=? WHERE id=?", (time.time(), run_id))
     try:
+        if run["stage"] == "transcribe":  # MLX capped in this process (review 5 Nov, risk 6)
+            from .asr import cap_mlx
+            cap_mlx()
         inputs = inputs_for(conn, run)
         inputs["progress"] = lambda msg: conn.execute("UPDATE stage_runs SET progress=? WHERE id=?", (msg, run_id))
-        out = STAGES[run["stage"]].fn(inputs, json.loads(run["params"]))
+        with calling(conn, run["stage"], run_id):  # a model call it makes is counted in model_calls
+            out = STAGES[run["stage"]].fn(inputs, json.loads(run["params"]))
     except Exception as e:
         traceback.print_exc()
         conn.execute("UPDATE stage_runs SET status='failed', error=?, finished_at=? WHERE id=?",

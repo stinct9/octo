@@ -482,6 +482,17 @@ async function saveReflection(text: string) {
   if (cur) cur.reflection = (await lab.reflection(cur.id, text)).reflection
 }
 const reflectBeside = computed(() => isReview.value && !!ins.value && !!s.value?.reflection)
+const reflectOpen = ref(false)  // "How did that go" opened from its one line
+// The one question's ticks, held here so the What to do rows above the full review can tick steps (review 5 Nov, item 4).
+const newPicked = ref<Set<string>>(new Set())
+const newAsking = ref(false)
+function tickStep(item: string, on: boolean) {
+  const x = new Set(newPicked.value)
+  if (on) x.add(item)
+  else x.delete(item)
+  newPicked.value = x
+}
+watch(() => props.id, () => { reflectOpen.value = false; newPicked.value = new Set(); newAsking.value = false })
 
 const checking = ref(false)
 const checkError = ref('')
@@ -574,14 +585,19 @@ async function answerFocus(a: FocusAnswer | null) {
           class="muted">. The review reads the minute before {{ s.marks.length === 1 ? 'it' : 'each' }}.</span></p>
       <p v-if="s.review_outdated" class="outdated small"><template v-if="s.parts?.list && !s.parts.whole">This review reads
         only this part: you'd answered it before its parts were put together. Redo it to have the whole discussion read
-        as one.</template><template v-else>This review was made before later changes (a speaker fix, a
+        as one.</template><template v-else-if="s.review_forgotten">This review was written before someone in it was
+        forgotten, and may still say what they said.</template><template v-else>This review was made before later changes (a speaker fix, a
         name, a new transcript).</template> Your answers stay with it and still count.
         <button type="button" class="link" :disabled="redoing" @click="redoReview">Redo the review</button>
         <span v-if="redoError" class="error" role="alert"> {{ redoError }}</span></p>
 
-      <section v-if="!s.aside && !reflectBeside && s.todo.kind !== 'part'" class="card reflect" aria-label="In your words">
+      <!-- One line until it's opened or written (review 5 Nov, item 4): the review doesn't read it. -->
+      <p v-if="!s.aside && !reflectBeside && s.todo.kind !== 'part' && !s.reflection?.text && !reflectOpen" class="reflect-line small">
+        <button type="button" class="link" @click="reflectOpen = true">How did that go, in your words? Add it →</button>
+        <span class="muted"> Optional: the review doesn't read it; the coach does.</span></p>
+      <section v-else-if="!s.aside && !reflectBeside && s.todo.kind !== 'part'" class="card reflect" aria-label="In your words">
         <OwnerWords label="How did that go, in your words?" :text="s.reflection?.text ?? null" :save="saveReflection" multiline :max="4000"
-                    placeholder="Optional. Before you read the review." />
+                    placeholder="Optional. Before you read the review." :autofocus="reflectOpen" />
         <p class="muted small">The review doesn't wait for it or read it; the coach reads it beside your marks.</p>
       </section>
 
@@ -601,6 +617,7 @@ async function answerFocus(a: FocusAnswer | null) {
                   :focus-item="focusItem" :playing-clip="playingClip" :sending="sending" :tt-done="ttDone" :highlight="highlight"
                   :tt-error="ttError" :change-error="changeError"
                   @confirm="showSpeakers = true" @play="playClip" @play-quote="playQuote" @focus="practiseMeasure" @changed="load"
+                  :ticks="{ asking: newAsking, picked: newPicked, answered: shownAnswer?.new ?? [] }" @tick="tickStep"
                   @practise="practise" @step="goToStep" @change="change" @ticktick="toTickTick" @ticktick-all="toTickTickAll" />
 
       <!-- The full review asks the question that makes a conversation reviewed, right after what to do (product/UI
@@ -608,7 +625,7 @@ async function answerFocus(a: FocusAnswer | null) {
       <FullReview v-if="settled" :ins="ins" :is-review="isReview" :feedback="s.feedback" :can-hear="canHear" :is-me="isMe" :who="who"
                   :color="color" :focus-item="focusItem" :playing-clip="playingClip"
                   :ask="askEntries.length > 0 && !!s.insight_run" :answer="shownAnswer" :legacy="legacyAnswer"
-                  :saving="answering" :error="answerError"
+                  :saving="answering" :error="answerError" v-model:picked="newPicked" v-model:asking="newAsking"
                   @hear="hear" @play="playLine" @practise="practise" @change="change" @submit="submitAnswer" />
 
       <Commitments v-if="settled && s.commitments" :block="s.commitments" :at="s.started_at" :connected="s.ticktick_connected"
@@ -671,6 +688,7 @@ p.marked { margin: 0; }
 
 .reflect { padding: 14px 18px; display: flex; flex-direction: column; gap: 6px; }
 .reflect p { margin: 0; }
+.reflect-line { margin: 0; }
 .planned { padding: 14px 18px; display: flex; flex-direction: column; gap: 6px; }
 .planned p { margin: 0; }
 .planned .aim { font-weight: 500; }

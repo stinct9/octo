@@ -223,7 +223,16 @@ def test_crash_recovery_requeues_running(lab):
     P.plan(conn)
     conn.execute("UPDATE stage_runs SET status='running'")  # the process died mid-stage
     assert P.recover(conn) == 1
+    assert lab["run"]()["done"] == 0  # an attempt, counted: tried again after the wait, as any failure
+    stopped = row(conn, "SELECT stage, target, input_hash FROM stage_runs WHERE status='failed'")
+    assert row(conn, "SELECT error FROM stage_runs WHERE status='failed'")["error"] == P.STOPPED
+    conn.execute("UPDATE stage_runs SET finished_at=finished_at-? WHERE status='failed'", (P.RETRY_AFTER_S * 2,))
     assert lab["run"]()["done"] == 3
+    for i in range(2):  # had it taken the lab down three times, it would be given up until Try again
+        conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, error, queued_at, finished_at) "
+                     "VALUES (?, ?, ?, ?, 'failed', ?, 0, 1)", (f"stop{i}", stopped["stage"], stopped["target"],
+                                                              stopped["input_hash"], P.STOPPED))
+    assert P.due_at(conn, stopped["stage"], stopped["target"], stopped["input_hash"]) == float("inf")
 
 
 # ---- conversion (the phone-memo path) --------------------------------------------------------
@@ -240,6 +249,20 @@ def test_m4a_converts_to_16k_mono_wav(tmp_path):
     assert A.is_board_wav(out)
     assert abs(A.duration(out) - 2.0) < 0.1
 
+
+
+@pytest.mark.skipif(not shutil.which("afconvert"), reason="macOS only")
+def test_a_decoded_upload_over_the_limit_is_refused_plainly(tmp_path, monkeypatch):
+    """Security review L10: a small file that decodes to hours of audio is refused, and nothing is left behind."""
+    src = tmp_path / "tone.wav"
+    A.write(src, np.zeros(16000 * 3, dtype=np.float32))
+    memo = tmp_path / "memo.m4a"
+    subprocess.run(["afconvert", "-f", "m4af", "-d", "aac", str(src), str(memo)], check=True)
+    monkeypatch.setattr(A, "MAX_HOURS", 1 / 3600)  # one second
+    out = tmp_path / "out.wav"
+    with pytest.raises(ValueError, match="split it into parts"):
+        A.to_wav(memo, out)
+    assert not out.exists()
 
 # ---- words → speakers ------------------------------------------------------------------------
 

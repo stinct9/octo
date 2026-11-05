@@ -35,7 +35,8 @@ your Mac, and when: [PRIVACY.md](PRIVACY.md).
    curl -fsSL https://github.com/stinct9/octo/releases/latest/download/install.sh | bash
    ```
 
-   It downloads the latest ready-built release (nothing to build: no git, no Node) and installs it. If it stops part
+   It downloads the latest ready-built release (nothing to build: no git, no Node), checks it against the SHA-256 in
+   the release's version.txt, and installs it. If it stops part
    way (the Mac went offline, say), it tells you where: paste the same line again, and it carries on.
 3. If a window from Apple asks to install "command line developer tools", click **Install**, then **Agree**. Terminal
    waits for it.
@@ -54,7 +55,9 @@ your Mac, and when: [PRIVACY.md](PRIVACY.md).
    8. **Your voice**: confirm yourself in your first conversation.
 
 **Updates:** when there's a new release, the octopus in the menu bar says **Octo update ready**. Click it; your
-conversations and settings are kept.
+conversations and settings are kept. A release goes out when the maintainer cuts one, after the tests pass on it, not
+on every change; each is dated (`2026.11.05-2+…`), and a lab offers only a newer one. If an update misbehaves,
+`~/Library/Application\ Support/octo/app/.venv/bin/octo update --back` returns to the version before.
 
 More detail (what each step needs, updating, uninstalling, installing from a git clone to change the code):
 [docs/install.md](docs/install.md). The iPhone app by hand: [mobile/README.md](mobile/README.md). The recorder's

@@ -55,8 +55,10 @@ def test_the_reviews_input_hash_is_what_it_was_before_commitments(tmp_path, monk
 # ---- the answer, checked in code ---------------------------------------------------------------
 
 from octo import commitments as CM  # noqa: E402
+from octo import planning as PL  # noqa: E402
 from octo import pipeline as P  # noqa: E402
 from octo.db import config, row, rows  # noqa: E402
+from tests.calls import spend
 
 NAMES = {"A": "Sam", "B": "Asha"}
 BY_ID = {ln["id"]: ln for ln in DZ["lines"]}
@@ -124,9 +126,9 @@ def _done(conn, sid, rid="cm_1", out=None, params=None, finished=None):
 def test_it_waits_for_the_review_and_for_its_history(tmp_path):
     conn = connect(tmp_path / "c.db")
     sid = make(conn)
-    assert not CM.ready(conn, sid)  # no review yet
+    assert not PL.commitments_ready(conn, sid)  # no review yet
     _review(conn, sid)
-    assert CM.ready(conn, sid)
+    assert PL.commitments_ready(conn, sid)
     params, _ = wanted(conn, STAGES["commitments"], sid, ["dz_1"])
     assert params["speakers"] == SPEAKERS and params["open"] == [] and params["model"] == "claude-opus-5-5"
     # From the 14 days before the step came (set once by the migration), never older (19 Oct).
@@ -134,11 +136,11 @@ def test_it_waits_for_the_review_and_for_its_history(tmp_path):
     assert abs(since - (time.time() - 14 * 86400)) < 60
     old = make(conn, "ses_20260901_00000002", at=since - 3600, rec="rec_20260901_00000002", dz_id="dz_2")
     _review(conn, old, "in_2")
-    assert not CM.ready(conn, old) and CM.for_session(conn, old)["status"] == "old"
+    assert not PL.commitments_ready(conn, old) and CM.for_session(conn, old)["status"] == "old"
     # Marked by the owner: like a rated review, not looked for again.
     _done(conn, sid)
     CM.mark(conn, rows(conn, "SELECT id FROM commitments WHERE by_self=1")[0]["id"], "done")
-    assert not CM.ready(conn, sid)
+    assert not PL.commitments_ready(conn, sid)
 
 
 def test_its_rows_both_ways_marks_ticktick_and_never_acted(tmp_path):
@@ -182,9 +184,9 @@ def test_next_time_it_is_given_the_open_ones_with_these_people_and_says_which_ca
     _done(conn, first)
     later = make(conn, "ses_20261019_00000003", rec="rec_20261019_00000003", dz_id="dz_3")
     _review(conn, later, "in_3")
-    open_ = CM.inputs(conn, later)["open"]
+    open_ = PL.commitments_input(conn, later)["open"]
     assert [o["what"] for o in open_] == ["Send Asha the deck", "Review the budget numbers"]
-    assert CM.inputs(conn, first)["open"] == []  # nothing from after it, nor its own
+    assert PL.commitments_input(conn, first)["open"] == []  # nothing from after it, nor its own
     mine = open_[0]["id"]
     out = {"commitments": [], "dropped": [], "came_up": [{"id": mine, "note": "Asked again.", "line": 0, "quote": "send me the deck",
                                                          "start": 1.0, "end": 5.0}], "usage": None}
@@ -193,7 +195,7 @@ def test_next_time_it_is_given_the_open_ones_with_these_people_and_says_which_ca
     assert [(c["id"], c["note"], c["here"]["start"]) for c in came] == [(mine, "Asked again.", 1.0)]
     # Taken once: marking one elsewhere doesn't send this conversation round again.
     CM.mark(conn, mine, "done")
-    assert CM.inputs(conn, later)["open"] == open_
+    assert PL.commitments_input(conn, later)["open"] == open_
 
 
 def test_deleting_the_conversation_or_forgetting_the_person_deletes_them(tmp_path):
@@ -220,13 +222,12 @@ LIMIT = "You've hit your session limit · resets 10:40am (Asia/Calcutta)"
 def test_it_counts_toward_the_daily_calls_and_waits_out_a_usage_limit(tmp_path):
     conn = connect(tmp_path / "c.db")
     sid = make(conn)
-    for i in range(P.DAILY_CLAUDE_CALLS - 1):
-        _done(conn, sid, f"cm_{i}")
+    spend(conn, P.DAILY_CLAUDE_CALLS - 1)  # each a row in model_calls (claude_code.ask writes it)
     assert P.claude_calls_since(conn, P._midnight(time.time())) == P.DAILY_CLAUDE_CALLS - 1
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, params, queued_at) VALUES "
                  "('q1', 'commitments', ?, 'q', 'queued', '{\"model\": \"claude-opus-5-5\"}', 1)", (sid,))
     assert P.next_run(conn)["id"] == "q1"
-    _done(conn, sid, "cm_last")
+    spend(conn, 1)
     assert P.next_run(conn) is None  # 60 used: it waits for midnight, with every other Claude step
     # A usage-limit failure of this step holds Claude's steps, and isn't counted as an attempt.
     conn2 = connect(tmp_path / "d.db")
@@ -287,7 +288,75 @@ def test_the_owners_check_counts_keeps_the_row_and_changes_nothing_else(tmp_path
     got = CM.judge(conn, second["id"], "wrong")
     assert got["counts"] == {"right": 1, "partly": 0, "wrong": 1} and got["checked"] == 2
     assert CM.judge(conn, second["id"], None)["counts"]["wrong"] == 0  # taken back
-    assert not CM.ready(conn, sid)  # a checked one stays, like a marked one: the step isn't redone over it
+    assert not PL.commitments_ready(conn, sid)  # a checked one stays, like a marked one: the step isn't redone over it
     _done(conn, sid, "cm_2")
     assert [r["checked"] for r in rows(conn, "SELECT checked FROM commitments WHERE checked IS NOT NULL")] == ["right"]
     assert CM.get(conn, first["id"])["state"] is None and R.checks(conn) == before  # not a mark, not "acted"
+
+
+# ---- the same promise as a step (review 5 Nov, item 5) ------------------------------------------------------
+
+STEPS = [{"title": "Send Asha the deck before Thursday", "detail": "She asked for it before Friday.", "why": "w", "due": "2026-10-22"},
+         {"title": "Ask how the hiring plan is going", "detail": "Next 1:1.", "why": "w", "due": None}]
+
+
+def _review_with(conn, sid, steps, rid="in_1"):
+    conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, upstream, params, output, queued_at, "
+                 "finished_at) VALUES (?, 'insight', ?, 'h', 'done', 1, '[\"dz_1\"]', '{}', ?, 0, ?)",
+                 (rid, sid, json.dumps({"skipped": None, "summary": "s", "next": steps}), time.time()))
+
+
+def test_which_step_is_the_same_promise():
+    mine = {"id": "c1", "what": "Send Asha the deck", "quote": "I'll send you the deck by Thursday", "due": "2026-10-22"}
+    assert CM.same_promise(STEPS[0], mine) >= CM.PAIRED
+    assert CM.same_promise(STEPS[1], mine) == 0
+    assert CM.same_promise({"title": "Send the notes", "detail": ""}, mine) == 0  # one shared word isn't a promise
+    assert CM.pair(STEPS, [mine]) == {"n0": mine}
+
+
+def test_a_step_and_the_same_promise_show_once_and_close_together(tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from octo import sessions as SV
+    from octo.api import make_router
+    conn = connect(tmp_path / "t.db")
+    sid = make(conn)
+    _review_with(conn, sid, STEPS)
+    _done(conn, sid)
+    mine = row(conn, "SELECT id FROM commitments WHERE by_self=1")["id"]
+    got = SV.open_tasks(conn)
+    # Once, as the step; the other step alone; Asha's promise to Sam isn't on the owner's list.
+    assert [(t["kind"], t["item"], t["promise"]) for t in got] == [("step", "n0", mine), ("step", "n1", None)]
+    app = FastAPI()
+    app.include_router(make_router(lambda: connect(tmp_path / "t.db"), processor=type("P", (), {"kick": lambda self: None})()))
+    c = TestClient(app)
+    assert c.post(f"/api/octo/sessions/{sid}/feedback", json={"run": "in_1", "item": "n0", "acted": True}).status_code == 200
+    assert CM.get(conn, mine)["state"] == "done"  # closing the step closed the promise
+    assert [(f["item"], f["acted"]) for f in rows(conn, "SELECT item, acted FROM feedback")] == [("n0", 1)]  # once, the step
+    assert [t["item"] for t in SV.open_tasks(conn)] == ["n1"]
+    c.post(f"/api/octo/sessions/{sid}/feedback", json={"run": "in_1", "item": "n0", "acted": False})
+    assert CM.get(conn, mine)["state"] is None
+    # Closing the promise (the conversation page's Let it go) closes the step too; Undo opens both.
+    CM.mark(conn, mine, "dropped")
+    assert row(conn, "SELECT let_go_at FROM feedback WHERE insight_run='in_1' AND item='n0'")["let_go_at"]
+    CM.mark(conn, mine, None)
+    assert row(conn, "SELECT let_go_at FROM feedback WHERE insight_run='in_1' AND item='n0'")["let_go_at"] is None
+    assert [t["item"] for t in SV.open_tasks(conn)] == ["n0", "n1"]
+
+
+def test_a_promise_of_yours_without_a_step_is_listed_and_never_counts_as_acted(tmp_path):
+    from octo import review as R
+    from octo import sessions as SV
+    conn = connect(tmp_path / "t.db")
+    sid = make(conn)
+    _review_with(conn, sid, STEPS[1:])
+    _done(conn, sid)
+    mine = row(conn, "SELECT id FROM commitments WHERE by_self=1")["id"]
+    got = SV.open_tasks(conn)
+    assert [(t["kind"], t["item"]) for t in got] == [("promise", mine), ("step", "n0")]  # due first
+    assert got[0]["title"] == "Send Asha the deck" and got[0]["to"] == "Asha" and got[0]["run"] is None
+    before = R.checks(conn)
+    CM.mark(conn, mine, "done")  # Did it on home
+    assert R.checks(conn) == before and not rows(conn, "SELECT 1 FROM feedback")  # B14: never acted
+    assert [t["item"] for t in SV.open_tasks(conn)] == ["n0"]

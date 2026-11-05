@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { Answer, Commitment, CommitmentChecks, CommitmentState, CommitmentVerdict, CoachMark, CoachNote, CoachPart, CoachSummary, Device, FillerCheckResult, FillerCheckStart, FillersSummary, FixResult, FocusAnswer, FocusSummary, ClaudeUsage, Measure, Incoming, ItemFeedback, OpenTask, Person, PersonPage, PipelineImpact, PipelineStep, Progress, SentTask, SessionFocus, SessionDetail, SessionSummary, Speaker, Status, Todo, AsideKind, AsideRow, QuestionChecks, QuestionsSummary, QuestionToCheck, QuestionVerdict, SearchResults, SearchWho, AskEntry, AskSummary, Quiet, WeekCard, AgendaEvent, Intention, Reflection, DrillsSummary, DrillDetail, Rehearsal, RehearsalsSummary, Talk, PrepareState, PreparePreview, MonthView, DayView } from './types'
+import type { Answer, Commitment, CommitmentChecks, CommitmentState, CommitmentVerdict, CoachMark, CoachNote, CoachPart, CoachSummary, Device, FillerCheckResult, FillerCheckStart, FillersSummary, FixResult, FocusAnswer, FocusSummary, ClaudeUsage, Measure, Incoming, ItemFeedback, OpenTask, Person, PersonPage, PipelineImpact, PipelineStep, Progress, States, SentTask, SessionFocus, SessionDetail, SessionSummary, Speaker, Status, Todo, AsideKind, AsideRow, QuestionChecks, QuestionsSummary, QuestionToCheck, QuestionVerdict, SearchResults, SearchWho, AskEntry, AskSummary, Quiet, WeekCard, AgendaEvent, Intention, Reflection, DrillsSummary, DrillDetail, Rehearsal, RehearsalsSummary, Talk, PrepareState, PreparePreview, MonthView, DayView, SolvedInput } from './types'
 
 /** Fired once a request comes back "this browser isn't let in" (the Mac's key, octo/mackey.py); App.vue shows how. */
 export const LET_IN = 'octo:let-in'
@@ -33,10 +33,10 @@ async function get<T>(path: string): Promise<T> {
 /** How many things the owner did are still being saved or worked out: App.vue shows a bar across the top meanwhile. */
 export const working = ref(0)
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(path: string, body: unknown, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
   working.value++
   try {
-    const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const res = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (!res.ok) return await failed(res)
     return await (res.json() as Promise<T>)
   } finally {
@@ -130,6 +130,9 @@ export const lab = {
     post<{ feedback: CoachNote['feedback'] }>(`/api/octo/coach/${encodeURIComponent(id)}/feedback`, { part, ...mark }),
   coachFocus: (id: string, text: string, measure: Measure | null) =>
     post<{ focus: FocusSummary; note: CoachNote }>(`/api/octo/coach/${encodeURIComponent(id)}/focus`, { text, measure: measure ?? '' }),
+  /** B38: who has solved its "work on", in the owner's words; who and what empty clears it. */
+  coachSolved: (id: string, s: SolvedInput) => post<CoachNote>(`/api/octo/coach/${encodeURIComponent(id)}/solved`, s, 'PUT'),
+  focusSolved: (id: string, s: SolvedInput) => post<FocusSummary>(`/api/octo/focus/${encodeURIComponent(id)}/solved`, s, 'PUT'),
   coachSeen: (id: string) => post<{ ok: boolean }>(`/api/octo/coach/${encodeURIComponent(id)}/seen`, {}),
   focus: () => get<FocusSummary>('/api/octo/focus'),
   startFocus: (text: string, from?: { session_id: string; run: string; item: string }, measure: Measure | null = null) =>
@@ -147,6 +150,7 @@ export const lab = {
     post<{ focus: SessionFocus | null; feedback: Record<string, ItemFeedback> }>(
       `/api/octo/sessions/${encodeURIComponent(id)}/focus`, { focus_id: focusId, answer }),
   progress: () => get<Progress>('/api/octo/progress'),
+  states: () => get<States>('/api/octo/progress/states'),
   actions: () => get<OpenTask[]>('/api/octo/actions'),
   actionsTicktick: () => get<{ done: Record<string, boolean | null> }>('/api/octo/actions/ticktick'),
   merge: (id: string, letter: string, into: string) =>

@@ -171,10 +171,11 @@ async function confirmForget() {
         <ul>
           <li>Their {{ forgetting.voiceprints }} voiceprint{{ forgetting.voiceprints === 1 ? ' is' : 's are' }} deleted from this Mac.</li>
           <li>Their name comes off {{ forgetting.conversations }} conversation{{ forgetting.conversations === 1 ? '' : 's' }}; they show as a lettered speaker there.</li>
-          <li>Those conversations' reviews are redone without their name, answered ones too; your answers stay with the old version and still count.</li>
+          <li>Their words go too: their lines read “(forgotten)” in every transcript and in the reviews' quotes. Your own lines stay.</li>
+          <li>Those conversations' reviews stay as they were until you press Redo the review on each; your answers stay with them and still count.</li>
           <li>Coach notes that read a conversation they were in are deleted.</li>
-          <li>Conversations and transcripts stay.</li>
-          <li>Still holding the name for a while: the daily database backups on this Mac (the last 14 days), and earlier versions of reviews. Tasks already sent to TickTick keep it until you edit them there.</li>
+          <li>The conversations stay, with everyone else's words.</li>
+          <li>Still holding their name and words for a while: the daily database backups on this Mac (the last 14 days). Still holding the name: a review's own wording until you redo it. Tasks already sent to TickTick keep it until you edit them there.</li>
         </ul>
         <label class="field">Type <b>{{ forgetting.name }}</b> to confirm
           <input ref="field" v-model="typed" autocomplete="off" @keydown.enter.prevent="confirmForget">

@@ -236,19 +236,33 @@ def strict(schema: dict) -> dict:
 
 def ask(reader: dict, system: str, prompt: str, schema: dict, timeout: int = TIMEOUT_S) -> tuple[dict, dict]:
     """(the structured answer, usage) from whatever `reader` names (settings.reader). Raises
-    ProviderError with a message for the owner on any failure."""
+    ProviderError with a message for the owner on any failure. Every call made, or failed after it may have been billed,
+    is a row in model_calls (db.model_call; Claude Code's in claude_code.ask)."""
     kind = reader["kind"]
     if kind == "claude-code":
         from .claude_code import ask as cc_ask
         return cc_ask(reader["model"], reader.get("effort", "high"), system, prompt, schema, timeout=timeout)
+    from .db import model_call
     c = connection(reader["connection"])
     if not c:
         raise ProviderError(f"The service “{reader['connection']}” isn't connected any more (Settings → Models and keys)")
-    if kind == "anthropic":
-        return _anthropic(c, reader["model"], reader.get("effort", "high"), system, prompt, schema, timeout)
-    if kind == "openai":
-        return _openai(c, reader["model"], system, prompt, schema, timeout)
-    raise ProviderError(f"unknown kind of service: {kind}")
+    try:
+        if kind == "anthropic":
+            out = _anthropic(c, reader["model"], reader.get("effort", "high"), system, prompt, schema, timeout)
+        elif kind == "openai":
+            out = _openai(c, reader["model"], system, prompt, schema, timeout)
+        else:
+            raise ProviderError(f"unknown kind of service: {kind}")
+    except Billed as e:
+        model_call(reader, False)
+        raise ProviderError(str(e)) from None
+    model_call(reader, True)
+    return out
+
+
+class Billed(ProviderError):
+    """A failure after the service worked on the request (a timeout, an answer cut off or not in JSON): counted in the
+    day's calls, since it may have been billed (review 5 Nov, risk 7)."""
 
 
 def cost(model: str, usage) -> float | None:
@@ -294,13 +308,15 @@ def _anthropic(c: dict, model: str, effort: str, system: str, prompt: str, schem
         if e.status_code >= 500:  # 500, 529 overloaded: theirs, and passing
             raise ProviderError(f"Anthropic had a problem ({e.status_code}){_asked(e.response.headers)}: {TRANSIENT}")
         raise ProviderError(f"Anthropic refused the request ({e.status_code}): {e.message}")
+    except anthropic.APITimeoutError:  # it may have worked on it, and billed it, before the time ran out
+        raise Billed(f"Anthropic didn't answer within {timeout} s: {TRANSIENT}")
     except anthropic.APIConnectionError:
         raise ProviderError(f"Couldn't reach Anthropic (is the Mac online?): {TRANSIENT}")
     if msg.stop_reason == "refusal":
         why = getattr(getattr(msg, "stop_details", None), "category", None)
-        raise ProviderError(f"Claude declined to answer{f' ({why})' if why else ''}")
+        raise Billed(f"Claude declined to answer{f' ({why})' if why else ''}")
     if msg.stop_reason == "max_tokens":
-        raise ProviderError("The answer was cut off before it finished (the output limit was reached)")
+        raise Billed("The answer was cut off before it finished (the output limit was reached)")
     text = ""
     for block in msg.content:
         if block.type == "fallback":  # anything before a switch came from the model that declined
@@ -310,7 +326,7 @@ def _anthropic(c: dict, model: str, effort: str, system: str, prompt: str, schem
     try:
         answer = json.loads(text)
     except json.JSONDecodeError:
-        raise ProviderError("Claude's answer wasn't the JSON asked for")
+        raise Billed("Claude's answer wasn't the JSON asked for")
     u = msg.usage
     return answer, {"provider": "anthropic", "model": msg.model, "cost_usd": cost(msg.model, u),
                     "duration_ms": round((time.time() - t0) * 1000), "input_tokens": u.input_tokens,
@@ -346,20 +362,22 @@ def _openai(c: dict, model: str, system: str, prompt: str, schema: dict, timeout
         if e.code >= 500:
             raise ProviderError(f"{name} had a problem ({e.code}){_asked(e.headers)}: {TRANSIENT}")
         raise ProviderError(f"{name} answered {e.code}: {detail}")
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
+    except TimeoutError:  # sent, and no answer in time: it may have been billed
+        raise Billed(f"{name} didn't answer within {timeout} s: {TRANSIENT}")
+    except (urllib.error.URLError, OSError) as e:
         raise ProviderError(f"Couldn't reach {name} ({getattr(e, 'reason', e)}): {TRANSIENT}")
     try:
         choice = d["choices"][0]
         if choice.get("finish_reason") == "length":
-            raise ProviderError("The answer was cut off before it finished (the output limit was reached)")
+            raise Billed("The answer was cut off before it finished (the output limit was reached)")
         text = choice["message"]["content"] or ""
     except (KeyError, IndexError, TypeError):
-        raise ProviderError(f"{name}'s answer wasn't in the expected form")
+        raise Billed(f"{name}'s answer wasn't in the expected form")
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())  # some models fence their JSON
     try:
         answer = json.loads(text)
     except json.JSONDecodeError:
-        raise ProviderError(f"{name}'s answer wasn't the JSON asked for")
+        raise Billed(f"{name}'s answer wasn't the JSON asked for")
     u = d.get("usage") or {}
     return answer, {"provider": c["id"], "model": d.get("model") or model, "cost_usd": None,
                     "duration_ms": round((time.time() - t0) * 1000), "input_tokens": u.get("prompt_tokens"),

@@ -17,11 +17,16 @@ def test_the_labs_folders_and_database_are_the_owners_alone(tmp_path, monkeypatc
     monkeypatch.setattr(DB, "NOTES", home / "notes")
     monkeypatch.setattr(DB, "DB_PATH", home / "data" / "octo.db")
     monkeypatch.setattr(DB, "HOME_FROM", "checkout")
+    monkeypatch.setattr(DB, "_made_private", False)
+    calls = []
+    real = DB.private
+    monkeypatch.setattr(DB, "private", lambda: (calls.append(1), real())[1])
     before = os.umask(0o022)
     try:
         DB.connect(home / "data" / "octo.db").close()
         DB.connect(home / "data" / "octo.db").close()  # a second time locks the file the first one made
         assert os.umask(0o077) == 0o077  # files made from here on are the owner's alone
+        assert len(calls) == 1  # once a process, not on every connection (review 5 Nov)
     finally:
         os.umask(before)
     for p in (home, home / "data", home / "audio", home / "notes"):

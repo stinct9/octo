@@ -1,15 +1,19 @@
 <script setup lang="ts">
 // Home: what you're practising, how it's going, and a way to change it.
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { lab } from '../lab/api'
 import { day, MEASURE_LABEL, measureValue, tallyText } from '../lab/format'
-import type { FocusSummary, Measure } from '../lab/types'
+import type { FocusSummary, Measure, SolvedInput } from '../lab/types'
 import FocusEditor from './FocusEditor.vue'
 import FoldToggle from './FoldToggle.vue'
+import SolvedFold from './SolvedFold.vue'
 
 const f = ref<FocusSummary | null>(null)
 const editing = ref(false)
-const open = ref(true)
+// Inside home's Working on card (28 Oct review, item 4) that card folds it; alone, its own toggle does.
+const props = defineProps<{ inside?: boolean; shown?: boolean }>()
+const own = ref(true)
+const open = computed(() => (props.inside ? props.shown !== false : own.value))
 const saving = ref(false)
 const error = ref('')
 onMounted(async () => { try { f.value = await lab.focus() } catch { /* the list still works */ } })
@@ -18,13 +22,16 @@ async function save(text: string, measure: Measure | null) {
   saving.value = true
   try { f.value = await lab.startFocus(text, undefined, measure); editing.value = false; error.value = '' } catch (e) { error.value = e instanceof Error ? e.message : String(e) } finally { saving.value = false }
 }
+async function saveSolved(id: string, s: SolvedInput) {  // B38
+  f.value = await lab.focusSolved(id, s)
+}
 async function stop() {
   try { f.value = await lab.stopFocus() } catch (e) { error.value = e instanceof Error ? e.message : String(e) }
 }
 </script>
 
 <template>
-  <section v-if="f" class="card focus" aria-labelledby="focus-now">
+  <section v-if="f" class="focus" :class="inside ? 'inside' : 'card'" aria-labelledby="focus-now">
     <template v-if="f.active">
       <div class="grow">
         <div class="eyebrow" id="focus-now">Your focus · since {{ day(f.active.started_at) }}<template v-if="tallyText(f.active.tally)"> · {{ tallyText(f.active.tally) }}</template></div>
@@ -47,7 +54,8 @@ async function stop() {
       </div>
       <button v-if="open" type="button" class="link small" @click="editing = true">Write one</button>
     </template>
-    <FoldToggle v-model="open" name="focus" label="your focus" />
+    <FoldToggle v-if="!inside" v-model="own" name="focus" label="your focus" />
+    <SolvedFold v-if="open && f.active" :value="f.active.solved" :save="(s) => saveSolved(f!.active!.id, s)" />
     <p v-if="error && !editing" class="error small" role="alert">{{ error }}</p>
     <FocusEditor :open="editing" initial="" :replaces="f.active?.text ?? null" :saving="saving" :error="error"
                  @save="save" @cancel="editing = false; error = ''" />
@@ -56,6 +64,7 @@ async function stop() {
 
 <style scoped>
 .focus { padding: 14px 18px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-left: 3px solid var(--accent); }
+.focus.inside { padding: 2px 0 2px 12px; }
 .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .eyebrow { font-size: 13px; color: var(--accent); font-weight: 500; }
 .text { font-size: 16px; font-weight: 600; }

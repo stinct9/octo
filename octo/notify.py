@@ -10,6 +10,7 @@ now checks every 5 minutes and posts a notification on this Mac when something n
   - the recorder unseen for QUIET_H hours while it was set to record
   - the coach's note, once it's written and until it's opened (6 Oct)
   - your week, from Monday morning until its card is dismissed (B17, 21 Oct: octo/week.py)
+  - once a month, "export your lab" while nothing copies it off this Mac (tech review 5 Nov, risk 9: octo/backup.py)
 
 **Counts only**: no names, no transcript text, no titles of review steps. **One exception (B23, 21 Oct):**
 10 min before an event with someone Octo knows, octo/events.py posts the event's name and time as the calendar has
@@ -38,9 +39,10 @@ TITLE = "Octo"  # one name (product review P0-9)
 
 def waiting(conn, now: float | None = None) -> set[str]:
     """What needs the owner right now, one key per thing: "review:<session>", "confirm:<session>",
-    "failed:<session>", "quiet:<last seen>", "coach:<note>", "week:<Monday>", "signin:<when it failed>"."""
+    "failed:<session>", "quiet:<last seen>", "coach:<note>", "week:<Monday>", "signin:<when it failed>",
+    "export:<YYYY-MM>"."""
     from . import device as D
-    from . import pipeline as P
+    from . import runs as RN
     from . import sessions as SV
     from .db import rows
     now = time.time() if now is None else now
@@ -52,11 +54,14 @@ def waiting(conn, now: float | None = None) -> set[str]:
     for n in rows(conn, "SELECT id FROM coach_notes WHERE status='done' AND seen_at IS NULL AND finished_at > ?",
                   now - 86400):
         keys.add(f"coach:{n['id']}")
-    if (out := P.claude_signed_out(conn, now)) is not None:
+    if (out := RN.claude_signed_out(conn, now)) is not None:
         keys.add(f"signin:{int(out)}")
     from .week import announce
     if week := announce(conn, now):
         keys.add(week)
+    from .backup import export_due
+    if due := export_due(conn, now):
+        keys.add(due)
     last = D.last_status() or {}
     seen, want = last.get("seen_at"), (last.get("status") or {}).get("want_on")
     if D.load_config() and seen and now - seen > QUIET_H * 3600 and want is not False:
@@ -80,6 +85,8 @@ def message(new: set[str], now: float | None = None) -> str | None:
         parts.append(f"{n['failed']} failed: press Try again")
     if any(x.startswith("coach:") for x in new):
         parts.append("the coach's note is ready")
+    if any(x.startswith("export:") for x in new):
+        parts.append("Export your lab: nothing copies it off this Mac (File → Export Lab… in the Octo app)")
     quiet = [int(x.split(":", 1)[1]) for x in new if x.startswith("quiet:")]
     if quiet:
         parts.append(f"recorder not seen for {int((now - max(quiet)) // 3600)} h")

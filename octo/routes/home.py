@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from .. import review as R
 from ..db import load_json, row
-from .common import Lab, same_origin, session_or_404
+from .common import Lab, Solved, same_origin, session_or_404
 
 
 class WeekBody(BaseModel):
@@ -82,6 +82,19 @@ def add(router: APIRouter, lab: Lab) -> None:
         from .. import focus as F
         conn = db()
         F.stop(conn)
+        return F.summary(conn)
+
+    @router.put("/focus/{focus_id}/solved", dependencies=[Depends(same_origin)])
+    def focus_solved(focus_id: str, body: Solved) -> dict:
+        from .. import focus as F
+        from .. import solved as SO
+        conn = db()
+        if not row(conn, "SELECT 1 FROM focus WHERE id=?", focus_id):
+            raise HTTPException(404, "no such focus")
+        try:
+            SO.put(conn, body.who, body.what, body.source, focus_id=focus_id)
+        except SO.SolvedError as e:
+            raise HTTPException(422, str(e))
         return F.summary(conn)
 
     @router.post("/marks", dependencies=[Depends(same_origin)])

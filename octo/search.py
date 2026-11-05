@@ -16,7 +16,7 @@ from . import corrections as C
 from . import fillers as FL
 from . import sessions as SV
 from .db import load_json, rows
-from .pipeline import current
+from .runs import current
 
 WORDS = 6  # either side of the match
 LIMIT = 200

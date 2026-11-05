@@ -3,17 +3,18 @@
 #
 #   curl -fsSL https://github.com/stinct9/octo/releases/latest/download/install.sh | bash
 #
-# Downloads a release (the code with its web pages built: no git, no Node) into
-# ~/Library/Application Support/octo/app, keeps what the lab records beside it in lab.noindex (only you can
-# open it), and runs that release's install.sh. Run it again to repair or update: the release replaces the code
-# (files it no longer has go), and nothing in lab.noindex is touched. OCTO_RELEASE names another release (a URL, or file:// for a local one).
+# Downloads a release (the code with its web pages built: no git, no Node) into its own folder,
+# ~/Library/Application Support/octo/versions/<its version>, keeps what the lab records beside it in lab.noindex (only
+# you can open it), and runs that release's install.sh, which makes it the version that runs (`current`) once it's
+# built; the one before is kept for `octo update --back`. Run it again to repair or update: the same version is
+# repaired in place (files it no longer has go), a new one gets its own folder, and nothing in lab.noindex is touched. OCTO_RELEASE names another release (a URL, or file:// for a local one).
 set -euo pipefail
 
 # Everything inside a function, so a download cut short runs nothing.
 main() {
   local release="${OCTO_RELEASE:-https://github.com/stinct9/octo/releases/latest/download/octo.tar.gz}"
   local base="$HOME/Library/Application Support/octo"
-  local app="$base/app" lab="$base/lab.noindex"
+  local lab="$base/lab.noindex"
 
   if [ "$(uname -m)" != "arm64" ]; then
     echo "Octo needs an Apple Silicon Mac (M1 or later): its speech models run on Apple's GPU."
@@ -36,6 +37,18 @@ main() {
     echo "What came from $release isn't an Octo release."
     exit 1
   fi
+  # Checked against the SHA-256 in version.txt beside it (scripts/release_files.sh) before anything is unpacked.
+  local want
+  want="$(curl -fsSL "${release%/*}/version.txt" 2>/dev/null | awk '$1 == "sha256" { print $2 }' || true)"
+  if [ -z "$want" ]; then
+    echo "There's no checksum beside $release to check it against, so nothing was installed."
+    echo "If someone gave you this line, ask them for a new one."
+    exit 1
+  elif [ "$(shasum -a 256 "$tmp/octo.tar.gz" | cut -d' ' -f1)" != "$want" ]; then
+    echo "What came from $release doesn't match its checksum, so nothing was installed. Run the same line again;"
+    echo "if it says this twice, don't use that link."
+    exit 1
+  fi
   # Unpacked aside first: a broken download leaves the installed copy as it was.
   mkdir "$tmp/octo"
   tar -xzf "$tmp/octo.tar.gz" -C "$tmp/octo" --strip-components 1
@@ -47,6 +60,11 @@ main() {
     said="$("$tmp/octo/install.sh" --check 2>&1)" || { echo "$said" | grep -v '^This folder: '; exit 1; }
   fi
 
+  # Its own folder, named by its version: a failed install leaves the version that runs as it was.
+  local ver app
+  ver="$(head -1 "$tmp/octo/VERSION" 2>/dev/null || true)"
+  [[ "$ver" =~ ^[A-Za-z0-9_+-][A-Za-z0-9_.+-]*$ ]] || ver="local-$(date +%Y%m%d-%H%M%S)"
+  app="$base/versions/$ver"
   mkdir -p "$app"
   mkdir -p -m 700 "$lab"
   # Over the code, files the release no longer has removed (octo/deploy.py's update_release does the same); the
@@ -59,6 +77,10 @@ main() {
   # Where updates come from: `octo update` and the lab's "Octo update ready" read it (octo/deploy.py).
   echo "$release" > "$app/.octo-release"
   # The lab's data lives outside the code (octo/__init__.py reads this), so an update never reaches it.
+  # (An install already here, before 5 Nov in app/, says where its lab is.)
+  for old in "$base/current" "$base/app"; do
+    [ -s "$app/.octo-home" ] || [ ! -s "$old/.octo-home" ] || cp "$old/.octo-home" "$app/.octo-home"
+  done
   [ -s "$app/.octo-home" ] || echo "$lab" > "$app/.octo-home"
   # db.connect won't start a lab in a folder named on purpose unless told: here, in the folder this script
   # keeps it in, while it has none, a new one is what's meant.

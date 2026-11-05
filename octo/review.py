@@ -208,7 +208,8 @@ def progress(conn, principles: list[dict]) -> dict:
     runs = rows(conn, "SELECT sr.id, sr.output, sr.stale, sr.target FROM stage_runs sr JOIN sessions s ON s.id = sr.target "
                       "WHERE sr.stage='insight' AND sr.is_current=1 AND sr.status='done' AND s.status='active'")
     from .sessions import shown_review  # B35: a later part whose review is the whole's, on its first part, isn't another
-    runs = [r for r in runs if (not r["stale"] or pinned_review(conn, r["target"])) and shown_review(conn, r["target"])]
+    runs = [r for r in runs if (not r["stale"] or pinned_review(conn, r["target"]))
+            and shown_review(conn, r["target"], output=False)]
     outs = [o for o in (load_json(r["output"]) for r in runs) if o and not o.get("skipped")]
     # By the principle's words where the run recorded them, so a renumbered rubric still lines up.
     same = lambda f, p: f["principle_id"] == p["id"] if f.get("principle_id") and p.get("id") else f["principle"] == p["n"]
@@ -218,6 +219,17 @@ def progress(conn, principles: list[dict]) -> dict:
 
     # By principle (review 4 Oct, M29): each principle in the owner's words, and what each review shown now
     # said about it, newest first, with his rating. Read from the reviews as they are: no model call.
+    # Read once for every review, not per review (architecture review 5 Nov, risk 5).
+    when = {x["id"]: x["at"] for x in rows(conn, "SELECT s.id, r.started_at + s.start_s AS at FROM sessions s "
+                                                   "JOIN recordings r ON r.id = s.recording_id")}
+    named: dict[str, list[tuple[str, int]]] = {}  # conversation → (name, is_self) confirmed in its current diarize run
+    for x in rows(conn, "SELECT ss.session_id, ss.speaker, p.name, p.is_self FROM session_speakers ss JOIN people p "
+                        "ON p.id = ss.person_id JOIN stage_runs dz ON dz.id = ss.diarize_run AND dz.is_current=1 "
+                        "WHERE ss.state IN ('confirmed', 'auto') ORDER BY ss.session_id, ss.speaker"):
+        named.setdefault(x["session_id"], []).append((x["speaker"], x["name"], x["is_self"]))
+    rated: dict[str, dict] = {}
+    for f in rows(conn, "SELECT insight_run, item, verdict FROM feedback"):
+        rated.setdefault(f["insight_run"], {})[f["item"]] = {"item": f["item"], "verdict": f["verdict"]}
     seen = []
     for r in runs:
         if r["stale"] and not pinned_review(conn, r["target"]):
@@ -225,13 +237,8 @@ def progress(conn, principles: list[dict]) -> dict:
         o = load_json(r["output"])
         if not o or o.get("skipped"):
             continue
-        s = row(conn, "SELECT r.started_at + s.start_s AS at FROM sessions s JOIN recordings r ON r.id = s.recording_id "
-                      "WHERE s.id=?", r["target"])
-        others = [x["name"] for x in rows(conn, "SELECT DISTINCT p.name FROM session_speakers ss JOIN people p ON p.id = ss.person_id "
-                                                "JOIN stage_runs dz ON dz.id = ss.diarize_run AND dz.is_current=1 "
-                                                "WHERE ss.session_id=? AND ss.state IN ('confirmed', 'auto') AND p.is_self=0", r["target"])]
-        fb = {f["item"]: f for f in rows(conn, "SELECT item, verdict FROM feedback WHERE insight_run=?", r["id"])}
-        seen.append((s["at"] if s else None, r["target"], others, o, fb))
+        others = list(dict.fromkeys(name for _, name, me in named.get(r["target"], []) if not me))
+        seen.append((when.get(r["target"]), r["target"], others, o, rated.get(r["id"], {})))
     seen.sort(key=lambda x: -(x[0] or 0))
     by_principle = [{"n": p["n"], "text": p.get("text", p["title"]), "seen": [
         {"session_id": sid, "at": at, "with": others, "title": f.get("title"), "observation": f.get("observation"),
@@ -241,17 +248,16 @@ def progress(conn, principles: list[dict]) -> dict:
 
     # Neutral counts per week, for the owner only.
     weeks: dict[str, dict] = {}
+    numbers = {x["target"]: x["sp"] for x in rows(conn, "SELECT target, json_extract(output, '$.speakers') sp FROM stage_runs "
+                                                       "WHERE stage='numbers' AND is_current=1 AND status='done'")}
     for s in rows(conn, "SELECT s.id, r.started_at + s.start_s AS at FROM sessions s JOIN recordings r ON r.id = s.recording_id "
                         "WHERE s.status='active' AND r.started_at IS NOT NULL"):
-        num = row(conn, "SELECT output FROM stage_runs WHERE target=? AND stage='numbers' AND is_current=1 AND status='done'", s["id"])
         # The owner's letters in the current diarize run, as the numbers have them after their merges: when two
         # of his letters were merged, the first one found was often the merged-away one (M32, a23d51f1).
-        me = [r["speaker"] for r in rows(conn, "SELECT ss.speaker FROM session_speakers ss JOIN people p ON p.id = ss.person_id "
-                                               "JOIN stage_runs dz ON dz.id = ss.diarize_run AND dz.is_current=1 "
-                                               "WHERE ss.session_id=? AND ss.state IN ('confirmed', 'auto') AND p.is_self=1", s["id"])]
+        me = [k for k, _, mine in named.get(s["id"], []) if mine]
         w = weeks.setdefault(_week(s["at"]), {"week": _week(s["at"]), "conversations": 0, "share": [], "questions": 0, "talked_over": 0})
         w["conversations"] += 1
-        nums = load_json(num["output"])["speakers"] if num else {}
+        nums = load_json(numbers[s["id"]]) if s["id"] in numbers else {}
         mine = [nums[k] for k in me if k in nums]
         if mine:
             w["share"].append(sum(m["share"] for m in mine))

@@ -6,7 +6,9 @@ import type { FocusAnswer, SessionFocus } from '../lab/types'
 /** focus.here: this conversation's own number, when the focus carries one. */
 defineProps<{ focus: SessionFocus; saving: boolean }>()
 const emit = defineEmits<{ answer: [a: FocusAnswer | null] }>()
-const OPTIONS: [FocusAnswer, string][] = [['did', 'Yes, I did it'], ['missed', 'It came up, I missed it'], ['na', "Didn't come up"]]
+// Short labels in one row, on every screen (review 5 Nov, items 6 and 10); a screen reader hears the whole answer.
+const OPTIONS: [FocusAnswer, string, string][] = [['did', 'Yes, I did it', 'Did it'], ['missed', 'It came up, I missed it', 'Missed it'],
+  ['na', "Didn't come up", "Didn't come up"]]
 </script>
 
 <template>
@@ -18,8 +20,8 @@ const OPTIONS: [FocusAnswer, string][] = [['did', 'Yes, I did it'], ['missed', '
       before the focus</template>. Your answer still decides.</p>
     <div role="radiogroup" aria-label="Did it come up in this conversation?" class="opts">
       <span class="muted small q">In this conversation?</span>
-      <button v-for="[a, label] in OPTIONS" :key="a" type="button" role="radio" :aria-checked="focus.answer === a" :disabled="saving"
-              @click="emit('answer', focus.answer === a ? null : a)">{{ label }}</button>
+      <button v-for="[a, label, short] in OPTIONS" :key="a" type="button" role="radio" :aria-checked="focus.answer === a" :disabled="saving"
+              :aria-label="label" @click="emit('answer', focus.answer === a ? null : a)">{{ short }}</button>
     </div>
     <p v-if="focus.answer === 'did' && focus.item" class="muted small">The review item it came from is marked acted on.</p>
   </section>
@@ -31,11 +33,15 @@ const OPTIONS: [FocusAnswer, string][] = [['did', 'Yes, I did it'], ['missed', '
 h3 { margin: 0; font-size: 16px; font-weight: 600; }
 p { margin: 0; }
 .opts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.opts button { white-space: nowrap; }
 .q { margin-right: 4px; }
 .opts button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 14px; min-height: 40px; border-radius: 10px; cursor: pointer; }
 .opts button[aria-checked='true'] { border-color: var(--accent); color: var(--accent); font-weight: 500; }
 .small { font-size: 13px; }
 .num { color: var(--ink-2); }
 .muted { color: var(--muted); }
-@media (max-width: 640px) { .opts button { flex: 1 1 100%; min-height: 44px; } .q { flex-basis: 100%; } }
+@media (max-width: 640px) {
+  .opts button { flex: 1 1 auto; padding: 6px 8px; min-height: 44px; font-size: 13px; }
+  .q { flex-basis: 100%; }
+}
 </style>

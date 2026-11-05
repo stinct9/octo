@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The conversation page's title, its state, and the ⋯ menu: the tools used rarely, opened at the bottom of the page.
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { mss, todoLabel, when } from '../../lab/format'
+import { mss, sourceName, todoLabel, when } from '../../lab/format'
 import { canDelete, canEdit } from '../../lab/where'
 import type { SessionDetail } from '../../lab/types'
 
@@ -10,7 +10,6 @@ const emit = defineEmits<{ retry: []; tool: [which: 'split' | 'remove']; aside: 
 
 const withWhom = computed(() => props.s.speakers.filter((sp) => !sp.self && sp.name && (sp.state === 'confirmed' || sp.state === 'auto'))
   .map((sp) => sp.name).join(', '))
-const SOURCE: Record<string, string> = { device: 'recorder', phone: 'phone memo', bench: 'bench', file: 'file' }
 
 const moreOpen = ref(false)
 const moreEl = ref<HTMLElement | null>(null)
@@ -28,7 +27,7 @@ function tool(which: 'split' | 'remove') {
   <header class="head">
     <div class="grow">
       <h1>{{ when(s.started_at) }}</h1>
-      <div class="muted meta">{{ mss(s.duration_s) }} · {{ SOURCE[s.source] ?? s.source }}<template v-if="withWhom"> · with {{ withWhom }}</template><template
+      <div class="muted meta">{{ mss(s.duration_s) }} · {{ sourceName(s.source) }}<template v-if="withWhom"> · with {{ withWhom }}</template><template
         v-if="s.language && s.language !== 'en'"> · language: {{ s.language }}</template><template v-if="!s.in_gate"> · not counted</template></div>
     </div>
     <div class="pill" :class="todoLabel(s.todo).tone"><span class="dot" aria-hidden="true" />{{ todoLabel(s.todo).text }}</div>

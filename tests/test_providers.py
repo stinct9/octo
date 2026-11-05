@@ -526,3 +526,15 @@ def test_a_key_is_tested_before_its_kept(tmp_path, monkeypatch):
     assert r.status_code == 200 and "Couldn't reach" in r.json()["tested"]["error"] and len(PV.load()["connections"]) == 1
     r = add()
     assert r.json()["tested"]["ok"] is True and len(PV.load()["connections"]) == 2
+
+
+def test_the_pipeline_page_reads_as_the_first_labs_notebook_only_there(new_lab, tmp_path):
+    # Review 5 Nov, item 1: Jay's dates, tests and history are his lab's; a buyer reads what each step does, plainly.
+    jays = connect(tmp_path / "jays.db")
+    jays.execute("INSERT OR REPLACE INTO app_config (key, value, updated_at) VALUES ('lab_origin', '\"first\"', 0)")
+    first = {s["stage"]: s for s in ST.describe(jays)}
+    assert first["transcribe"]["why"] == ST.BY_STAGE["transcribe"].why and first["transcribe"]["tried"]
+    assert first["speakers"]["choices"][1]["why"].startswith("Merged two people into one speaker in a family")
+    for s in ST.describe(new_lab):
+        texts = [s["why"], *s["tried"], *(c["why"] for c in s["choices"])]
+        assert not s["tried"] and not any(m in t for t in texts for m in (" Oct", "family", "colleagues", "B14"))

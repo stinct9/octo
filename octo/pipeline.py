@@ -11,23 +11,27 @@ import fcntl
 import hashlib
 import json
 import math
-import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
-from zoneinfo import ZoneInfo
 
 import numpy as np
 
-from . import AUDIO, HOME, ROOT
+from . import AUDIO, BACKGROUND, HOME, ROOT
 from . import audio as A
 from . import planning as PL
 from . import review as R
 from .db import load_json, new_id, row, rows, tx
 from .parts import held, whole
+# The runs' state and every hold live in octo/runs.py since 5 Nov (risk 8), below sessions; their old names stay here.
+from .runs import (_NO_OUTPUT, DAILY_CLAUDE_CALLS, HEAVY_HOLD_S, HEAVY_STAGES, KEY_FIX, KEY_REFUSED_WORDS,  # noqa: F401
+                   LIMIT_WORDS, MAX_ATTEMPTS, RETRY_AFTER_S, SIGN_IN, SIGN_IN_CHECK_S,
+                   SIGNED_OUT_WORDS, TRANSIENT_MAX_S, TRANSIENT_WORDS, _calls_since, _midnight, budget_blocked_until,
+                   claude_blocked_until, claude_calls_since, claude_signed_out, claude_waits, connection_refused,
+                   current, due_at, heavy_held, held_back, key_refused, limit_reset,
+                   run_reader, signed_in, signed_out, transient, transient_retry, uses_claude)
 from .stages import STAGES, Stage, params_for
 
 Log = Callable[[str], None]
@@ -128,148 +132,37 @@ def input_hash(stage: Stage, params: dict, target: str, upstream: list[str]) -> 
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
-def current(conn, target: str, stage: str, output: bool = True) -> dict | None:
-    """The current run. output=False leaves its output out (has_output says if there is one): a transcript is ~120 KB,
-    and the list read every one of them each time it was asked for, ~22 MB on the first lab (4 Nov)."""
-    if output:
-        return row(conn, "SELECT * FROM stage_runs WHERE target=? AND stage=? AND is_current=1", target, stage)
-    return row(conn, f"SELECT {_NO_OUTPUT}, output IS NOT NULL AS has_output FROM stage_runs WHERE target=? AND stage=? "
-                     "AND is_current=1", target, stage)
+PRESSURE_CRITICAL = 4  # kern.memorystatus_vm_pressure_level: 1 normal, 2 warning, 4 critical (risk 6; the hold: runs.py)
 
 
-_NO_OUTPUT = "id, stage, target, input_hash, status, is_current, stale, upstream, params, error, queued_at, started_at, finished_at, progress"
-
-
-# A failed run is tried again on a later pass, after a wait that doubles each time, and given up
-# after MAX_ATTEMPTS (until its inputs change, or `octo retry` / Try again in the UI). Before 2 Oct a
-# failure stopped the whole queue until the next hourly pass, and then failed again forever: four
-# Ollama timeouts one night held up every other conversation.
-MAX_ATTEMPTS = 3
-RETRY_AFTER_S = 15 * 60
-
-# Claude Code's answer when the owner's Pro plan is used up for now (4 Oct: "You've hit your session limit ·
-# resets 10:40am (Asia/Calcutta)"). That says nothing about the run, so it isn't counted as an
-# attempt: the run waits until the limit resets, and so does every other step that needs Claude.
-# On 4 Oct three reviews and a Hindi transcript used up all three attempts in two hours, hours
-# before the reset, and then waited for Try again.
-# The weekly one (31 Oct: "You've hit your weekly limit · resets Nov 3 at 2:30am (Asia/Calcutta)") wasn't recognised
-# until 4 Nov: its six failures were counted and two reviews waited for Try again.
-LIMIT_WORDS = ("hit your session limit", "hit your usage limit", "hit your weekly limit", "hit your limit",
-               "usage limit reached")
-_RESETS = re.compile(r"resets\s+(?:([a-z]{3})[a-z]*\.?\s+(\d{1,2})\s+at\s+)?(\d{1,2})(?::(\d{2}))?\s*([ap]m)?"
-                     r"(?:\s*\(([^)]+)\))?", re.I)
-_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
-
-
-def limit_reset(error: str | None, failed_at: float | None) -> float | None:
-    """When a usage-limit failure clears: the time in its message (the next one after it failed),
-    or an hour after it failed if there's none. None if the error isn't Claude's usage limit."""
-    if not error or not any(w in error.lower() for w in LIMIT_WORDS):
-        return None
-    failed_at = failed_at or time.time()
-    m = _RESETS.search(error)
-    hour, minute = (int(m[3]), int(m[4] or 0)) if m else (99, 0)
-    if m and (m[5] or "").lower() == "pm" and hour < 12:
-        hour += 12
-    elif m and (m[5] or "").lower() == "am" and hour == 12:
-        hour = 0
-    month = _MONTHS.index(m[1].lower()) + 1 if m and m[1] and m[1].lower() in _MONTHS else None
-    if hour > 23 or minute > 59 or (m and m[1] and not month):
-        return failed_at + 3600
+def pressure_level() -> int:
     try:
-        zone = ZoneInfo(m[6].strip()) if m[6] else None
-    except (ValueError, KeyError):  # not a zone name we know: the Mac's own time
-        zone = None
-    at = datetime.fromtimestamp(failed_at, zone)
-    try:
-        reset = at.replace(**({"month": month, "day": int(m[2])} if month else {}), hour=hour, minute=minute, second=0,
-                           microsecond=0)
-    except ValueError:  # no such day
-        return failed_at + 3600
-    if reset <= at:
-        reset = reset.replace(year=reset.year + 1) if month else reset + timedelta(days=1)
-    return reset.timestamp() + 60
+        return int(subprocess.run(["sysctl", "-n", "kern.memorystatus_vm_pressure_level"], capture_output=True, text=True,
+                                  timeout=5).stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return 1
 
 
-# Claude Code signed out on this Mac (3 Nov: its login expired and for two days every review failed three times,
-# then said "press Try again", which couldn't fix it). Like the usage limit it says nothing about the run: it isn't
-# counted, and every step that needs Claude waits until `claude auth status` says it's signed in again, looked at
-# once every SIGN_IN_CHECK_S; then they carry on by themselves.
-SIGNED_OUT_WORDS = ("claude auth login", "log in with /login")
-SIGN_IN_CHECK_S = 300
-SIGN_IN = "Claude Code is signed out on this Mac: run claude auth login in Terminal, and reviews carry on by themselves"
-_signed_in: tuple[float, bool] = (0.0, False)
-
-
-def signed_out(error: str | None) -> bool:
-    return bool(error) and any(w in error for w in SIGNED_OUT_WORDS)
-
-
-def signed_in(now: float | None = None) -> bool:
-    """Whether Claude Code is signed in on this Mac now (`claude auth status`), asked at most once a minute."""
-    global _signed_in
-    now = now if now is not None else time.time()
-    if now - _signed_in[0] > 60:
-        from . import claude_code as CC
-        _signed_in = (now, CC.status()["logged_in"])
-    return _signed_in[1]
-
-
-def claude_signed_out(conn, now: float | None = None) -> float | None:
-    """When the newest step that called Claude failed because Claude Code was signed out, while it still is; else None."""
-    for r in rows(conn, "SELECT stage, params, status, error, finished_at FROM stage_runs WHERE status IN ('done','failed') "
-                        "AND stage IN ('insight','commitments','transcribe') ORDER BY finished_at DESC LIMIT 100"):
-        if uses_claude(r):
-            return r["finished_at"] if r["status"] == "failed" and signed_out(r["error"]) and not signed_in(now) else None
+def short_of() -> str | None:
+    """Why the Mac can't take a heavy step now, or None."""
+    from .privacy import HOLD_GB, free_gb
+    if pressure_level() >= PRESSURE_CRITICAL:
+        return "the Mac is short of memory"
+    if (free := free_gb()) < HOLD_GB:
+        return f"only {free} GB free on the disk"
     return None
 
 
-# A provider's rate limit, outage or network failure (octo/providers.py TRANSIENT; review 8 Oct, finding 5) says
-# nothing about the run either: it waits 15 min, doubling to 4 h, or what the service asked for if longer, and
-# isn't counted. Before, an hour offline used up every queued review's three attempts.
-TRANSIENT_WORDS = ("it will be tried again later",)
-TRANSIENT_MAX_S = 4 * 3600
-_ASKED = re.compile(r"it asked for (\d+) s")
-
-
-def transient(error: str | None) -> bool:
-    return bool(error) and any(w in error for w in TRANSIENT_WORDS)
-
-
-def transient_retry(fails: list[dict]) -> float | None:
-    """When a run whose latest failure was transient goes again (newest first); None if it wasn't transient."""
-    if not fails or not transient(fails[0]["error"]):
-        return None
-    n = next((i for i, f in enumerate(fails) if not transient(f["error"])), len(fails))  # in a row
-    wait = min(RETRY_AFTER_S * 2 ** (n - 1), TRANSIENT_MAX_S)
-    if m := _ASKED.search(fails[0]["error"]):
-        wait = max(wait, int(m[1]))
-    return (fails[0]["finished_at"] or 0) + wait
-
-
-def due_at(conn, stage: str, target: str, input_hash: str) -> float:
-    """When a run with these inputs may run (again): 0 if it never failed, inf once given up."""
-    fails = rows(conn, "SELECT error, finished_at FROM stage_runs WHERE target=? AND stage=? AND input_hash=? "
-                       "AND status='failed' ORDER BY finished_at DESC", target, stage, input_hash)
-    if not fails:
-        return 0.0
-    reset = limit_reset(fails[0]["error"], fails[0]["finished_at"])
-    if reset is not None:
-        return reset
-    if signed_out(fails[0]["error"]):  # claude_blocked_until holds it while still signed out
-        return (fails[0]["finished_at"] or 0) + SIGN_IN_CHECK_S
-    if (again := transient_retry(fails)) is not None:
-        return again
-    counted = [f for f in fails if limit_reset(f["error"], f["finished_at"]) is None and not transient(f["error"])
-               and not signed_out(f["error"])]
-    if len(counted) >= MAX_ATTEMPTS:
-        return math.inf
-    return (counted[0]["finished_at"] or 0) + RETRY_AFTER_S * 2 ** (len(counted) - 1)
-
-
-def held_back(conn, stage: str, target: str, input_hash: str, now: float | None = None) -> bool:
-    """True while a run with these inputs is waiting to be retried, or has been given up on."""
-    return due_at(conn, stage, target, input_hash) > (now if now is not None else time.time())
+def heavy_hold(conn, now: float) -> dict | None:
+    """The runner's: held as before, or held now if the Mac is short of memory or disk."""
+    if held := heavy_held(conn, now):
+        return held
+    if why := short_of():
+        held = {"until": now + HEAVY_HOLD_S, "why": why}
+        conn.execute("INSERT INTO app_config (key, value, updated_at) VALUES ('heavy_hold', ?, ?) ON CONFLICT(key) "
+                     "DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (json.dumps(held), now))
+        return held
+    return None
 
 
 def next_due(conn, now: float | None = None) -> float | None:
@@ -286,125 +179,9 @@ def next_due(conn, now: float | None = None) -> float | None:
         due.append(now + SIGN_IN_CHECK_S)
     if (settled := PL.voiceprints_settle_at(conn, now)) is not None:
         due.append(settled)
+    if held := heavy_held(conn, now):  # look again when the hold on heavy steps ends
+        due.append(held["until"])
     return min(due) if due else None
-
-
-# Automatic Claude calls a day (review 4 Oct, M09): a review is one call, commitments one (B14), a Hindi merge one per chunk
-# (3599a4cb took 37 on 4 Oct). The owner's Pro limit is shared with their own Claude use; past this, Claude
-# steps wait for midnight and everything else carries on.
-DAILY_CLAUDE_CALLS = 60
-
-
-def claude_calls_since(conn, since: float) -> int:
-    """Reviews and Hindi merges that called Claude, the coach's notes (octo/coach.py, 6 Oct), practice takes' points (B18)
-    questions to the conversations (B24), rehearsals' replies and reviews (B26), replies talking one through (B31) and plans
-    for a conversation (B36)."""
-    return _calls_since(conn, since, lambda r: r["kind"] == "claude-code")
-
-
-def _calls_since(conn, since: float, which: Callable[[dict], bool]) -> int:
-    """Model calls made since `since` by runs whose reader `which` picks: a review is one, a Hindi merge one per
-    chunk; and, for Claude Code, the coach's notes."""
-    n = 0
-    # Two fields, not the output: today's transcripts are ~120 KB each, and this is asked on most pages (4 Nov).
-    for r in rows(conn, "SELECT stage, params, json_extract(output, '$.usage') AS usage, "
-                        "json_extract(output, '$.merged.calls') AS calls FROM stage_runs WHERE status='done' AND finished_at >= ? "
-                        "AND stage IN ('insight', 'transcribe', 'commitments')", since):
-        who = run_reader(r)
-        if not who or not which(who):
-            continue
-        used = load_json(r["usage"]) if isinstance(r["usage"], str) and r["usage"][:1] in "{[" else r["usage"]
-        n += (1 if used else 0) if r["stage"] != "transcribe" else (r["calls"] or 0)
-    for d in rows(conn, "SELECT point FROM drills WHERE point IS NOT NULL AND point_at >= ?", since):
-        p = load_json(d["point"]) or {}
-        n += 1 if p.get("usage") and p.get("reader") and which(p["reader"]) else 0
-    for a in rows(conn, "SELECT reader FROM asks WHERE status='done' AND usage IS NOT NULL AND finished_at >= ?", since):
-        n += 1 if which(load_json(a["reader"]) or {}) else 0  # B24: a question to the conversations
-    from .rehearse import calls_since
-    n += calls_since(conn, since, which)  # B26: each reply and each review
-    from . import talk
-    n += talk.calls_since(conn, since, which)  # B31: each reply
-    from . import prepare
-    n += prepare.calls_since(conn, since, which)  # B36: each plan
-    for g in rows(conn, "SELECT * FROM calls_gone WHERE at >= ?", since):  # their rows deleted since (db.SCHEMA's triggers)
-        who = run_reader(g) if g["stage"] else load_json(g["reader"])
-        n += g["n"] if who and which(who) else 0
-    if not which({"kind": "claude-code"}):
-        return n
-    n += row(conn, "SELECT count(*) n FROM coach_notes WHERE status='done' AND usage IS NOT NULL AND finished_at >= ?",
-             since)["n"]
-    return n
-
-
-def _midnight(now: float, days: int = 0) -> float:
-    d = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0)
-    return (d + timedelta(days=days)).timestamp()
-
-
-def claude_blocked_until(conn, now: float | None = None) -> float | None:
-    """While Claude's usage limit holds (a run failed on it and it hasn't reset), when it resets;
-    or, once today's DAILY_CLAUDE_CALLS are used, midnight."""
-    now = now if now is not None else time.time()
-    resets = [r for f in rows(conn, "SELECT error, finished_at FROM stage_runs WHERE status='failed' AND finished_at > ? "
-                                    "UNION ALL SELECT error, finished_at FROM coach_notes WHERE status='failed' AND finished_at > ? "
-                                    "UNION ALL SELECT point_error, point_at FROM drills WHERE point_error IS NOT NULL AND point_at > ? "
-                                    "UNION ALL SELECT error, finished_at FROM asks WHERE status='failed' AND finished_at > ? "
-                                    "UNION ALL SELECT error, error_at FROM rehearsals WHERE error IS NOT NULL AND error_at > ? "
-                                    "UNION ALL SELECT error, error_at FROM talks WHERE error IS NOT NULL AND error_at > ? "
-                                    "UNION ALL SELECT error, error_at FROM preparations WHERE error IS NOT NULL AND error_at > ?",
-                              now - 86400, now - 86400, now - 86400, now - 86400, now - 86400, now - 86400, now - 86400)
-              if (r := limit_reset(f["error"], f["finished_at"])) is not None and r > now]
-    if claude_calls_since(conn, _midnight(now)) >= DAILY_CLAUDE_CALLS:
-        resets.append(_midnight(now, 1))
-    if claude_signed_out(conn, now) is not None:
-        resets.append(now + SIGN_IN_CHECK_S)
-    return max(resets) if resets else None
-
-
-def claude_waits(conn, now: float | None = None) -> str | None:
-    """Why something that needs Claude can't go now, in the owner's words, or None."""
-    now = now if now is not None else time.time()
-    if claude_signed_out(conn, now) is not None:
-        return SIGN_IN
-    if (blocked := claude_blocked_until(conn, now)) is None:
-        return None
-    if claude_calls_since(conn, _midnight(now)) >= DAILY_CLAUDE_CALLS:
-        return f"today's {DAILY_CLAUDE_CALLS} Claude calls are used: after midnight"
-    return f"Claude's usage limit: after {datetime.fromtimestamp(blocked):%H:%M}"
-
-
-def run_reader(run: dict) -> dict | None:
-    """The model a run calls: its reader ({"kind": "claude-code" | "anthropic" | "openai", "connection": …}), or None
-    for a step that runs on the Mac (a local model's review too)."""
-    p = json.loads(run["params"] or "{}")
-    if run["stage"] == "insight":
-        if p.get("reader"):
-            return p["reader"]
-        return {"kind": "claude-code"} if str(p.get("model", "")).startswith("claude") else None
-    if run["stage"] == "commitments":  # B14: on the model its choice names, Claude Code by default (octo/commitments.py)
-        return p.get("reader") or ({"kind": "claude-code"} if str(p.get("model", "")).startswith("claude") else None)
-    if run["stage"] == "transcribe" and "hindi" in p:
-        return p["hindi"].get("reader") or {"kind": "claude-code"}  # the first lab merges with Claude Code
-    return None
-
-
-def uses_claude(run: dict) -> bool:
-    """A step through Claude Code, on the owner's Claude plan (any lab that chose it): its usage limit and
-    DAILY_CLAUDE_CALLS apply to these only. Before 8 Oct (review, finding 15) they applied to any model, so a buyer's own key, or a server on their Mac,
-    stopped at 60 calls a day with a message about Claude."""
-    who = run_reader(run)
-    return bool(who) and who["kind"] == "claude-code"
-
-
-def budget_blocked_until(conn, connection_id: str, now: float | None = None) -> float | None:
-    """A connection's own budget (its "daily_calls", octo/providers.py), once today's are used: midnight."""
-    from . import providers as PV
-    budget = (PV.connection(connection_id) or {}).get("daily_calls")
-    if not budget:
-        return None
-    now = now if now is not None else time.time()
-    used = _calls_since(conn, _midnight(now), lambda r: r.get("connection") == connection_id)
-    return _midnight(now, 1) if used >= budget else None
 
 
 def retry(conn, target: str | None = None) -> int:
@@ -739,9 +516,15 @@ def _apply_identify(conn, run: dict) -> None:
 
 # ---- running -------------------------------------------------------------------------------
 
+STOPPED = "it stopped while it ran (the lab or the Mac restarted)"
+
+
 def recover(conn) -> int:
-    """Runs left 'running' by a crash or kill go back to the queue."""
-    return conn.execute("UPDATE stage_runs SET status='queued', started_at=NULL WHERE status='running'").rowcount
+    """Runs left 'running' by a crash or kill count as a failed attempt, and the planner queues them again as any failure
+    (architecture review 5 Nov): put straight back, a step that took the lab down each time (macOS ending it under
+    memory pressure) came back for ever."""
+    return conn.execute("UPDATE stage_runs SET status='failed', is_current=0, error=?, finished_at=? WHERE status='running'",
+                        (STOPPED, time.time())).rowcount
 
 
 WORKER_TIMEOUT_S = 3 * 3600  # no step has taken more than minutes; one that hangs mustn't hold the queue
@@ -752,7 +535,7 @@ def _in_worker(run_id: str) -> tuple[int, str]:
     """The worker inherits the runner's lock: if the runner is killed while a worker lives on, the
     lock stays held, and a new runner says "busy" instead of starting the same step a second time."""
     try:
-        proc = subprocess.run([sys.executable, "-m", "octo.worker", run_id], cwd=ROOT, capture_output=True, text=True,
+        proc = subprocess.run([*BACKGROUND, sys.executable, "-m", "octo.worker", run_id], cwd=ROOT, capture_output=True, text=True,
                               pass_fds=(_LOCK_FD,) if _LOCK_FD is not None else (), timeout=WORKER_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         return 1, f"the step took over {WORKER_TIMEOUT_S // 3600} h and was stopped"
@@ -799,7 +582,8 @@ def review_outdated(conn, session_id: str) -> bool:
     ups = insight_ups(conn, session_id) if stage else []
     if not ins or not ups or not all(ups):
         return False
-    return bool(ins["stale"]) or wanted(conn, stage, session_id, [u["id"] for u in ups])[1] != ins["input_hash"]
+    from .privacy import review_held
+    return review_held(conn, session_id, ins["id"]) or bool(ins["stale"]) or wanted(conn, stage, session_id, [u["id"] for u in ups])[1] != ins["input_hash"]
 
 
 def _lock_path(conn) -> Path:
@@ -843,6 +627,7 @@ def next_run(conn, now: float | None = None) -> dict | None:
     blocked = claude_blocked_until(conn, now)
     budgets: dict[str, float | None] = {}  # each connection's own budget, asked once per call
     downloading: dict[str, bool] = {}  # each step's models, looked at once per call
+    heavy: list = []  # the hold on heavy steps, looked at once per call
     for run in rows(conn, "SELECT * FROM stage_runs WHERE status='queued' ORDER BY CASE "
                           "WHEN stage='find_conversations' THEN 0 "
                           "WHEN stage='insight' AND json_extract(params, '$.model') LIKE 'claude%' THEN 1 ELSE 2 END, "
@@ -856,10 +641,16 @@ def next_run(conn, now: float | None = None) -> dict | None:
             downloading[run["stage"]] = bool(MD.missing_for(conn, run["stage"]))
         if downloading[run["stage"]]:
             continue
+        if run["stage"] in HEAVY_STAGES:
+            if not heavy:
+                heavy.append(heavy_hold(conn, now if now is not None else time.time()))
+            if heavy[0]:
+                continue
         who = run_reader(run) or {}
         if who.get("connection"):
             if who["connection"] not in budgets:
-                budgets[who["connection"]] = budget_blocked_until(conn, who["connection"], now)
+                budgets[who["connection"]] = budget_blocked_until(conn, who["connection"], now) \
+                    or connection_refused(conn, who["connection"])
             if budgets[who["connection"]]:
                 continue
         return run

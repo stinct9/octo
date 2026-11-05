@@ -2,6 +2,8 @@
 
 import os
 import threading
+import time
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -54,8 +56,8 @@ def test_the_key_is_private_and_made_once(app):
 
 def test_let_in_sets_the_cookie_and_goes_on_to_the_page(app):
     mac = TestClient(app)
-    assert mac.get("/let-in", params={"k": "wrong"}, follow_redirects=False).status_code == 403
-    r = mac.get("/let-in", params={"k": MK.key(), "to": "/#/phone"}, follow_redirects=False)
+    assert mac.get("/let-in", params={"c": "wrong"}, follow_redirects=False).status_code == 403
+    r = mac.get("/let-in", params={"c": MK.let_in_code(), "to": "/#/phone"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/#/phone"
     cookie = r.headers["set-cookie"]
     assert cookie.startswith(f"{MK.COOKIE}=") and "HttpOnly" in cookie and "samesite=strict" in cookie.lower()
@@ -65,10 +67,60 @@ def test_let_in_sets_the_cookie_and_goes_on_to_the_page(app):
     assert MK.COOKIE in mac.get("/api/status").headers.get("set-cookie", "")
 
 
+def test_the_let_in_link_never_holds_the_key_and_works_once_within_a_minute(app):
+    """Security review L4 (28 Oct): the link was the key itself, kept in browser history and history sync."""
+    key = MK.key()
+    url = MK.let_in_url()
+    assert key not in url and "c=" in url and "k=" not in url
+    code = url.split("c=")[1].split("&")[0]
+    mac = TestClient(app)
+    assert mac.get("/let-in", params={"c": code}, follow_redirects=False).status_code == 303
+    again = TestClient(app).get("/let-in", params={"c": code}, follow_redirects=False)
+    assert again.status_code == 403 and "used or is out of date" in again.text  # spent
+    assert TestClient(app).get("/let-in", params={"k": key}, follow_redirects=False).status_code == 403  # the old link
+    old = MK.let_in_code(now=time.time() - MK.CODE_S - 1)
+    assert TestClient(app).get("/let-in", params={"c": old}, follow_redirects=False).status_code == 403
+    forged = MK.let_in_code(value="another key")
+    assert TestClient(app).get("/let-in", params={"c": forged}, follow_redirects=False).status_code == 403
+    assert not MK.redeem("1.2", value=key) and not MK.redeem("x.y.z", value=key) and not MK.redeem("", value=key)
+
+
+def test_rotate_signs_everyone_out_and_the_app_and_phone_carry_on(app):
+    mac = TestClient(app, headers={"Cookie": MK.cookie_header()})
+    assert mac.get("/api/octo/sessions").status_code == 200
+    unspent = MK.let_in_code()
+    token = PH.add_device(app.state.db(), "iPhone")
+    old = MK.key()
+    new = MK.rotate()
+    assert new != old and MK.key() == new and oct(os.stat(MK.FILE).st_mode & 0o777) == "0o600"
+    assert mac.get("/api/octo/sessions").status_code == 401  # no restart needed
+    assert TestClient(app).get("/let-in", params={"c": unspent}, follow_redirects=False).status_code == 403
+    # The Octo app reads the new key: the lab proves it holds it, and a code made with it lets the window in.
+    c = "0123456789abcdef0123"
+    assert TestClient(app).get("/mac-hello", params={"c": c}).json()["proof"] == MK.proof(c, new)
+    window = TestClient(app)
+    assert window.get("/let-in", params={"c": MK.let_in_code(value=new)}, follow_redirects=False).status_code == 303
+    assert window.get("/api/octo/sessions").status_code == 200
+    # A paired phone has its own pairing: the rotate doesn't touch it.
+    phone = TestClient(app, base_url=f"https://192.168.1.20:{PH.PORT}", headers={"Cookie": f"{PH.COOKIE}={token}"})
+    assert phone.get("/api/octo/sessions").status_code == 200
+
+
+def test_the_octo_app_makes_its_code_as_the_lab_checks_it():
+    """macapp/Octo.swift's letIn: the same label and shape as mackey.let_in_code, and never the key in the link."""
+    src = (Path(__file__).parents[1] / "macapp" / "Octo.swift").read_text()
+    body = src[src.index("static func letIn("):]
+    body = body[:body.index("\n    }\n")]
+    assert '"octo-let-in:"' in body and 'name: "c"' in body and 'name: "k"' not in body
+    assert "UInt8.random" in body and "(0..<12)" in body  # 24 hex characters of nonce, as let_in_code
+    # The app hands the default browser only the schemes it lets the main frame open (security review L10).
+    assert src.count("Self.opensOutside(url)") == 2 and "if let url = action.request.url { NSWorkspace" not in src
+
+
 def test_let_in_never_sends_the_browser_to_another_site(app):
     mac = TestClient(app)
     for to in ("//evil.example/x", "https://evil.example", "/\\evil.example", "javascript:alert(1)"):
-        r = mac.get("/let-in", params={"k": MK.key(), "to": to}, follow_redirects=False)
+        r = mac.get("/let-in", params={"c": MK.let_in_code(), "to": to}, follow_redirects=False)
         assert r.headers["location"] == "/", to
 
 
@@ -76,7 +128,7 @@ def test_a_phone_uses_its_own_pairing_and_is_never_let_in_as_the_mac(app):
     token = PH.add_device(app.state.db(), "iPhone")
     phone = TestClient(app, base_url=f"https://192.168.1.20:{PH.PORT}", headers={"Cookie": f"{PH.COOKIE}={token}"})
     assert phone.get("/api/octo/sessions").status_code == 200  # no Mac key needed on the phone's socket
-    assert phone.get("/let-in", params={"k": MK.key()}, follow_redirects=False).status_code == 404
+    assert phone.get("/let-in", params={"c": MK.let_in_code()}, follow_redirects=False).status_code == 404
     # The Mac's key on a phone socket opens nothing the phone couldn't already reach.
     r = phone.get("/api/octo/settings/providers", headers={"Cookie": f"{PH.COOKIE}={token}; {MK.COOKIE}={MK.key()}"})
     assert r.status_code == 403

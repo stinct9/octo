@@ -178,7 +178,10 @@ TAILSCALE_APP = "/Applications/Tailscale.app"
 
 def _ask_tailscale(cli: str) -> tuple[int, str]:
     try:
-        r = subprocess.run([cli, "status", "--json"], capture_output=True, text=True, timeout=5)
+        # The app's binary with no TERM (as launchd starts the lab) doesn't act as a command line and hangs to the
+        # timeout: every Setup, This Mac and Phone page waited 5 s (5 Nov).
+        r = subprocess.run([cli, "status", "--json"], capture_output=True, text=True, timeout=5,
+                           env={**os.environ, "TERM": os.environ.get("TERM") or "dumb"})
         return r.returncode, r.stdout
     except (OSError, subprocess.SubprocessError):
         return 1, ""

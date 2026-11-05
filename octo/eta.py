@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import time
 
+from . import frame as FR
 from .db import load_json, row, rows
 
 MIN_RUNS = 5
@@ -82,6 +83,9 @@ def rates(conn) -> dict[str, tuple[float, float]]:
             pts = by.setdefault(k, [])
             if len(pts) < RECENT_RUNS:
                 pts.append((f["minutes"], f["took"]))
+    lab, ids = FR.lab(conn), {f["id"] for f in found}
+    for k in [k for k in _MERGED if k[0] == lab and k[1] not in ids]:  # deleted, or pruned: not kept for ever (review 5 Nov)
+        del _MERGED[k]
     for k, pts in by.items():
         fit = _fit(pts)
         if fit:
@@ -92,7 +96,7 @@ def rates(conn) -> dict[str, tuple[float, float]]:
 def _merged(conn, run_id: str) -> bool:
     """A transcript merged by Claude (octo/hindi.py). Asked of a done run, whose output is written once: sorting every
     run with its output spilled ~20 MB of transcripts to a temporary file on each forecast (4 Nov)."""
-    key = (row(conn, "PRAGMA database_list")["file"], run_id)
+    key = (FR.lab(conn), run_id)
     if key not in _MERGED:
         m = row(conn, "SELECT json_extract(output, '$.merged') m FROM stage_runs WHERE id=?", run_id)["m"]
         _MERGED[key] = bool(load_json(m) if isinstance(m, str) and m[:1] in "{[" else m)  # an object comes back as its text
@@ -111,7 +115,7 @@ def seconds(rate: dict[str, tuple[float, float]], stage: str, minutes: float, mo
 def forecast(conn, now: float | None = None) -> dict:
     """{"sessions": {id: {"at", "late", "then"}}, "queue_empty_at", "steps"}. "then": "review" when the
     review is among its steps, "you" when it stops for the owner (speakers to confirm). Empty when nothing waits."""
-    from . import pipeline as P
+    from . import runs as RN
     from . import planning as PL
     from .stages import STAGES, downstream
 
@@ -128,7 +132,7 @@ def forecast(conn, now: float | None = None) -> dict:
             s = row(conn, "SELECT s.start_s, s.end_s, r.started_at, r.created_at FROM sessions s JOIN recordings r "
                           "ON r.id = s.recording_id WHERE s.id=?", target)
             if s:
-                tr = P.current(conn, target, "transcribe")
+                tr = RN.current(conn, target, "transcribe")
                 lang = (load_json(tr["output"]) or {}).get("language") if tr and tr["output"] else None
                 info[target] = {"minutes": (s["end_s"] - s["start_s"]) / 60, "session": True,
                                 "when": (s["started_at"] or s["created_at"]) + s["start_s"], "merge": lang not in (None, "en")}
@@ -143,7 +147,7 @@ def forecast(conn, now: float | None = None) -> dict:
         model = _model(run["params"])
         t = about(run["target"])
         est = seconds(rate, run["stage"], t["minutes"], model, t["merge"])
-        task = {"stage": run["stage"], "target": run["target"], "claude": P.uses_claude(run), "queued_at": run["queued_at"] or 0}
+        task = {"stage": run["stage"], "target": run["target"], "claude": RN.uses_claude(run), "queued_at": run["queued_at"] or 0}
         if run["status"] == "running":
             took = now - (run["started_at"] or now)
             task.update(running=True, left=max(est - took, 0.0), late=took > est * LATE_FACTOR + LATE_SLACK_S)
@@ -179,7 +183,7 @@ def forecast(conn, now: float | None = None) -> dict:
         first = 0 if t["stage"] == "find_conversations" else 1 if (t["stage"] == "insight" and t["claude"]) else 2
         return (first, order[t["stage"]], -about(key[0])["when"], t["queued_at"])
 
-    blocked = P.claude_blocked_until(conn, now) or 0.0
+    blocked = RN.claude_blocked_until(conn, now) or 0.0
     clock, finished, waits = now, {}, {}
     for key in [k for k, t in tasks.items() if t["running"]]:  # one runner: the running step ends first
         clock += tasks[key]["left"]

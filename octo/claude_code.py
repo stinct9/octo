@@ -74,7 +74,27 @@ def clean_env() -> dict:
 
 
 def ask(model: str, effort: str, system: str, prompt: str, schema: dict, timeout: int = TIMEOUT_S) -> tuple[dict, dict]:
-    """(the structured answer, usage). Raises with Claude Code's own message on any failure."""
+    """(the structured answer, usage). Raises with Claude Code's own message on any failure. Every call made, or failed
+    after it may have used the plan (a timeout, an error with a cost), is a row in model_calls (db.model_call)."""
+    from .db import model_call
+    reader = {"kind": "claude-code", "model": model}
+    try:
+        answer, usage = _run(model, effort, system, prompt, schema, timeout)
+    except subprocess.TimeoutExpired:
+        model_call(reader, False)
+        raise
+    except Billed as e:
+        model_call(reader, False)
+        raise RuntimeError(str(e)) from None
+    model_call(reader, True)
+    return answer, usage
+
+
+class Billed(RuntimeError):
+    """A failure after Claude worked on the request: counted in the day's calls."""
+
+
+def _run(model: str, effort: str, system: str, prompt: str, schema: dict, timeout: int) -> tuple[dict, dict]:
     exe = claude_bin()
     if not exe:
         raise RuntimeError("Claude Code isn't installed (the `claude` command wasn't found)")
@@ -92,10 +112,13 @@ def ask(model: str, effort: str, system: str, prompt: str, schema: dict, timeout
         msg = str(d.get("result") or d.get("subtype") or "unknown error")
         if "authenticate" in msg.lower() or "login" in msg.lower():
             msg += " -- sign in on this Mac: claude auth login"  # pipeline.SIGNED_OUT_WORDS
-        raise RuntimeError(f"Claude Code: {msg}")
+        raise (Billed if d.get("total_cost_usd") else RuntimeError)(f"Claude Code: {msg}")
     answer = d.get("structured_output")
     if answer is None:
-        answer = json.loads(d.get("result") or "{}")
+        try:
+            answer = json.loads(d.get("result") or "{}")
+        except json.JSONDecodeError:
+            raise Billed("Claude Code: the answer wasn't the JSON asked for")
     usage = {"cost_usd_equivalent": d.get("total_cost_usd"), "duration_ms": d.get("duration_ms"),
              "input_tokens": (d.get("usage") or {}).get("input_tokens"),
              "output_tokens": (d.get("usage") or {}).get("output_tokens")}

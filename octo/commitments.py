@@ -12,14 +12,19 @@ input hash stay exactly as they were and no review is made again.
   ones, and says which came up (each with a checked quote).
 - **History:** only conversations from the 14 days before the step shipped, and every one since
   (`app_config.commitments_from`, set once in db._migrate). Older ones are never queued.
-- **The owner's marks** (Done / Dropped on their own, They did / They didn't on others') are kept in the
-  `commitments` table, never counted as "acted" on Progress: these are what was said, not the review's advice.
+- **The owner's marks** (Did it / Let it go on their own, They did / They didn't on others'; stored as done /
+  dropped) are kept in the `commitments` table, never counted as "acted" on Progress: these are what was said, not
+  the review's advice.
+- **The same promise as a step** (review 5 Nov, item 5): one of the owner's own that says what a "What to do" step of
+  the same conversation says (`same_promise`, words shared, read time, nothing stored) is shown once, as the step, and
+  closing either closes both (`close_paired`); acted is counted for the step only.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from datetime import date, datetime
 from pathlib import Path
@@ -189,35 +194,6 @@ def open_with(conn, session_id: str, person_ids: set[str]) -> list[dict]:
             for c in found if (c["at"] or 0) < at]
 
 
-def ready(conn, session_id: str) -> bool:
-    """After the review (its current run done; for a part of one discussion, the whole's), within the history, and not once the owner has marked any of
-    this conversation's commitments: like a rated review, those stay as they are."""
-    from .planning import insight_ready
-    from .settings import BY_STAGE, selected
-    if not in_history(conn, session_id) or not insight_ready(conn, session_id) or not selected(conn, BY_STAGE["commitments"]):
-        return False
-    from .parts import group
-    g = group(conn, session_id)  # B35: a part of one discussion waits for the review of the whole, on its first part
-    if not row(conn, "SELECT 1 FROM stage_runs WHERE target=? AND stage='insight' AND is_current=1 AND status='done'",
-               g[0]["id"] if g else session_id):
-        return False
-    return not row(conn, "SELECT 1 FROM commitments WHERE session_id=? AND (state IS NOT NULL OR ticktick IS NOT NULL OR checked IS NOT NULL)", session_id)
-
-
-def inputs(conn, session_id: str) -> dict:
-    """Who's who (with their people, so a promise lands on the right page), the owner's corrections, and the open
-    commitments with them. That list is taken once: the run made with it keeps it, so marking a commitment in
-    another conversation doesn't send this one round again."""
-    from .planning import corrections_input, settled_speakers
-    people = people_in(conn, session_id)
-    speakers = [{**s, "person": people.get(s["speaker"])} for s in settled_speakers(conn, session_id) or []]
-    cur = row(conn, "SELECT params FROM stage_runs WHERE target=? AND stage='commitments' AND is_current=1", session_id)
-    was = load_json(cur["params"]) if cur else None
-    earlier = was["open"] if was and "open" in was else \
-        open_with(conn, session_id, {s["person"] for s in speakers if s["person"] and not s["self"]})
-    return {"speakers": speakers, **corrections_input(conn, session_id), "open": earlier}
-
-
 # ---- after a run (octo/pipeline.py) -------------------------------------------------------------
 
 def apply(conn, run: dict) -> None:
@@ -283,14 +259,45 @@ def for_person(conn, person_id: str) -> list[dict]:
 
 
 def mark(conn, commitment_id: str, state: str | None) -> dict:
-    """Done / Dropped on the owner's own, They did / They didn't on others'; None opens it again."""
+    """Did it / Let it go (done / dropped) on the owner's own, They did / They didn't on others'; None opens it again.
+    One of the owner's that is the same promise as a step closes or opens that step too (5 Nov, item 5)."""
     c = get(conn, commitment_id)
     if not c:
         raise KeyError(commitment_id)
     if state is not None and state not in (MINE if c["mine"] else THEIRS):
         raise ValueError(f"{state!r} isn't a mark for {'your' if c['mine'] else 'their'} commitment")
     conn.execute("UPDATE commitments SET state=?, state_at=? WHERE id=?", (state, time.time() if state else None, commitment_id))
+    if c["mine"]:
+        _step_follows(conn, c, state)
     return get(conn, commitment_id)
+
+
+def step_for(conn, c: dict) -> tuple[str, str] | None:
+    """The shown review's step (its run and item) that is the same promise as this commitment of the owner's, if any."""
+    from . import parts as PT
+    from . import sessions as SV
+    g = PT.group(conn, c["session_id"])
+    head = g[0]["id"] if g else c["session_id"]
+    ins = SV.shown_review(conn, head)
+    review = load_json(ins["output"]) if ins else None
+    for item, p in paired_in(conn, head, review).items():
+        if p["id"] == c["id"]:
+            return ins["id"], item
+    return None
+
+
+def _step_follows(conn, c: dict, state: str | None) -> None:
+    found = step_for(conn, c)
+    if not found:
+        return
+    run, item = found
+    fb = row(conn, "SELECT acted, let_go_at FROM feedback WHERE insight_run=? AND item=?", run, item) or {}
+    conn.execute("INSERT OR IGNORE INTO feedback (insight_run, item, session_id, updated_at) VALUES (?, ?, ?, ?)",
+                 (run, item, row(conn, "SELECT target FROM stage_runs WHERE id=?", run)["target"], time.time()))
+    acted = 1 if state == "done" else (0 if fb.get("acted") and c["state"] == "done" else fb.get("acted"))
+    let_go = time.time() if state == "dropped" else (None if c["state"] == "dropped" else fb.get("let_go_at"))
+    conn.execute("UPDATE feedback SET acted=?, let_go_at=?, updated_at=? WHERE insight_run=? AND item=?",
+                 (acted, let_go, time.time(), run, item))
 
 
 def to_ticktick(conn, commitment_id: str, add=None) -> dict:
@@ -332,3 +339,75 @@ def judge(conn, commitment_id: str, verdict: str | None) -> dict:
     conn.execute("UPDATE commitments SET checked=?, checked_at=? WHERE id=?",
                  (verdict, time.time() if verdict else None, commitment_id))
     return to_check(conn)
+
+
+# ---- the same promise as a step (review 5 Nov, item 5) ----------------------------------------------------------
+
+_STOP = {"about", "after", "again", "also", "before", "from", "have", "into", "just", "make", "more", "next", "once",
+         "over", "said", "some", "than", "that", "their", "them", "then", "there", "they", "this", "time", "what",
+         "when", "will", "with", "would", "your", "yours", "week", "going", "want", "need"}
+
+
+def _words(text: str) -> set[str]:
+    return {w.rstrip("s") for w in re.findall(r"[a-z]+", (text or "").lower()) if len(w) >= 4 and w not in _STOP}
+
+
+def same_promise(step: dict, c: dict) -> float:
+    """How surely a "What to do" step and one of the owner's commitments are one promise: the words they share over
+    the fewer of the two (the step's title and detail; the commitment's what and quote), 0 under two shared words.
+    Same due date adds a little. 0.5 and over is the same promise."""
+    a = _words(f"{step.get('title', '')} {step.get('detail', '')}")
+    b = _words(f"{c.get('what', '')} {c.get('quote', '')}")
+    shared = a & b
+    if len(shared) < 2:
+        return 0.0
+    return len(shared) / min(len(a), len(b)) + (0.1 if step.get("due") and step.get("due") == c.get("due") else 0.0)
+
+
+PAIRED = 0.5
+
+
+def pair(steps: list[dict], mine: list[dict]) -> dict[str, dict]:
+    """Each step ("n0", "n1", …) to the owner's commitment that is the same promise, best first, one each way."""
+    scored = sorted(((same_promise(t, c), f"n{i}", c) for i, t in enumerate(steps) for c in mine),
+                    key=lambda x: -x[0])
+    out: dict[str, dict] = {}
+    taken: set[str] = set()
+    for score, item, c in scored:
+        if score >= PAIRED and item not in out and c["id"] not in taken:
+            out[item] = c
+            taken.add(c["id"])
+    return out
+
+
+def mine_in(conn, session_ids: list[str]) -> list[dict]:
+    """The owner's own commitments in these conversations (every part of one discussion), open or not."""
+    if not session_ids:
+        return []
+    marks = ",".join("?" * len(session_ids))
+    return [view(c) for c in rows(conn, _SELECT + f"WHERE c.by_self=1 AND c.session_id IN ({marks}) ORDER BY c.start_s",
+                                  *session_ids)]
+
+
+def paired_in(conn, session_id: str, review: dict | None) -> dict[str, dict]:
+    """The shown review's steps paired with the owner's commitments in its conversation (and its parts)."""
+    from . import parts as PT
+    if not review or not review.get("next"):
+        return {}
+    ids = [g["id"] for g in PT.group(conn, session_id)] or [session_id]
+    return pair(review["next"], mine_in(conn, ids))
+
+
+def close_paired(conn, c: dict | None, *, acted: bool | None = None, let_go: bool | None = None) -> None:
+    """A step closed or opened again: its paired commitment follows (Did it → done, Let it go → dropped; undone, only
+    the mark the step gave it is taken back)."""
+    if not c:
+        return
+    if acted is not None:
+        state = "done" if acted else (None if c["state"] == "done" else c["state"])
+    elif let_go is not None:
+        state = "dropped" if let_go else (None if c["state"] == "dropped" else c["state"])
+    else:
+        return
+    if state != c["state"]:
+        conn.execute("UPDATE commitments SET state=?, state_at=? WHERE id=?", (state, time.time() if state else None, c["id"]))

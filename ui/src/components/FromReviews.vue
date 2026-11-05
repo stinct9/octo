@@ -3,6 +3,9 @@
 // (review 4 Oct, M01). Until then the only place to mark one acted was inside each past conversation.
 // "Did it" is the owner's own tap, through the same feedback route as the conversation page. "Let it go"
 // (6 Oct) takes a step off the list without counting it as done: otherwise the list only grows.
+// Since 5 Nov (review item 5) the owner's own commitments are here too, "you promised", each once: one that is the
+// same promise as a step is the step, and closing it closes both (the server's). A promise alone is marked through
+// its commitment, so it never counts as acted (B14).
 import { computed, onMounted, ref } from 'vue'
 import { lab } from '../lab/api'
 import { dueDay, today as localToday, when } from '../lab/format'
@@ -48,7 +51,8 @@ onMounted(async () => {
 async function mark(t: OpenTask, acted: boolean) {
   const k = key(t)
   try {
-    await lab.feedback(t.session_id, t.run, t.item, { acted })
+    if (t.kind === 'promise') await lab.markCommitment(t.item, acted ? 'done' : null)
+    else await lab.feedback(t.session_id, t.run!, t.item, { acted })
     if (acted) done.value = { ...done.value, [k]: { note: '', saved: '', error: '' } }
     else { const d = { ...done.value }; delete d[k]; done.value = d }
   } catch (e) {
@@ -58,7 +62,8 @@ async function mark(t: OpenTask, acted: boolean) {
 async function letGo(t: OpenTask, on: boolean) {
   const k = key(t)
   try {
-    await lab.feedback(t.session_id, t.run, t.item, { let_go: on })
+    if (t.kind === 'promise') await lab.markCommitment(t.item, on ? 'dropped' : null)
+    else await lab.feedback(t.session_id, t.run!, t.item, { let_go: on })
     if (on) letGone.value = { ...letGone.value, [k]: true }
     else { const d = { ...letGone.value }; delete d[k]; letGone.value = d }
   } catch (e) {
@@ -67,7 +72,7 @@ async function letGo(t: OpenTask, on: boolean) {
 }
 async function saveNote(t: OpenTask) {
   const d = done.value[key(t)]
-  if (!d || d.note.trim() === d.saved) return
+  if (!d || d.note.trim() === d.saved || !t.run) return
   try {
     await lab.feedback(t.session_id, t.run, t.item, { note: d.note.trim() })
     d.saved = d.note.trim()
@@ -95,7 +100,7 @@ async function saveNote(t: OpenTask) {
           <span v-if="ttDone[key(t)]" class="tt-done small">Done in TickTick</span>
           <a v-else-if="t.ticktick" :href="t.ticktick" target="_blank" rel="noopener" class="tt small">TickTick ↗</a>
           <template v-if="done[key(t)]">
-            <span class="ok small">Done</span>
+            <span class="ok small">✓ Did it</span>
             <button type="button" class="link small" @click="mark(t, false)">Undo</button>
           </template>
           <template v-else-if="letGone[key(t)]">
@@ -107,8 +112,10 @@ async function saveNote(t: OpenTask) {
             <button type="button" class="btn btn-small" @click="mark(t, true)">Did it</button>
           </template>
         </div>
-        <div class="meta muted small">{{ when(t.at) }}<template v-if="!t.counts"> · not counted</template></div>
-        <label v-if="done[key(t)]" class="note small">What you did (optional)
+        <div class="meta muted small"><template v-if="t.kind === 'promise'">{{ t.to ? `You promised ${t.to}` : 'You promised' }} ·
+          </template><template v-else-if="t.promise">You promised this too · </template>{{ when(t.at) }}<template
+            v-if="!t.counts"> · not counted</template></div>
+        <label v-if="done[key(t)] && t.kind === 'step'" class="note small">What you did (optional)
           <input v-model="done[key(t)].note" maxlength="1000" @blur="saveNote(t)" @keydown.enter.prevent="saveNote(t)">
           <span v-if="done[key(t)].error" class="error">{{ done[key(t)].error }}</span>
           <span v-else-if="done[key(t)].saved" class="muted">Saved</span>

@@ -4,9 +4,11 @@ import json
 import time
 
 from octo import pipeline as P
+from octo import runs as RN  # the holds and the day's calls (risk 8, 5 Nov)
 from octo import review as R
 from octo.db import connect
 from octo.stages import dropped, readmitted
+from tests.calls import spend
 
 
 def test_dropped_speech_a_speaker_turn_covers_comes_back_unsure():  # M17
@@ -44,15 +46,11 @@ def test_by_principle_lists_what_each_review_said_with_jays_rating(tmp_path):  #
 def test_the_daily_claude_cap_holds_claude_steps_until_midnight(tmp_path, monkeypatch):  # M09
     conn = _lab(tmp_path)
     now = time.time()
-    monkeypatch.setattr(P, "DAILY_CLAUDE_CALLS", 3)
-    # As the owner's runs record them: a Hindi merge through Claude Code, a review on claude-opus-5-5.
-    conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, params, output, queued_at, finished_at) "
-                 "VALUES ('t', 'transcribe', 'x', 'h', 'done', ?, ?, 0, ?)",
-                 (json.dumps({"hindi": {"base_model": "q"}}), json.dumps({"merged": {"calls": 2}}), now))
+    monkeypatch.setattr(RN, "DAILY_CLAUDE_CALLS", 3)
+    spend(conn, 2, at=now)  # e.g. a Hindi merge's two chunks through Claude Code
+    spend(conn, 5, {"kind": "anthropic", "connection": "key", "model": "m"}, at=now)  # not Claude Code's: not counted
     assert P.claude_blocked_until(conn, now) is None
-    conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, params, output, queued_at, finished_at) "
-                 "VALUES ('i', 'insight', 'x', 'h', 'done', ?, ?, 0, ?)",
-                 (json.dumps({"model": "claude-opus-5-5"}), json.dumps({"usage": {"duration_ms": 1}}), now))
+    spend(conn, 1, at=now)  # a review
     assert P.claude_blocked_until(conn, now) == P._midnight(now, 1)
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, params, queued_at) "
                  "VALUES ('q1', 'insight', 'y', 'h2', 'queued', ?, 1), ('q2', 'identify', 'y', 'h3', 'queued', '{}', 2)",
@@ -60,7 +58,7 @@ def test_the_daily_claude_cap_holds_claude_steps_until_midnight(tmp_path, monkey
     assert P.next_run(conn, now)["id"] == "q2"  # the review waits; the rest carries on
 
 
-def test_progress_says_where_every_conversation_is(tmp_path):  # M03
+def test_the_list_says_where_every_conversation_is(tmp_path):  # M03; on the list's footer since 5 Nov
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -68,7 +66,7 @@ def test_progress_says_where_every_conversation_is(tmp_path):  # M03
     _lab(tmp_path)
     app = FastAPI()
     app.include_router(make_router(lambda: connect(tmp_path / "t.db"), processor=type("P", (), {"kick": lambda self: None})()))
-    states = TestClient(app).get("/api/octo/progress").json()["states"]
+    states = TestClient(app).get("/api/octo/progress/states").json()
     assert sum(states.values()) == 1 and set(states) >= {"reviewed", "to_review", "waiting_on_you", "cant_count", "not_counted"}
 
 
@@ -133,10 +131,7 @@ def test_the_claude_cap_is_jays_plans_and_a_connection_has_its_own_budget(tmp_pa
     now = time.time()
     PV.add("openai", label="Local", base_url="http://127.0.0.1:1234/v1", models=["m"])
     reader = {"kind": "openai", "connection": "local", "model": "m"}
-    for i in range(70):  # more than the Claude cap, on the owner's own server
-        conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, params, output, queued_at, finished_at) "
-                     "VALUES (?, 'insight', ?, 'h', 'done', ?, ?, 0, ?)",
-                     (f"d{i}", f"s{i}", json.dumps({"model": "m", "reader": reader}), json.dumps({"usage": {"x": 1}}), now))
+    spend(conn, 70, reader, at=now)  # more than the Claude cap, on the owner's own server
     assert P.claude_calls_since(conn, P._midnight(now)) == 0 and P.claude_blocked_until(conn, now) is None
     conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, params, queued_at) "
                  "VALUES ('q', 'insight', 'y', 'h2', 'queued', ?, 1)", (json.dumps({"model": "m", "reader": reader}),))

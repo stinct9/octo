@@ -9,6 +9,7 @@ import pytest
 from octo import corrections as C
 from octo import delivery as D
 from octo import fillers as FL
+from octo import frame as FR
 from octo import eta as E
 from octo import person as PE
 from octo import planning as PL
@@ -55,6 +56,11 @@ def _pages(conn) -> str:
            "settled": [PL.settled_speakers(conn, s) for s in sids], "rates": E.rates(conn)}
     for s in got["search"]:
         s.pop("ms")
+    with FR.reading(conn):  # the list's request reads every row's state at once (review 5 Nov, risk 5): the same rows
+        framed = [{k: v for k, v in SV.summary(conn, s).items() if k != "todo"} | {"todo": SV.todo(conn, s["id"])["kind"]}
+                  for s in rows(conn, "SELECT s.*, r.source, r.original, r.started_at FROM sessions s "
+                                      "JOIN recordings r ON r.id = s.recording_id WHERE s.status='active' ORDER BY s.id")]
+        assert json.dumps(framed, sort_keys=True, default=str) == json.dumps(got["list"], sort_keys=True, default=str)
     return json.dumps(got, sort_keys=True, default=str)
 
 
@@ -111,3 +117,44 @@ def test_a_run_read_without_its_output_has_everything_else(lab):
     full, light = current(lab, sid, "diarize"), current(lab, sid, "diarize", output=False)
     assert {k: v for k, v in full.items() if k != "output"} == {k: v for k, v in light.items() if k != "has_output"}
     assert light["has_output"] == 1
+
+
+def test_the_list_and_progress_read_a_few_queries_not_forty_a_conversation(lab, monkeypatch):
+    """Architecture review 5 Nov, risk 5: 3,907 queries for the list of 98 conversations (~40 each), 3,474 for Progress.
+    Each row's state now comes from a few set-based queries; what's left per row is a handful."""
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from octo.api import make_router
+    path = row(lab, "PRAGMA database_list")["file"]
+    n = {"q": 0}
+
+    def db():
+        c = connect(__import__("pathlib").Path(path))
+        c.set_trace_callback(lambda q: n.update(q=n["q"] + 1))
+        return c
+    app = FastAPI()
+    app.include_router(make_router(db, processor=SimpleNamespace(kick=lambda: None)))
+    client = TestClient(app)
+    conversations = row(lab, "SELECT count(*) n FROM sessions WHERE status='active'")["n"]
+    for page in ("/api/octo/sessions", "/api/octo/progress"):
+        assert client.get(page).status_code == 200  # memos filled
+        n["q"] = 0
+        assert client.get(page).status_code == 200
+        assert n["q"] < 4 * conversations + 40, (page, n["q"], conversations)
+
+
+def test_what_is_kept_holds_one_run_per_conversation(lab):
+    """Review 5 Nov: the run-keyed records never dropped a superseded run (a slow leak). Kept by conversation now, a
+    re-run replaces its entry; the ETA's records drop runs no longer in the lab."""
+    conn = lab
+    _pages(conn)
+    sids = {r["id"] for r in rows(conn, "SELECT id FROM sessions")}
+    for kept in (SV._TALK, SV._PAUSED, PL._LETTERS):
+        assert kept and {k[1] for k in kept} <= sids
+    lab_file = row(conn, "PRAGMA database_list")["file"]
+    E._MERGED[(lab_file, "tr_gone")] = False  # a run asked of once, deleted since
+    E.rates(conn)
+    assert (lab_file, "tr_gone") not in E._MERGED

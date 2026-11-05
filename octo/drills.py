@@ -27,12 +27,12 @@ import time
 import traceback
 from pathlib import Path
 
-from . import AUDIO, HOME, ROOT
+from . import AUDIO, BACKGROUND, HOME, ROOT
 from . import audio as A
 from . import delivery as D
 from . import fillers as FL
 from . import insight as IN
-from .db import config, load_json, new_id, row, rows
+from .db import calling, config, load_json, new_id, row, rows
 
 FOLDER = AUDIO / "drills"
 PROMPTS_DEFAULT = ["Explain one thing from your work in 90 s, answer first"]  # C7's, the only one to start
@@ -127,7 +127,7 @@ def run_queued(conn, log=print, lock_fd: int | None = None) -> int:
     for d in rows(conn, "SELECT id FROM drills WHERE status='queued' ORDER BY created_at"):
         log(f"drill · {d['id']}")
         try:
-            p = subprocess.run([sys.executable, "-m", "octo.drills", d["id"]], cwd=ROOT, capture_output=True, text=True,
+            p = subprocess.run([*BACKGROUND, sys.executable, "-m", "octo.drills", d["id"]], cwd=ROOT, capture_output=True, text=True,
                                pass_fds=(lock_fd,) if lock_fd is not None else (), timeout=WORKER_TIMEOUT_S)
             err = (p.stderr.strip().splitlines() or ["the worker stopped"])[-1]
         except subprocess.TimeoutExpired:
@@ -187,8 +187,9 @@ def find_point(conn, d: dict, who: dict, ask=None) -> None:
     me = row(conn, "SELECT name FROM people WHERE is_self=1 LIMIT 1")
     name = (me["name"] if me else None) or "the speaker"
     try:
-        raw, usage = ask(who.get("model") or MODEL, who.get("effort") or EFFORT,
-                         POINT_SYSTEM.format(name=name, prompt=d["prompt"]), IN.transcript(lines, {"me": name}), POINT_SCHEMA)
+        with calling(conn, "drill", d["id"]):
+            raw, usage = ask(who.get("model") or MODEL, who.get("effort") or EFFORT,
+                             POINT_SYSTEM.format(name=name, prompt=d["prompt"]), IN.transcript(lines, {"me": name}), POINT_SCHEMA)
         out = check_point(raw, lines, [w for x in segments(d) for w in x.get("words") or []])
     except Exception as e:  # noqa: BLE001 - stored, and shown on the take
         conn.execute("UPDATE drills SET point_error=?, point_at=? WHERE id=?", (str(e)[:2000] or type(e).__name__, time.time(), d["id"]))
@@ -200,7 +201,7 @@ def find_point(conn, d: dict, who: dict, ask=None) -> None:
 def find_points(conn, log=print, ask=None, now: float | None = None) -> int:
     """The runner's, after hearing: each heard take without its point, oldest first. A failure stays failed, except
     Claude's usage limit, tried again once it resets; nothing is asked while the day's calls are used."""
-    from . import pipeline as P
+    from . import runs as RN
     from .settings import reader
     now = time.time() if now is None else now
     who = reader(conn)
@@ -208,10 +209,10 @@ def find_points(conn, log=print, ask=None, now: float | None = None) -> int:
         return 0
     n, ls = 0, None
     for d in rows(conn, "SELECT * FROM drills WHERE status='done' AND point IS NULL ORDER BY created_at"):
-        if d["point_error"] and ((r := P.limit_reset(d["point_error"], d["point_at"])) is None or r > now):
+        if d["point_error"] and ((r := RN.limit_reset(d["point_error"], d["point_at"])) is None or r > now):
             continue
-        if (who["kind"] == "claude-code" and P.claude_blocked_until(conn, now)) or \
-                (who.get("connection") and P.budget_blocked_until(conn, who["connection"], now)):
+        if (who["kind"] == "claude-code" and RN.claude_blocked_until(conn, now)) or \
+                (who.get("connection") and RN.budget_blocked_until(conn, who["connection"], now)):
             break
         ls = ls or D.lists(conn)
         t = take(d, ls)
@@ -235,7 +236,7 @@ def point_view(conn, d: dict) -> dict | None:
     if p:
         return {"state": "done"} | {k: p.get(k) for k in ("quote", "dropped", "short", "short_words", "build_up_right", "build_up_why")}
     if d["point_error"]:
-        from .pipeline import limit_reset
+        from .runs import limit_reset
         return {"state": "waiting"} if limit_reset(d["point_error"], d["point_at"]) else {"state": "failed", "error": d["point_error"]}
     from .settings import reader
     return {"state": "waiting" if reader(conn) else "off"}
@@ -337,5 +338,7 @@ def progress(conn) -> dict:
 
 
 if __name__ == "__main__":
+    from .asr import cap_mlx
     from .db import connect
+    cap_mlx()  # Qwen on MLX, as the transcription worker (review 5 Nov, risk 6)
     hear(connect(), sys.argv[1])

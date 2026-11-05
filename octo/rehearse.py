@@ -11,8 +11,8 @@ conversation's, against their principles, and what to try in the real one.
 - **What leaves the Mac:** those readings (headline and observation, and the owner's note on one marked partly
   right), the owner's words (who, what's hard, what they want, their lines) and the exchange, to the reviews' own
   model (settings.reader, as the coach). Nothing else of the lab: no transcript, quote, number or audio.
-- **Calls:** one per reply, and one for the review, each counted in the day's (pipeline._calls_since via
-  calls_since); a usage-limit failure is kept (error, error_at) so Claude's steps wait for its reset, as the coach's.
+- **Calls:** one per reply, and one for the review, each counted in the day's (a row in model_calls,
+  pipeline._calls_since); a usage-limit failure is kept (error, error_at) so Claude's steps wait for its reset, as the coach's.
   Replies at medium effort on Claude Code, to keep the wait short (not measured); the review at the reader's.
 - **Kept apart, like drills (K4):** its own table, never a session, so the list, search, the coach and Progress
   never see it. Deleted by the owner, or when its person is forgotten (voice.forget; merged with them on a rename).
@@ -28,7 +28,7 @@ import time
 
 from . import owner as O
 from . import review_any as RA
-from .db import load_json, new_id, row, rows, tx
+from .db import calling, load_json, new_id, row, rows, tx
 from .insight import MATERIAL, principles, review_rules
 
 MODEL, EFFORT, TURN_EFFORT = "claude-opus-5-5", "high", "medium"
@@ -133,18 +133,18 @@ def _reader_of(who: dict) -> dict:
 def why_not(conn, now: float | None = None) -> str | None:
     """Why the model can't be asked right now, or None (the coach's reasons)."""
     from . import claude_code as CC
-    from . import pipeline as P
+    from . import runs as RN
     from .settings import reader
     now = now or time.time()
     who = reader(conn)
     if who is None:
-        return "choose a model for reviews first (Pipeline page)"
+        return "choose a model for reviews first (Settings → Models and keys)"
     if who["kind"] == "claude-code":
         if not CC.claude_bin():
             return "Claude Code isn't installed (the `claude` command)"
-        if why := P.claude_waits(conn, now):
+        if why := RN.claude_waits(conn, now):
             return why
-    elif who.get("connection") and P.budget_blocked_until(conn, who["connection"], now):
+    elif who.get("connection") and RN.budget_blocked_until(conn, who["connection"], now):
         return "today's calls on this model's budget are used: after midnight"
     return None
 
@@ -156,7 +156,8 @@ def _call(conn, rid: str, effort: str | None, system: str, prompt: str, schema: 
         raise RehearsalError(why)
     who = reader(conn)
     try:
-        raw, usage = _ask(who, effort or who.get("effort") or EFFORT, system, prompt, schema)
+        with calling(conn, "rehearse", rid):
+            raw, usage = _ask(who, effort or who.get("effort") or EFFORT, system, prompt, schema)
     except Exception as e:  # noqa: BLE001 - kept, so a usage limit holds Claude's steps; shown on the page
         msg = str(e)[:2000] or type(e).__name__
         conn.execute("UPDATE rehearsals SET error=?, error_at=?, updated_at=? WHERE id=?", (msg, time.time(), time.time(), rid))
@@ -294,7 +295,7 @@ def view(conn, rid: str) -> dict | None:
     r = _rehearsal(conn, rid)
     if not r:
         return None
-    from .pipeline import limit_reset
+    from .runs import limit_reset
     review = load_json(r["review"])
     if review:
         review = {k: v for k, v in review.items() if k not in ("reader", "usage")}
@@ -312,16 +313,6 @@ def summary(conn) -> dict:
                         "AND i.session_id IS NULL WHERE p.is_self=0 AND p.name IS NOT NULL ORDER BY p.name COLLATE NOCASE")
     got = [r for x in rows(conn, "SELECT id FROM rehearsals ORDER BY created_at DESC") if (r := _rehearsal(conn, x["id"]))]
     return {"rehearsals": [_public(r) for r in got], "people": people, "why_not": why_not(conn)}
-
-
-def calls_since(conn, since: float, which) -> int:
-    """Its calls for the day's count (pipeline._calls_since): each reply, and each review, made since `since`."""
-    n = 0
-    for r in rows(conn, "SELECT turns, review, review_at FROM rehearsals WHERE updated_at >= ?", since):
-        n += sum(1 for t in load_json(r["turns"]) or [] if t.get("reader") and t["at"] >= since and which(t["reader"]))
-        rv = load_json(r["review"]) or {}
-        n += 1 if rv.get("reader") and (r["review_at"] or 0) >= since and which(rv["reader"]) else 0
-    return n
 
 
 def delete(conn, rid: str) -> bool:

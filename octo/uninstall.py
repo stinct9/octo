@@ -92,10 +92,12 @@ def plan(keep_data: bool, code: Path, home: Path, *, app: Path | None, agents: P
             out.append(("empty", "the lab's audio/", home / "audio"))
     out += [("path", what, base / f) for f, what in BESIDE_LAB.items() if (base / f).exists()]
     data_inside = keep_data and home.is_relative_to(code)
-    if code == base / "app" and not data_inside:
-        out.append(("path", "Octo's code", code))
+    ours = code == base / "app" or code.parent == base / "versions"  # the one-line install's (versions/ since 5 Nov)
+    if ours and not data_inside:
+        out += [("path", "Octo's code", p) for p in (base / "current", base / "previous", base / "versions", base / "app")
+                if p.exists() or p.is_symlink()]
     elif code.exists():
-        kept.append(("path", "Octo's code, a folder you made: delete it yourself if you don't want it" if code != base / "app"
+        kept.append(("path", "Octo's code, a folder you made: delete it yourself if you don't want it" if not ours
                      else "Octo's code, which holds the conversations you kept", code))
     out.append(("empty", "Octo's folder", base))
     from .export import ASIDE_DAYS, asides

@@ -18,7 +18,7 @@ from pathlib import Path
 from . import AUDIO, DATA, HOME
 from . import audio as A
 from . import files as FL
-from .db import load_json, row, rows
+from .db import config, load_json, row, rows
 
 RAW_AUDIO_DAYS = 60  # D5: raw audio kept 60 days (1 Oct 2026; was 14) so newer models can redo recent ones
 # B29 (23 Oct): a lab with labconfig's keep_recordings keeps its recordings instead (the filler cue retrains on them);
@@ -31,6 +31,7 @@ BENCH = DATA / "bench"  # bench tools' output since 5 Oct, swept like raw audio 
 # Free space (review 4 Oct, M13): the disk was 87% full. Below WARN_GB the header says so; below
 # STOP_GB nothing more is pulled from the recorder (its card holds the audio until there's room).
 WARN_GB, STOP_GB = 20, 5
+HOLD_GB = 2  # below this, heavy steps and the daily backup wait (architecture review 5 Nov): room for SQLite and swap
 
 
 def free_gb() -> float:
@@ -136,6 +137,8 @@ def _derived(conn, session_id: str, keep_session_row: bool = True) -> None:
     conn.execute("DELETE FROM session_speakers WHERE session_id=?", (session_id,))
     conn.execute("DELETE FROM voiceprints WHERE source LIKE ?", (f"label:{session_id}:%",))
     conn.execute("DELETE FROM stage_runs WHERE target=?", (session_id,))
+    if session_id in (held := config(conn, HELD, {})):  # L9: a held review goes with its runs
+        _held(conn, {k: v for k, v in held.items() if k != session_id})
     rec = row(conn, "SELECT recording_id FROM sessions WHERE id=?", session_id)
     if rec:
         drop_clips(conn, rec["recording_id"])
@@ -249,3 +252,94 @@ def drop_old_audio(conn, now: float | None = None, days: int = RAW_AUDIO_DAYS) -
         if f.is_file() and f.stat().st_mtime < cutoff:
             f.unlink(missing_ok=True)
     return gone
+
+
+# ---- Forget takes their words (security review L9, Jay 5 Nov) ----------------------------------------------------
+# Their lines read "(forgotten)" in every stored run of the conversations they were in: the transcript, who said what,
+# the reviews' and commitments' quotes, the Hindi drafts. The owner's lines stay. A review that read them isn't made
+# again by itself (Jay's reviews never re-run unasked): it's held, and its page offers Redo the review.
+
+FORGOTTEN = "(forgotten)"
+from .runs import FORGOTTEN_REVIEWS as HELD, review_held  # noqa: E402,F401  (L9; read models check it too)
+
+
+def _inside(t: float, spans: list) -> bool:
+    return any(a <= t < b for a, b in spans)
+
+
+def _blank(x, texts: list[str], spans: list, others: list):
+    """x with their words taken out: words timed inside their lines (and nobody else's), lines or quotes that are theirs
+    by time or by text. `texts` longest first; only those of 12+ characters are matched inside other text."""
+    def theirs_at(d: dict) -> bool:
+        if not spans or not isinstance(d.get("start"), (int, float)):
+            return False
+        mid = (d["start"] + (d.get("end") or d["start"])) / 2
+        return _inside(mid, spans) and not _inside(mid, others)
+
+    if isinstance(x, str):
+        for t in texts:
+            if len(t) >= 12:
+                x = x.replace(t, FORGOTTEN)
+        return x
+    if isinstance(x, list):
+        return [_blank(v, texts, spans, others) for v in x
+                if not (isinstance(v, dict) and "w" in v and theirs_at(v))]
+    if not isinstance(x, dict):
+        return x
+    d = {k: _blank(v, texts, spans, others) for k, v in x.items()}
+    if isinstance(x.get("text"), str):
+        t = x["text"].strip()
+        words = x.get("words") if isinstance(x.get("words"), list) else None
+        if words is not None and len(d["words"]) != len(words):  # some of a segment's words were theirs
+            d["text"] = " ".join(w["w"] for w in d["words"]) or FORGOTTEN
+        # shortcut: a quote under 12 characters in a review (no time to place it) stays; the review is held for a redo.
+        if t and (theirs_at(d) if words is None else not d["words"]) or (len(t) >= 12 and any(t in s for s in texts)):
+            d["text"] = FORGOTTEN
+            if words is not None:
+                d["words"] = []
+    return d
+
+
+def forget_words(conn, person_id: str) -> list[str]:
+    """Their words out of every stored run of the conversations they were in (and of the discussions those are parts
+    of), and question checks that quote them. Before Forget unlinks them. Returns the conversations whose review is
+    now held."""
+    from .parts import with_groups
+    from .pipeline import current
+    from .sessions import diarized
+    letters: dict[str, set[str]] = {}
+    for r in rows(conn, "SELECT session_id, speaker FROM session_speakers WHERE person_id=?", person_id):
+        letters.setdefault(r["session_id"], set()).add(r["speaker"])
+    texts, timed = set(), {}
+    for sid, mine in letters.items():
+        _, dz, _ = diarized(conn, sid)
+        spans, others = [], []
+        for ln in (dz or {}).get("lines", []):
+            (spans if ln["speaker"] in mine else others).append((ln["start"], ln["end"]))
+            if ln["speaker"] in mine and ln["text"].strip():
+                texts.add(ln["text"].strip())
+        timed[sid] = (spans, others)
+    texts = sorted(texts, key=len, reverse=True)
+    held, now_held = config(conn, HELD, {}), []
+    for sid in with_groups(conn, list(letters)):
+        spans, others = timed.get(sid, ([], []))
+        for run in rows(conn, "SELECT id, stage, output FROM stage_runs WHERE target=? AND output IS NOT NULL", sid):
+            # Times are this conversation's own only in its transcript and who said what (a review of a whole runs on)
+            sp = spans if run["stage"] in ("transcribe", "diarize") else []
+            out = json.dumps(_blank(json.loads(run["output"]), texts, sp, others))
+            if out != run["output"]:
+                conn.execute("UPDATE stage_runs SET output=? WHERE id=?", (out, run["id"]))
+        for q in rows(conn, "SELECT id, start_s, text FROM question_checks WHERE session_id=?", sid):
+            if _inside(q["start_s"], spans) or q["text"].strip() in texts:
+                conn.execute("UPDATE question_checks SET text=? WHERE id=?", (FORGOTTEN, q["id"]))
+        if ins := current(conn, sid, "insight", output=False):
+            held[sid] = ins["id"]
+            now_held.append(sid)
+    _held(conn, held)
+    return now_held
+
+
+def _held(conn, held: dict) -> None:
+    conn.execute("INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, strftime('%s','now')) "
+                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                 (HELD, json.dumps(held)))
