@@ -130,7 +130,7 @@ def input_hash(stage: Stage, params: dict, target: str, upstream: list[str]) -> 
 
 def current(conn, target: str, stage: str, output: bool = True) -> dict | None:
     """The current run. output=False leaves its output out (has_output says if there is one): a transcript is ~120 KB,
-    and the list read every one of them each time it was asked for, ~22 MB on Jay's lab (4 Nov)."""
+    and the list read every one of them each time it was asked for, ~22 MB on the first lab (4 Nov)."""
     if output:
         return row(conn, "SELECT * FROM stage_runs WHERE target=? AND stage=? AND is_current=1", target, stage)
     return row(conn, f"SELECT {_NO_OUTPUT}, output IS NOT NULL AS has_output FROM stage_runs WHERE target=? AND stage=? "

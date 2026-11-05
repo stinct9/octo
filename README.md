@@ -35,7 +35,8 @@ your Mac, and when: [PRIVACY.md](PRIVACY.md).
    curl -fsSL https://github.com/stinct9/octo/releases/latest/download/install.sh | bash
    ```
 
-   It downloads the latest ready-built release (nothing to build: no git, no Node) and installs it.
+   It downloads the latest ready-built release (nothing to build: no git, no Node) and installs it. If it stops part
+   way (the Mac went offline, say), it tells you where: paste the same line again, and it carries on.
 3. If a window from Apple asks to install "command line developer tools", click **Install**, then **Agree**. Terminal
    waits for it.
 4. When Terminal says it's done, the **Octo** app opens on **Set up Octo**. You can close Terminal. Follow the page

@@ -5,8 +5,8 @@
 #
 # Downloads a release (the code with its web pages built: no git, no Node) into
 # ~/Library/Application Support/octo/app, keeps what the lab records beside it in lab.noindex (only you can
-# open it), and runs that release's install.sh. Run it again to update: the release is unpacked over the code,
-# and nothing in lab.noindex is touched. OCTO_RELEASE names another release (a URL, or file:// for a local one).
+# open it), and runs that release's install.sh. Run it again to repair or update: the release replaces the code
+# (files it no longer has go), and nothing in lab.noindex is touched. OCTO_RELEASE names another release (a URL, or file:// for a local one).
 set -euo pipefail
 
 # Everything inside a function, so a download cut short runs nothing.
@@ -22,7 +22,15 @@ main() {
   tmp="$(mktemp -d)"  # not local: the EXIT trap reads it after main returns
   trap 'rm -rf "$tmp"' EXIT
   echo "Downloading Octo from $release"
-  curl -fL --progress-bar "$release" -o "$tmp/octo.tar.gz" || { echo "Couldn't download Octo from $release: check this Mac is online, then try again."; exit 1; }
+  local rc=0 code
+  code="$(curl -fL --progress-bar -w '%{http_code}' "$release" -o "$tmp/octo.tar.gz")" || rc=$?
+  if [ "$rc" -ne 0 ] && [ "${code:-000}" -ge 400 ]; then  # the server answered, with an error (404: no release there, or not public yet)
+    echo "There's no Octo release at $release yet. If someone gave you this line, ask them for a new one."
+    exit 1
+  elif [ "$rc" -ne 0 ]; then
+    echo "Couldn't download Octo from $release: check this Mac is online, then run the same line again."
+    exit 1
+  fi
   # A web page served with status 200 in its place (a link that moved) isn't something curl -f can tell.
   if [ "$(head -c 2 "$tmp/octo.tar.gz" | od -An -tx1 | tr -d ' \n')" != "1f8b" ]; then
     echo "What came from $release isn't an Octo release."
@@ -32,10 +40,22 @@ main() {
   mkdir "$tmp/octo"
   tar -xzf "$tmp/octo.tar.gz" -C "$tmp/octo" --strip-components 1
   [ -x "$tmp/octo/install.sh" ] || { echo "That download isn't an Octo release (no install.sh in it)."; exit 1; }
+  # This Mac, the port, the disk: refused here, before anything already installed is touched.
+  # (Only a release whose install.sh has --check: an older one would install from this temporary folder.)
+  if grep -q -- '--check' "$tmp/octo/install.sh"; then
+    local said
+    said="$("$tmp/octo/install.sh" --check 2>&1)" || { echo "$said" | grep -v '^This folder: '; exit 1; }
+  fi
 
   mkdir -p "$app"
   mkdir -p -m 700 "$lab"
-  (cd "$tmp/octo" && tar -cf - .) | (cd "$app" && tar -xf -)
+  # Over the code, files the release no longer has removed (octo/deploy.py's update_release does the same); the
+  # environment, Node and anything of the lab's kept. A lab already running starts no new step meanwhile (PAUSE).
+  echo "$$" > "$app/.octo-deploying"
+  rsync -a --checksum --delete --exclude=/.venv --exclude=/.node --exclude=/ui/node_modules --exclude=/.octo-home \
+    --exclude=/.octo-release --exclude=/.octo-deploying --exclude=/data --exclude=/audio --exclude=/notes --exclude=/runs \
+    "$tmp/octo/" "$app/" || { rm -f "$app/.octo-deploying"; echo "Couldn't copy Octo into $app."; exit 1; }
+  rm -f "$app/.octo-deploying"
   # Where updates come from: `octo update` and the lab's "Octo update ready" read it (octo/deploy.py).
   echo "$release" > "$app/.octo-release"
   # The lab's data lives outside the code (octo/__init__.py reads this), so an update never reaches it.

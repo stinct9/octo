@@ -62,13 +62,17 @@ def add(router: APIRouter, lab: Lab) -> None:
         skipped = set(config(conn, "setup_skipped", []))
         mac = [c for c in (*DR.machine(), *DR.places(), *DR.apple_tools(), *DR.software(), *DR.launcher())
                if c.mark == DR.FAIL]
+        # Not blocking, but install.sh says this page will tell (install review, 5 Nov): no command line tools yet, so the
+        # Octo app is the simple launcher, and how to get the full one.
+        mac += [c for c in (*DR.apple_tools(), *DR.launcher()) if c.mark == DR.WARN]
         from .. import notify as N
         if N._app_mode == "off":  # the Octo app says the owner turned its banners off: worth knowing, never blocking
             mac.append(DR.Check(DR.WARN, "Notifications", "turned off for Octo, so it can't tell you when a review is ready",
                                 "System Settings → Notifications → Octo → turn on Allow Notifications"))
         devices = PH.devices(conn)
         steps = [
-            {"id": "mac", "done": not [c for c in mac if c.mark == DR.FAIL], "why": [c.__dict__ for c in mac]},
+            {"id": "mac", "done": not [c for c in mac if c.mark == DR.FAIL],
+             "why": [{**c.__dict__, "fix": DR.spelled(c.fix)} for c in mac]},  # `octo` isn't on PATH: its full path
             {"id": "models", "done": all(m["cached"] for m in MD.status(conn))},
             {"id": "you", "done": bool(O.load(conn).get("name"))},
             {"id": "principles", "done": bool(RB.sections()["parsed"])},

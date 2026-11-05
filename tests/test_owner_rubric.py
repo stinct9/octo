@@ -131,6 +131,15 @@ def test_a_new_lab_is_walked_through_setup(client, new_lab_files, monkeypatch):
     assert client.get("/api/octo/progress").json()["first_lab"] is False  # a buyer's lab: Progress shows the beta's card
 
 
+def test_setup_says_how_to_get_the_full_octo_app(client, monkeypatch):
+    """install.sh, when the command line tools didn't arrive: "The Setup page will say how to finish" (install review, 5 Nov)."""
+    from octo import doctor as DR
+    monkeypatch.setattr(DR, "apple_tools", lambda: [DR.Check(DR.WARN, "Apple's command line tools", "not installed", "xcode-select --install")])
+    monkeypatch.setattr(DR, "launcher", lambda: [DR.Check(DR.WARN, "The Octo app", "the simple launcher", "octo launcher install")])
+    mac = next(s for s in client.get("/api/octo/settings/setup").json()["steps"] if s["id"] == "mac")
+    assert {c["what"] for c in mac["why"]} >= {"Apple's command line tools", "The Octo app"}
+
+
 def test_jays_lab_is_the_first_lab(tmp_path, client):
     conn = connect(tmp_path / "t.db")
     conn.execute("""INSERT OR REPLACE INTO app_config (key, value, updated_at) VALUES ('lab_origin', '"first"', 0)""")  # as migrated: it had reviews before 7 Oct (octo/labconfig.py)

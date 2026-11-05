@@ -48,6 +48,15 @@ that leaves is a conversation's text when it's reviewed, sent to the model you c
    and the lab, started at login, has no window to answer in, so it would wait with no sign. The installer
    refuses them and says so.
 
+   **If it stops** (the Mac went offline, a download was cut short), it says at which step: run the same line again.
+   What's done is kept, and the code is replaced cleanly, so a second run also repairs a broken install. Before it
+   touches anything it checks the Mac (Apple Silicon, macOS 14, 15 GB free), the folder, and port 8765; in a clone,
+   `./install.sh --check` runs only those checks.
+
+   **One lab per Mac.** The lab answers on 127.0.0.1:8765 and its helpers on 8767 (and Ollama's 11434), the same for
+   every user, so a second macOS user on the same Mac can't run a lab while the first one's is running: the installer
+   says so and stops. The lab is per user otherwise (its login items, folder and Octo app are that user's own).
+
 2. It finishes by starting the lab when you log in, building the **Octo** app (below) and opening **Set up Octo** in
    it. The speech models (about 10 GB) download in the background meanwhile. Two of them
    (`pyannote/speaker-diarization-3.1` and `pyannote/segmentation-3.0`) need a free Hugging Face account: the
@@ -83,6 +92,8 @@ itself is the program the login item starts, and quitting the app doesn't stop i
 - Without the command line tools, `install.sh` makes a one-line launcher instead that opens the lab in your browser;
   install the tools (`xcode-select --install`) and run `.venv/bin/octo launcher install` to get the app.
   `octo doctor` says which you have and whether it's up to date.
+- On macOS 14 or 15 the command line tools are older, and the app is built without the live filler cue on calls,
+  which needs macOS 26 (its speech recognition is new there); everything else is the same.
 
 ## The iPhone app
 

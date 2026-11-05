@@ -335,7 +335,7 @@ def _day(t: float) -> str:
 
 
 def setup_step(have: dict | None, devices: list[dict], now: float | None = None) -> dict:
-    """Set up Octo's step 6, for the Setup page, home's card and `octo doctor` alike (Jay, 4 Nov): done once there's
+    """Set up Octo's step 6, for the Setup page, home's card and `octo doctor` alike (4 Nov): done once there's
     evidence the app is on the phone, however it got there: this lab installed it and it was opened, or a phone is
     paired (only the app pairs: its QR code; the Safari code has had no button since phone v2), so an install from
     Xcode by hand counts. Evidence that went stale stays ticked and says so in `note`."""

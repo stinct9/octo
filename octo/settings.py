@@ -134,7 +134,7 @@ STEPS: tuple[Step, ...] = (
          "model to merge, and the coach your reviews.",
          choices=(
              Choice("claude-opus-5-5", CLAUDE_CODE_LABEL, {"model": "claude-opus-5-5", "effort": "high"},
-                    "Wrote the 20:31 analysis chosen as the bar (2 Oct). One review per conversation. " + CLAUDE_CODE_WHY,
+                    "The model the review was built and measured on. One review per conversation. " + CLAUDE_CODE_WHY,
                     claude=True),
              Choice("qwen3-8b", "qwen3:8b (local)", {"model": "qwen3:8b"},
                     "In use 1–2 Oct. Stays on the Mac, one principle at a time. Timed out on every conversation "

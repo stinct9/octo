@@ -347,7 +347,7 @@ onMounted(async () => {
         Claude plan, or a model on an API key, which its maker bills per use.</p>
       <p v-if="current">Reviews use <b>{{ current.label }}</b>. <a :href="href.pipeline">Change it on the Pipeline page</a>; keys are in <a :href="href.settings">Settings</a>.</p>
       <template v-else>
-        <ModelsKeys @changed="loadReview" />
+        <ModelsKeys in-setup @changed="loadReview" />
         <div v-if="usable.length" class="line">
           <label class="field grow">Review with
             <select v-model="pick" aria-describedby="pick-why"><option v-for="c in usable" :key="c.id" :value="c.id">{{ c.label }}</option></select>
@@ -362,8 +362,8 @@ onMounted(async () => {
         <h3>Try it on a made-up conversation</h3>
 
       <p class="muted">Before you record anyone: a short invented 1:1 between you and a team lead, reviewed against your
-        principles by your model. It sends that made-up text (about 300 words) to your model once, on your key, and counts
-        toward nothing.</p>
+        principles by your model. It sends that made-up text (about 300 words) to your model once, on your plan or key, and
+        counts toward nothing.</p>
       <p v-if="!done('principles') || !done('model')" class="muted small">Write your principles and choose a model first.</p>
       <div v-else class="line">
         <button type="button" class="btn" :disabled="sampleBusy" @click="runSample">{{ sampleBusy ? 'Reviewing… (up to a minute)' : sample ? 'Review it again' : 'Review the sample' }}</button>

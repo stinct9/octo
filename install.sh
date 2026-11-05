@@ -2,6 +2,7 @@
 # Install Octo's conversation lab on this Mac (Apple Silicon). Safe to run again: it skips what's done.
 #
 #   ./install.sh
+#   ./install.sh --check    only the checks before anything is downloaded or changed (this Mac, the folder, the port)
 #
 # What it does, in order: checks the Mac and where this folder is; checks Apple's command line tools;
 # gets uv (Astral's Python installer, one file in ~/.local/bin) if it's missing; makes the Python
@@ -13,7 +14,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-say() { printf '\n== %s\n' "$*"; }
+step=""
+say() { step="$*"; printf '\n== %s\n' "$*"; }
+# Stopped part way (offline, a download cut short): say where, and that running it again carries on from there.
+stopped() {
+  local rc=$?
+  [ "$rc" -eq 0 ] || [ -z "$step" ] || printf "\nOcto's install stopped at \"%s\". If this Mac went offline, check it's back, then run the same line again: what's done is kept.\n" "$step"
+}
 
 say "This Mac"
 if [ "$(uname -m)" != "arm64" ]; then
@@ -51,6 +58,25 @@ for f in Downloads Documents Desktop "Library/Mobile Documents"; do
   esac
 done
 echo "This folder: $here"
+
+# Port 8765 is the lab's, the same on every Mac (the Octo app and the phone find it there). Held by anything but this
+# user's own lab (another user's lab on this Mac, another program), the new lab couldn't start and would say nothing.
+if [ "${OCTO_SKIP_LOGIN_ITEMS:-}" != "1" ] && ! launchctl print "gui/$(id -u)/com.octo.lab" >/dev/null 2>&1 \
+   && nc -z 127.0.0.1 8765 >/dev/null 2>&1; then
+  # The program on 127.0.0.1 (or every address), not one on [::1] only (Logitech's Options+ is there on some Macs);
+  # another user's programs aren't listed at all.
+  held="$( (lsof -nP -iTCP:8765 -sTCP:LISTEN -Fcn 2>/dev/null || true) | awk '/^c/ {c=substr($0, 2)} /^n(127\.0\.0\.1|\*):8765$/ {print c; exit}')"
+  echo "Something is already using port 8765 on this Mac, where Octo's lab answers${held:+: $held}."
+  if [ -n "$held" ]; then
+    echo "Quit $held (or move it to another port), then run this again."
+  else
+    echo "It isn't one of your programs: another user on this Mac may be running Octo. Only one lab can run on a Mac"
+    echo "at a time: ask them to quit theirs (or log them out), then run this again."
+  fi
+  exit 1
+fi
+[ "${1:-}" = "--check" ] && { echo; echo "Checks passed: this Mac can run Octo."; exit 0; }
+trap stopped EXIT  # from here on a stop is a download or a build cut short, not one of the refusals above
 
 say "Apple's command line tools"
 if clt="$(xcode-select -p 2>/dev/null)" && [ -d "$clt" ]; then
@@ -120,7 +146,12 @@ else
 fi
 
 say "Check"
+# The lab takes a few seconds to start after its login item is installed: wait, so the check doesn't call that a fault.
+if [ "${OCTO_SKIP_LOGIN_ITEMS:-}" != "1" ]; then
+  for _ in $(seq 60); do curl -s -o /dev/null --max-time 2 http://127.0.0.1:8765/ && break; sleep 1; done
+fi
 .venv/bin/octo doctor --fresh || true
+step=""
 
 [ "${OCTO_UPDATE:-}" = "1" ] && exit 0  # `octo update` (octo/deploy.py): the lab restarted, nothing to open
 echo

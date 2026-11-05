@@ -38,7 +38,8 @@ def test_missing_packages_and_pages(monkeypatch, tmp_path):
 
 
 def test_login_items_and_the_lab_answering():
-    got = {c.what: c for c in DR.running(launchctl=lambda: "123\t0\tcom.octo.lab\n", fetch=lambda: False, lsof=lambda: "")}
+    got = {c.what: c for c in DR.running(launchctl=lambda: "123\t0\tcom.octo.lab\n", fetch=lambda: False, lsof=lambda: "",
+                                                answers=lambda: False)}
     assert got["The lab starts at login"].mark == DR.OK
     assert got["The recorder relay starts at login"].mark == DR.WARN
     assert got["The lab answers"].mark == DR.FAIL
@@ -150,6 +151,10 @@ def test_another_program_on_the_labs_port():
     (f,) = DR.port(False, lsof=lambda: "p1\ncSomeApp\nn127.0.0.1:8765\n")
     assert f.mark == DR.FAIL and f.detail == "taken by SomeApp"
     assert DR.port(True, lsof=lambda: "p8415\ncPython\nn127.0.0.1:8765\n") == []
+    # Another user's lab (install review, 5 Nov): lsof can't see it, but the port answers
+    (o,) = DR.port(False, lsof=lambda: "", answers=lambda: True)
+    assert o.mark == DR.FAIL and "another user" in o.detail
+    assert DR.port(False, lsof=lambda: "", answers=lambda: False) == []
 
 
 def test_the_firewall_only_matters_once_the_phone_is_on(tmp_path):

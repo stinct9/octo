@@ -129,7 +129,13 @@ except GatedRepoError:
 except RepositoryNotFoundError:
     print(json.dumps({"ok": False, "error": "not found (or gated and not logged in)", "gated": True}))
 except Exception as e:
-    print(json.dumps({"ok": False, "error": str(e)[:300]}))
+    said = f"{type(e).__name__}: {e}"
+    # What to do, for the two a new Mac meets most (install review, 5 Nov); anything else as it was said.
+    if getattr(e, "errno", None) == 28 or "No space left" in said:
+        said = "this Mac's disk is full: free some space, then Download what's missing (it carries on where it stopped)"
+    elif any(w in said for w in ("ConnectError", "ConnectionError", "Timeout", "timed out", "Name or service", "nodename")):
+        said = "couldn't reach Hugging Face: check this Mac is online, then Download what's missing (it carries on where it stopped)"
+    print(json.dumps({"ok": False, "error": said[:300]}))
 """
 
 
@@ -193,7 +199,10 @@ def account(token: str = "", run=subprocess.run) -> dict:
     With a token, signs in first (it's kept where `hf auth login` keeps it, ~/.cache/huggingface/token).
     Online, in a child process, as `download` is; the token goes in its environment, never its arguments."""
     env = {**os.environ, "HF_HUB_OFFLINE": "0", **({"OCTO_HF_TOKEN": token} if token else {})}
-    r = run([sys.executable, "-c", _ACCOUNT, *GATED], capture_output=True, text=True, env=env, timeout=60)
+    try:
+        r = run([sys.executable, "-c", _ACCOUNT, *GATED], capture_output=True, text=True, env=env, timeout=60)
+    except subprocess.TimeoutExpired:
+        return {"name": None, "error": "couldn't reach Hugging Face: check this Mac is online"}
     try:
         return json.loads((r.stdout or "").strip().splitlines()[-1])
     except (IndexError, json.JSONDecodeError):

@@ -214,7 +214,7 @@ class Processor:
 
 
 def warm(db: Callable) -> None:
-    """Build what the read-time pages keep (fillers.memoized and the list's own) before anyone asks: on Jay's lab, with the
+    """Build what the read-time pages keep (fillers.memoized and the list's own) before anyone asks: on the first lab, with the
     speech models in memory, a person's page took 26 s the first time after a start and 2 s after (4 Nov). Each kept
     record is still checked against what it's made from on every read, so this only moves the work earlier."""
     from . import delivery as DV, fillers as FI, questions as QS, search as SE, sessions as SV

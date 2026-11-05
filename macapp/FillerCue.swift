@@ -69,6 +69,9 @@ struct FillerTally {
     }
 }
 
+// SpeechAnalyzer is in macOS 26's SDK (Swift 6.2, Xcode 26): a Mac on macOS 14 or 15 has older tools, and the app
+// must still build there, without the cue (install review, 5 Nov).
+#if compiler(>=6.2)
 @available(iOS 26, macOS 26, *)
 final class FillerCue {
     struct Refused: Error { let text: String }
@@ -144,3 +147,4 @@ final class FillerCue {
         Task { await a.cancelAndFinishNow(); r?.cancel() }
     }
 }
+#endif

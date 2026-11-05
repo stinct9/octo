@@ -2,6 +2,7 @@
 sign-in, with the network and the cache replaced."""
 
 import json
+import subprocess
 import time
 from types import SimpleNamespace
 
@@ -51,6 +52,29 @@ def test_signing_in_sends_the_token_in_the_environment_never_the_arguments():
     assert "hf_secret_token" not in " ".join(seen["cmd"]) and seen["env"]["OCTO_HF_TOKEN"] == "hf_secret_token"
     assert seen["env"]["HF_HUB_OFFLINE"] == "0"
     assert MD.account(run=lambda cmd, **kw: SimpleNamespace(stdout=""))["error"] == "couldn't reach Hugging Face"
+
+    def hangs(cmd, **kw):  # a network that half works: the page said "server error" (install review, 5 Nov)
+        raise subprocess.TimeoutExpired(cmd, 60)
+    assert "online" in MD.account(run=hangs)["error"]
+
+
+def test_a_download_that_stops_says_what_to_do(monkeypatch, capsys):
+    """The disk filling up or the Mac going offline part way, as the fetch's child process reports them."""
+    import errno
+    import sys
+    from huggingface_hub import errors
+    for raised, said in ((OSError(errno.ENOSPC, "No space left on device"), "disk is full"),
+                         (ConnectionError("HTTPSConnectionPool: Max retries exceeded (ConnectError)"), "online"),
+                         (ValueError("something else"), "something else")):
+        def boom(*a, **k):
+            raise raised
+        fake = SimpleNamespace(hf_hub_download=boom, snapshot_download=boom)
+        monkeypatch.setitem(sys.modules, "huggingface_hub", fake)
+        monkeypatch.setitem(sys.modules, "huggingface_hub.errors", errors)
+        monkeypatch.setattr(sys, "argv", ["-c", "some/repo", "", ""])
+        exec(MD._FETCH, {})
+        got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert got["ok"] is False and said in got["error"]
 
 
 def test_the_sample_is_reviewed_as_the_owner_and_kept_outside_the_database(tmp_path, monkeypatch):

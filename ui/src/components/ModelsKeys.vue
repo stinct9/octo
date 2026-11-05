@@ -35,6 +35,8 @@ interface View {
 }
 
 const emit = defineEmits<{ changed: [] }>()
+// On Set up Octo the choice is made right under this, not on the Pipeline page (install review, 5 Nov)
+const props = defineProps<{ inSetup?: boolean }>()
 const view = ref<View | null>(null)
 const error = ref('')
 const note = ref('')
@@ -138,7 +140,7 @@ const price = (m: ClaudeModel) => `$${m.price[0]} in · $${m.price[1]} out per m
       to the model you choose. The audio and voiceprints never leave this Mac. There are two ways to Claude: Claude Code on
       this Mac, on your own Claude plan, or an Anthropic API key, billed per use. Or another service.</p>
     <p v-if="view?.blocked" class="warn" role="status">Reviews are waiting for a model: set up one of these, then choose it
-      on the <a href="#/pipeline">Pipeline</a> page.</p>
+      <template v-if="props.inSetup">below.</template><template v-else>on the <a href="#/pipeline">Pipeline</a> page.</template></p>
 
     <div v-if="view" class="service" aria-labelledby="cc-h">
       <div class="row-head">
@@ -161,8 +163,8 @@ const price = (m: ClaudeModel) => `$${m.price[0]} in · $${m.price[1]} out per m
         Claude Code here is logged in with an API key, not a Claude plan: Anthropic bills that per use.</p>
       <p v-if="view.claude_code.fix" class="small">{{ view.claude_code.fix.slice(0, view.claude_code.fix.indexOf(': ')) }}, in Terminal:
         <code class="mono">{{ fixCommand(view.claude_code.fix) }}</code>, then <button type="button" class="btn btn-small" :disabled="busy" @click="load">Check again</button></p>
-      <p v-else-if="!view.claude_code.in_use" class="muted small">To use it, choose “Claude Code on this Mac” for reviews on the
-        <a href="#/pipeline">Pipeline</a> page.</p>
+      <p v-else-if="!view.claude_code.in_use" class="muted small">To use it, choose “Claude Code on this Mac” for reviews
+        <template v-if="props.inSetup">below.</template><template v-else>on the <a href="#/pipeline">Pipeline</a> page.</template></p>
     </div>
 
     <p v-if="!view && !error" class="muted loading" role="status">Loading…</p>

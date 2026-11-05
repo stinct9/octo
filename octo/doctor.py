@@ -132,7 +132,7 @@ def models(conn) -> list[Check]:
     return out
 
 
-def running(launchctl=None, fetch=None, lsof=None) -> list[Check]:
+def running(launchctl=None, fetch=None, lsof=None, answers=None) -> list[Check]:
     launchctl = launchctl or (lambda: subprocess.run(["launchctl", "list"], capture_output=True, text=True, timeout=10).stdout)
     fetch = fetch or _fetch_status
     try:
@@ -147,7 +147,7 @@ def running(launchctl=None, fetch=None, lsof=None) -> list[Check]:
     up = fetch()
     out.append(Check(OK if up else FAIL, "The lab answers", LAB if up else "no answer",
                      "" if up else "octo login-item install (or `bench serve` in a terminal)"))
-    return out + port(up, lsof)
+    return out + port(up, lsof, answers or _answers)
 
 
 def _fetch_status() -> bool:
@@ -252,14 +252,26 @@ def listeners(lsof=None) -> list[tuple[str, str]]:
     return out
 
 
-def port(up: bool, lsof=None) -> list[Check]:
+def _answers(host: str = "127.0.0.1", port: int = PORT) -> bool:
+    import socket
+    try:
+        socket.create_connection((host, port), timeout=1).close()
+        return True
+    except OSError:
+        return False
+
+
+def port(up: bool, lsof=None, answers=_answers) -> list[Check]:
     """Another program on 8765 (19 Oct: Logitech's Options+ listens on [::1]:8765 on the owner's Mac, so localhost:8765 can
     reach it instead of the lab, and if it ever takes 127.0.0.1:8765 the lab can't start)."""
     held = listeners(lsof)
     ours = f"127.0.0.1:{PORT}"
-    if not up and (taker := next((n for n, a in held if a == ours), None)):
+    if not up and (taker := next((n for n, a in held if a in (ours, f"*:{PORT}")), None)):
         return [Check(FAIL, f"Port {PORT}", f"taken by {taker}",
                       f"quit {taker} (or move it to another port), then: octo login-item install")]
+    if not up and answers():  # lsof lists only this user's programs: another user's is there and unnamed (install review, 5 Nov)
+        return [Check(FAIL, f"Port {PORT}", "taken by another user's program (another Octo lab on this Mac?)",
+                      "only one lab can run on a Mac at a time: they quit theirs or log out, then: octo login-item install")]
     others = sorted({f"{n} on {a.rsplit(':', 1)[0]}" for n, a in held if a != ours})
     if others:
         return [Check(WARN, f"Port {PORT}", "also used by " + ", ".join(others),

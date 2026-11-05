@@ -1471,6 +1471,7 @@ final class Calls: NSObject {
     /// B21: the live filler cue on the owner's mic channel, never the call's. The recording doesn't wait for it.
     private func listen(_ r: CallRecorder, _ mic: AsyncStream<[Float]>, phrases: [String]) {
         cues = 0
+        #if compiler(>=6.2)
         guard #available(macOS 26, *) else { cueNote = "The filler cue needs macOS 26"; return changed() }
         Task { @MainActor [self] in
             do {
@@ -1495,6 +1496,10 @@ final class Calls: NSObject {
                 changed()
             }
         }
+        #else
+        cueNote = "The filler cue needs macOS 26"
+        changed()
+        #endif
     }
 
     /// The filler for 1.5 s, then the count for the call, as the recorder's screen (B20).

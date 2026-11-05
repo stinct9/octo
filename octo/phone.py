@@ -267,7 +267,7 @@ def away_step(ts: dict, enabled: bool, devices: list[dict], ca_renewed_at: float
 
 
 def away_setup(ts: dict, enabled: bool, devices: list[dict], ca_renewed_at: float | None) -> dict:
-    """Set up Octo's step 8, for the Setup page, home's card and `octo doctor` alike (Jay, 4 Nov): done once a paired
+    """Set up Octo's step 8, for the Setup page, home's card and `octo doctor` alike (4 Nov): done once a paired
     phone has reached the lab through Tailscale, and it stays done; while that way is off or broken now, `note` says
     what to do rather than the tick going. Not yet done: `do` is the next single thing."""
     nxt = away_step(ts, enabled, devices, ca_renewed_at)
