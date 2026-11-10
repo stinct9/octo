@@ -1,5 +1,7 @@
 # The lab's tests and the pages' tests on an Apple Silicon runner. The speech models aren't needed: the unit tests
 # never download or run them.
+# macos-latest, not a named version (10 Nov: every macos-14 run was cancelled in 2 s, "The configuration
+# 'macos-14-arm64-us-xl' is not supported", which blocks releases as surely as a failure).
 name: tests
 on:
   push:
@@ -9,7 +11,7 @@ permissions:
   contents: read
 jobs:
   lab:
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +22,7 @@ jobs:
         env:
           HF_HUB_OFFLINE: "1"
   pages:
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 15
     strategy:
       matrix:
