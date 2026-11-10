@@ -45,6 +45,20 @@ def test_about_is_the_landing_page_built_now(client):
     assert "<!--@" not in page and "/*@" not in page
 
 
+def test_about_asks_for_its_own_fonts_and_the_lab_serves_them(client):
+    """11 Nov: the fonts come from docs/landing/fonts, never from Google (a visitor's address stays with us)."""
+    if not P.LANDING_BUILD.exists():
+        pytest.skip("no docs/landing (a public copy)")
+    page = client.get("/about").text
+    assert "googleapis" not in page and "gstatic" not in page
+    names = re.findall(r"url\('fonts/([^']+)'\)", page)
+    assert names and all((P.LANDING_FONTS / n).is_file() for n in names)
+    r = client.get(f"/fonts/{names[0]}")
+    assert r.status_code == 200 and r.headers["content-type"] == "font/woff2"
+    for bad in ("OFL-Fraunces.txt", "..%2Fbuild.py", "missing.woff2"):
+        assert client.get(f"/fonts/{bad}").status_code == 404, bad
+
+
 def test_case_goes_to_the_published_page_when_it_cant_be_built(client, tmp_path, monkeypatch):
     monkeypatch.setattr(P, "CASE_PAGE", tmp_path / "octo-case.html")
     monkeypatch.setattr(P, "can_build_case", lambda: False)

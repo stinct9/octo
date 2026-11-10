@@ -3,6 +3,7 @@
   GET /about   the landing page for people who ask what Octo does (docs/landing), built on every
                visit, so the owner's principles on it are always the rubric's words. On the paired phone too.
                A copy without docs/landing (the public one) sends it to the published page.
+  GET /fonts/{name}  the landing page's fonts (docs/landing/fonts), which /about asks for as fonts/<file>.
   GET /case    the recorder case's design review (hardware/case). Rebuilt when its sources are newer
                than the last build and manifold3d is installed; otherwise the copy published on
                claude.ai, which is republished whenever the design changes.
@@ -16,12 +17,13 @@ import subprocess
 import sys
 import threading
 
-from fastapi import APIRouter
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from . import ROOT
 
 LANDING_BUILD = ROOT / "docs" / "landing" / "build.py"
+LANDING_FONTS = ROOT / "docs" / "landing" / "fonts"
 CASE = ROOT / "hardware" / "case"
 CASE_PAGE = CASE / "out" / "octo-case.html"
 CASE_SOURCES = [CASE / "case.py", CASE / "viewer.html", ROOT / "firmware" / "recorder" / "octo_display.js"]
@@ -73,6 +75,14 @@ def make_router() -> APIRouter:
         if not LANDING_BUILD.exists():
             return RedirectResponse(LANDING_PUBLISHED, status_code=307)
         return HTMLResponse(landing_page(), headers=NO_STORE)
+
+    @router.get("/fonts/{name}")
+    def font(name: str) -> FileResponse:
+        # only a font file in that one folder: no path, no other kind of file
+        path = LANDING_FONTS / name
+        if not name.endswith(".woff2") or "/" in name or name.startswith(".") or not path.is_file():
+            raise HTTPException(404)
+        return FileResponse(path, media_type="font/woff2", headers={"Cache-Control": "public, max-age=86400"})
 
     @router.get("/case", response_model=None)
     def case() -> HTMLResponse | RedirectResponse:
