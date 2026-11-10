@@ -479,8 +479,8 @@ def install(app: FastAPI, db: Callable = connect) -> PhoneServer:
         return PAIR_PAGE
 
     @app.post("/api/pair", dependencies=[Depends(same_origin)])
-    def pair(body: PairBody) -> JSONResponse:
-        ok = pairing.use_secret(body.secret) if body.secret else pairing.use(body.code)
+    def pair(body: PairBody, request: Request) -> JSONResponse:
+        ok = pairing.use_secret(body.secret) if body.secret else pairing.use(body.code, request.client.host if request.client else "")
         if not ok:
             raise HTTPException(403, "That code didn't work. Show a new one on the Mac.")
         token = PH.add_device(db(), body.name)

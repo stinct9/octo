@@ -7,9 +7,11 @@ that leaves is a conversation's text when it's reviewed, sent to the model you c
 
 - **An Apple Silicon Mac** (M1 or later) with **16 GB** of memory and **macOS 14** or later. The speech
   models run on the Mac's own GPU.
-- **About 20 GB free**: 10 GB of speech models, downloaded once, and room for audio.
+- **About 20 GB free**: 10 GB of speech models, downloaded once, and room for audio. The installer stops with
+  under 15 GB, and `octo doctor` warns under 20.
 - Nothing else to install first: no Homebrew, git or Node. The installer gets **uv** (Astral's Python
-  installer, one file in `~/.local/bin`), which brings Python 3.12. It also asks for Apple's **command line
+  installer, one file in `~/.local/bin`) unless a recent one is already there, and uv brings its own
+  Python 3.12, whatever Python the Mac already has. It also asks for Apple's **command line
   tools** if they're missing (Apple's own installer opens; only the recorder needs them).
 - **A free Hugging Face account** (https://huggingface.co), for two of the speech models: their authors ask
   you to accept their conditions before downloading.
@@ -51,8 +53,12 @@ that leaves is a conversation's text when it's reviewed, sent to the model you c
 
    **If it stops** (the Mac went offline, a download was cut short), it says at which step: run the same line again.
    What's done is kept, and the code is replaced cleanly, so a second run also repairs a broken install. Before it
-   touches anything it checks the Mac (Apple Silicon, macOS 14, 15 GB free), the folder, and port 8765; in a clone,
+   touches anything it checks the Mac (Apple Silicon, macOS 14, free disk space), the folder, and port 8765; in a clone,
    `./install.sh --check` runs only those checks.
+
+   **The `octo` command** this page names lives inside the install, not on your PATH. From the one-line install,
+   type it in full, for example `~/Library/Application\ Support/octo/app/.venv/bin/octo doctor`; in a clone, it's
+   `.venv/bin/octo` from inside the clone's folder.
 
    **One lab per Mac.** The lab answers on 127.0.0.1:8765 and its helpers on 8767 (and Ollama's 11434), the same for
    every user, so a second macOS user on the same Mac can't run a lab while the first one's is running: the installer
@@ -91,7 +97,7 @@ itself is the program the login item starts, and quitting the app doesn't stop i
 - **Notifications** come from Octo while the app is open (macOS asks once, the first time there's something to
   say), and from Script Editor while it isn't. Counts only, never what was said.
 - Without the command line tools, `install.sh` makes a one-line launcher instead that opens the lab in your browser;
-  install the tools (`xcode-select --install`) and run `.venv/bin/octo launcher install` to get the app.
+  install the tools (`xcode-select --install`) and run `octo launcher install` to get the app.
   `octo doctor` says which you have and whether it's up to date.
 - On macOS 14 or 15 the command line tools are older, and the app is built without the live filler cue on calls,
   which needs macOS 26 (its speech recognition is new there); everything else is the same.
@@ -106,16 +112,16 @@ General → VPN & Device Management → Developer App → your Apple ID → **Tr
 
 **With a free Apple ID an install opens for 7 days.** The lab renews it by itself 2 days before, while the iPhone is
 plugged in or on the same Wi-Fi, and sends a notification if a day is left and it couldn't. Each Apple ID gets its own
-app ID (`app.octo.recorder.<team>`), since Apple keeps one per team. In Terminal, `.venv/bin/octo phone install` does the
+app ID (`app.octo.recorder.<team>`), since Apple keeps one per team. In Terminal, `octo phone install` does the
 same (`--device NAME` when the Mac knows several phones, `--team ID` when Xcode has several Apple IDs). The phone app
 then connects on the **Phone** page (a code to scan in the app's Lab tab).
 
 ## Afterwards
 
-- **Something not right?** `.venv/bin/octo doctor` checks the Mac, the software, the models, the login
+- **Something not right?** `octo doctor` checks the Mac, the software, the models, the login
   items, the lab, and what macOS may refuse without saying (its firewall for the phone, Local Network for the
   recorder, another program on port 8765), and says what to do about anything that isn't ready.
-- **Update:** **Octo update ready** in the octopus menu when there is one, or Octo → Update Octo…, or `.venv/bin/octo update` (it waits for a running step, takes the new version and restarts the lab). From the
+- **Update:** **Octo update ready** in the octopus menu when there is one, or Octo → Update Octo…, or `octo update` (it waits for a running step, takes the new version and restarts the lab). From the
   one-line install, each version gets its own folder and runs only once its install has worked, so a failed update leaves
   the one you had running; the one before is kept, and `octo update --back` goes back to it (unless the newer one has
   already changed the lab's database: it says so, and changes nothing). A copy of the database from before each such
@@ -182,6 +188,11 @@ export in. Anything you deleted, forgot or withdrew after the export was made co
   - unpair your phones on the Phone page and pair them again;
   - replace your API keys and TickTick token at their services;
   - remember that it holds voiceprints of the people you recorded.
+- **If the recorder has been out of your hands** (lost, lent, left somewhere), treat it as untrusted: there's no
+  Secure Boot on it, so reflashing is the remedy. Plug it in and run `octo device flash --direct`: it writes the
+  bootloader, partition table and firmware through the chip's own loader, not through whatever firmware is on it
+  (from a release, the whole flash image, which also clears its settings and pairing; built from source, only those
+  parts). Then `octo device pair`, which replaces the key it trusts.
 
 ## What leaves your Mac
 

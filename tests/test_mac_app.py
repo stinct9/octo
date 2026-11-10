@@ -63,6 +63,19 @@ def test_without_swiftc_it_falls_back_to_the_applescript_app(tmp_path, monkeypat
     assert made[0][0] == "osacompile" and made[0][-1] == LN.script(tmp_path / "octo")
 
 
+def test_a_failed_applescript_app_is_said_and_never_raises(tmp_path, monkeypatch):
+    """Review 10 Nov: install.sh carries on to the browser when even osacompile fails."""
+    monkeypatch.setattr(LN, "SYSTEM", tmp_path / "A" / "Octo.app")
+    monkeypatch.setattr(LN, "USER", tmp_path / "U" / "Octo.app")
+
+    def run(cmd, **kw):
+        raise LN.subprocess.CalledProcessError(1, cmd, stderr=b"osacompile: execution error\n")
+    monkeypatch.setattr(LN.subprocess, "run", run)
+    said = []
+    assert LN.install(app=LN.SYSTEM, octo=tmp_path / "octo", compiler=lambda: None, say=said.append) is None
+    assert said == ["couldn't make the Octo app: osacompile: execution error; the lab opens in your browser instead"]
+
+
 def test_a_failed_build_keeps_the_app_that_is_there(tmp_path, monkeypatch):
     app = tmp_path / "Octo.app"
     (app / "Contents").mkdir(parents=True)

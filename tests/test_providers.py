@@ -283,6 +283,23 @@ def test_haiku_takes_no_effort_and_a_fallback_restarts_the_answer(monkeypatch):
     assert "fallbacks" not in sent["request"] and usage["model"] == "claude-haiku-4-5"
 
 
+def test_haiku_5_5_is_offered_and_takes_effort_and_4_5_runs_only_where_chosen(new_lab, monkeypatch):
+    """Review 10 Nov: Haiku 5.5 in 4.5's place; a lab that chose 4.5 keeps it, a new choice can't be it."""
+    PV.add("anthropic", api_key="sk-ant-x-9999")
+    ids = [c.id for c in ST.choices(new_lab, ST.BY_STAGE["insight"])]
+    assert "anthropic:claude-haiku-5-5" in ids and "anthropic:claude-haiku-4-5" not in ids
+    assert "claude-haiku-4-5" not in PV.public(PV.load()["connections"][0])["models"]
+    with pytest.raises(ValueError):
+        ST.choose(new_lab, "insight", "anthropic:claude-haiku-4-5")
+    new_lab.execute("INSERT INTO settings (stage, choice, updated_at) VALUES ('insight', 'anthropic:claude-haiku-4-5', 0)")
+    assert ST.selected(new_lab, ST.BY_STAGE["insight"]).params["model"] == "claude-haiku-4-5"
+    sent = {}
+    fake_anthropic(monkeypatch, message([block("text", text='{"ok": true}')], model="claude-haiku-5-5"), sent)
+    reader = {"kind": "anthropic", "connection": "anthropic", "model": "claude-haiku-5-5", "effort": "low"}
+    PV.ask(reader, "s", "p", {"type": "object", "properties": {"ok": {"type": "boolean"}}})
+    assert sent["request"]["output_config"]["effort"] == "low" and "fallbacks" not in sent["request"]
+
+
 def test_a_refusal_or_a_cut_off_answer_is_a_failure_with_a_reason(monkeypatch):
     PV.add("anthropic", api_key="sk-ant-x-9999")
     reader = {"kind": "anthropic", "connection": "anthropic", "model": "claude-opus-5-5", "effort": "high"}
@@ -512,7 +529,7 @@ def test_a_key_is_tested_before_its_kept(tmp_path, monkeypatch):
     add = lambda: c.post("/api/octo/settings/providers", json={"kind": "anthropic", "api_key": "sk-ant-0000000000"})
     answers = iter([PV.ProviderError("The Anthropic account is out of credit: add some at console.anthropic.com (Billing)"),
                     PV.ProviderError(f"Couldn't reach Anthropic (is the Mac online?): {PV.TRANSIENT}"),
-                    ({"ok": True}, {"model": "claude-haiku-4-5"})])
+                    ({"ok": True}, {"model": "claude-haiku-5-5"})])
 
     def ask(*a, **k):
         got = next(answers)

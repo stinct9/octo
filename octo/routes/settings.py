@@ -102,7 +102,7 @@ def add(router: APIRouter, lab: Lab) -> None:
         # Claude Code on this Mac, apart from the keys (31 Oct): found, version, logged in, and what fixes each.
         return {"connections": PV.listing(), "claude_code": {**CC.status(), "in_use": bool(sel and sel.claude)},
                 "claude_models": [{"id": k, "label": v["label"], "price": v["price"], "why": v["why"]}
-                                  for k, v in PV.CLAUDE_MODELS.items()],
+                                  for k, v in PV.CLAUDE_MODELS.items() if k in PV.OFFERED],
                 "review": sel.id if sel else None, "blocked": ST.review_blocked(conn),
                 "first_lab": labconfig.origin(conn) == labconfig.FIRST}  # the page's lead (review 5 Nov, item 1)
 

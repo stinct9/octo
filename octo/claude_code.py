@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 TIMEOUT_S = 1200
@@ -35,7 +37,30 @@ def claude_bin() -> str | None:
               str(Path.home() / ".claude/local/claude")):
         if os.access(p, os.X_OK):
             return p
-    return None
+    return _from_login_shell()
+
+
+# Installed with npm under nvm, volta or a custom prefix, `claude` is only on the PATH the owner's shell sets up, which a
+# login item never sees (review 10 Nov): ask that shell, once. A path it finds is kept for the process; not finding one
+# is asked again after SHELL_RETRY_S, so Setup sees an install made meanwhile.
+_shell = {"path": None, "asked": 0.0}
+SHELL_RETRY_S = 300
+
+
+def _from_login_shell() -> str | None:
+    if _shell["path"] or (_shell["asked"] and time.monotonic() - _shell["asked"] < SHELL_RETRY_S):
+        return _shell["path"]
+    _shell["asked"] = time.monotonic()
+    try:  # interactive too: nvm's lines go in .zshrc / .bashrc, which a login shell alone doesn't read
+        r = subprocess.run([pwd.getpwuid(os.getuid()).pw_shell or "/bin/zsh", "-ilc", "command -v claude"],
+                           capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
+        lines = r.stdout.strip().splitlines()
+    except (OSError, subprocess.SubprocessError, KeyError):
+        return None
+    found = lines[-1].strip() if lines else ""
+    if found.startswith("/") and os.access(found, os.X_OK):
+        _shell["path"] = found
+    return _shell["path"]
 
 
 def status() -> dict:
@@ -67,10 +92,14 @@ def status() -> dict:
 
 def clean_env() -> dict:
     """The environment without a parent Claude Code's own variables (2 Oct: "OAuth session expired").
-    DISABLE_TELEMETRY and DISABLE_ERROR_REPORTING (octo/__init__.py) pass through."""
-    return {k: v for k, v in os.environ.items()
-            if not (k == "CLAUDECODE" or k == "ANTHROPIC_BASE_URL" or k.startswith("CLAUDE_AGENT_SDK")
-                    or (k.startswith("CLAUDE_CODE_") and k != "CLAUDE_CODE_OAUTH_TOKEN"))}
+    DISABLE_TELEMETRY and DISABLE_ERROR_REPORTING (octo/__init__.py) pass through. A `claude` found through the login
+    shell gets its folder on PATH, so its `#!/usr/bin/env node` finds the node beside it."""
+    env = {k: v for k, v in os.environ.items()
+           if not (k == "CLAUDECODE" or k == "ANTHROPIC_BASE_URL" or k.startswith("CLAUDE_AGENT_SDK")
+                   or (k.startswith("CLAUDE_CODE_") and k != "CLAUDE_CODE_OAUTH_TOKEN"))}
+    if _shell["path"]:
+        env["PATH"] = os.path.dirname(_shell["path"]) + os.pathsep + env.get("PATH", "")
+    return env
 
 
 def ask(model: str, effort: str, system: str, prompt: str, schema: dict, timeout: int = TIMEOUT_S) -> tuple[dict, dict]:

@@ -5,8 +5,8 @@
 #   ./install.sh --check    only the checks before anything is downloaded or changed (this Mac, the folder, the port)
 #
 # What it does, in order: checks the Mac and where this folder is; checks Apple's command line tools;
-# gets uv (Astral's Python installer, one file in ~/.local/bin) if it's missing; makes the Python
-# environment (.venv: Python 3.12 and the exact versions in requirements.lock); builds the web pages only
+# gets uv (Astral's Python installer, one file in ~/.local/bin) if it's missing or too old; makes the Python
+# environment (.venv: uv's own Python 3.12 and the exact versions in requirements.lock); builds the web pages only
 # if they aren't built already (a release has them; a git clone builds them with Node, fetched into .node if the
 # Mac has none); starts the lab when you log in (per-user login items, no admin rights) and builds the Octo app; then opens the lab's getting-started page,
 # where the speech models (about 10 GB, once) come down in the background. No Homebrew and no git. It never asks for your password itself; Apple's
@@ -24,7 +24,14 @@ stopped() {
 
 say "This Mac"
 if [ "$(uname -m)" != "arm64" ]; then
-  echo "Octo needs an Apple Silicon Mac (M1 or later): its speech models run on Apple's GPU."
+  # An Apple Silicon Mac whose Terminal runs under Rosetta reads as Intel here (review 10 Nov).
+  if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+    echo "This Mac is Apple Silicon, but Terminal is running under Rosetta (as an Intel app). Either quit Terminal,"
+    echo "untick \"Open using Rosetta\" in its Get Info (Finder, Applications, Utilities) and open it again, or put"
+    echo "arch -arm64 before bash in the same line, then run it again."
+  else
+    echo "Octo needs an Apple Silicon Mac (M1 or later): its speech models run on Apple's GPU."
+  fi
   exit 1
 fi
 ram_gb=$(( $(sysctl -n hw.memsize) / 1073741824 ))
@@ -38,7 +45,7 @@ fi
 free_gb=$(df -g . | awk 'NR==2 {print $4}')
 if [ "$free_gb" -lt 15 ]; then
   echo "Only ${free_gb} GB free here. Octo downloads about 12 GB (Python, then the speech models) and keeps your"
-  echo "recordings: free up at least 15 GB, then run this again."
+  echo "recordings: free up space to about 20 GB, then run this again."
   exit 1
 fi
 
@@ -95,9 +102,12 @@ else
 fi
 
 say "uv (Python and its packages)"
+# A uv already on this Mac is used only if it knows the options below; an older one fails part way with an argument
+# error, so the pinned one is fetched instead (review 10 Nov).
+uv_ok() { [ -x "$1" ] && "$1" venv --help 2>/dev/null | grep -q -- '--managed-python' && "$1" venv --help | grep -q -- '--clear'; }
 UV="$(command -v uv || true)"
-[ -n "$UV" ] || UV="$HOME/.local/bin/uv"
-if [ ! -x "$UV" ]; then
+uv_ok "$UV" || UV="$HOME/.local/bin/uv"
+if ! uv_ok "$UV"; then
   # Astral's own installer, a pinned version checked against its checksum (it carries uv's own checksums), into
   # ~/.local/bin; it leaves your shell's settings alone.
   uv_installer="$(mktemp)"
@@ -110,8 +120,10 @@ fi
 echo "uv: $UV ($("$UV" --version))"
 
 say "The lab's Python environment (.venv)"
-# Python 3.12 from uv (downloaded once if the Mac has none); --seed keeps pip in .venv for `octo deploy`.
-[ -x .venv/bin/python ] || "$UV" venv --clear --seed --python 3.12 .venv
+# Python 3.12 managed by uv (downloaded once), never whatever 3.12 the Mac has: Homebrew's, conda's or pyenv's may be
+# x86_64 under Rosetta (the locked wheels are arm64) or removed by a later upgrade (review 10 Nov). --seed keeps pip
+# in .venv for `octo deploy`.
+[ -x .venv/bin/python ] || "$UV" venv --clear --seed --managed-python --python 3.12 .venv
 # The versions the lab was tested with (requirements.lock, the one list of versions), each checked against its SHA-256
 # there, then the lab itself.
 "$UV" pip install --quiet --require-hashes --python .venv/bin/python -r requirements.lock

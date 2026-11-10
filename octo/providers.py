@@ -47,11 +47,20 @@ CLAUDE_MODELS: dict[str, dict] = {
     "claude-sonnet-5-5": {"label": "Claude Sonnet 5.5", "price": (2.0, 10.0), "effort": True, "fallbacks": True,
                           "max_tokens": 64000,
                           "why": "Half Opus's price. Not yet compared with Opus on real conversations."},
+    # Haiku 5.5 in 4.5's place (review 10 Nov; id, price and effort from Anthropic's model list of 6 Oct). Its refusals
+    # have no server-side fallback. shortcut: one price, its rate for prompts up to 100K tokens ($0.50/$2.50 beyond);
+    # a transcript that long would show a low estimate.
+    "claude-haiku-5-5": {"label": "Claude Haiku 5.5", "price": (0.1, 0.5), "effort": True, "fallbacks": False,
+                         "max_tokens": 64000,
+                         "why": "The cheapest by far. Not yet compared on real conversations; likely to miss what the "
+                                "bigger models find."},
+    # Kept so a lab that chose it still runs (it takes no effort); no longer offered.
     "claude-haiku-4-5": {"label": "Claude Haiku 4.5", "price": (1.0, 5.0), "effort": False, "fallbacks": False,
-                         "max_tokens": 32000,
+                         "max_tokens": 32000, "offered": False,
                          "why": "The cheapest. Not yet compared on real conversations; likely to miss what the "
                                 "bigger models find."},
 }
+OFFERED = [m for m, spec in CLAUDE_MODELS.items() if spec.get("offered", True)]
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 KINDS = ("anthropic", "openai")
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -195,7 +204,7 @@ def public(c: dict) -> dict:
     out = {k: v for k, v in c.items() if k != "api_key"}
     out["key"] = f"…{key[-4:]}" if len(key) >= 8 else ("set" if key else None)
     if c["kind"] == "anthropic":
-        out["models"] = list(CLAUDE_MODELS)
+        out["models"] = list(OFFERED)
     return out
 
 
@@ -391,7 +400,7 @@ def test(conn_id: str, model: str | None = None) -> dict:
     c = connection(conn_id)
     if not c:
         raise KeyError(conn_id)
-    model = model or ("claude-haiku-4-5" if c["kind"] == "anthropic" else c["models"][0])
+    model = model or ("claude-haiku-5-5" if c["kind"] == "anthropic" else c["models"][0])
     schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]}
     reader = {"kind": c["kind"], "connection": c["id"], "model": model, "effort": "low"}
     t0 = time.time()

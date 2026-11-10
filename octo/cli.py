@@ -45,7 +45,9 @@
   octo device setup [--new-key]     a developer build: write the recorder's secrets.h (Wi-Fi + signing key)
   octo device flash [--direct]      build and update the recorder's firmware: over USB if it's plugged in, else
                                     over Wi-Fi; its screen shows how far, and it goes back if the new one fails
-                                    (--direct: the chip's own loader, for a recorder that won't start). A new
+                                    (--direct: the chip's own loader, for a recorder that won't start, or one
+                                    that was out of your hands: no Secure Boot, so reflash it this way and pair
+                                    it again; it rewrites the bootloader and firmware). A new
                                     board on USB gets Octo's firmware installed; then `octo device pair`. Without
                                     arduino-cli it uses a release's prebuilt firmware (firmware/recorder/release)
   octo device status                what the recorder is doing (over home Wi-Fi)
@@ -693,7 +695,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--usb", action="store_true", help="flash: over USB even if the recorder is reachable on Wi-Fi")
     p.add_argument("--direct", action="store_true",
                    help="flash: over USB with the chip's own loader (esptool), not the recorder's update: nothing on "
-                        "its screen and no going back; for a recorder that won't start")
+                        "its screen and no going back; for a recorder that won't start, or one that was out of your "
+                        "hands (no Secure Boot: this rewrites its bootloader and firmware; then pair it again)")
     p = sub.add_parser("filler", help="the recorder's filler cue: status, train, install, undo, cancel (B22, B29)")
     p.add_argument("action", choices=["status", "train", "install", "undo", "cancel"])
     p.add_argument("--target", help="train, install: a filler from your list, or \"uh\" for the hesitations (default: the "
@@ -714,6 +717,8 @@ def main(argv: list[str] | None = None) -> int:
         from . import launcher as LN
         if args.action == "install":
             app = LN.install()
+            if app is None:  # it said why; never a failure for install.sh, which opens the browser instead
+                return 0
             print(f"made {app}: open it (or find Octo in Spotlight) " +
                   ("for the lab in its own window" if LN.native(app) else "to let your browser in"))
         else:

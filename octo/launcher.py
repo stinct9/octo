@@ -190,9 +190,10 @@ def swap(new: Path, app: Path) -> None:
     shutil.rmtree(old, ignore_errors=True)
 
 
-def install(app: Path | None = None, octo: Path | None = None, compiler=swiftc, say=print) -> Path:
+def install(app: Path | None = None, octo: Path | None = None, compiler=swiftc, say=print) -> Path | None:
     """The native app when swiftc is there, else the AppleScript one. A failed build keeps the app that's there (or
-    falls back to AppleScript when there's none) and says why: it never fails install.sh or `octo deploy`."""
+    falls back to AppleScript when there's none) and says why: it never fails install.sh or `octo deploy`. None when
+    even the AppleScript one couldn't be made (said why)."""
     app = app or place()
     for other in (SYSTEM, USER):  # one app, not one in each Applications folder
         if other != app and other.exists() and other.stat().st_uid == os.getuid():
@@ -217,8 +218,13 @@ def install(app: Path | None = None, octo: Path | None = None, compiler=swiftc, 
     if app.exists():
         shutil.rmtree(app)
     app.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["osacompile", "-o", str(app), "-e", script(octo or octo_bin())],
-                   check=True, capture_output=True, timeout=30)
+    try:  # it can fail too (review 10 Nov): say why, and install.sh carries on to the Setup page in the browser
+        subprocess.run(["osacompile", "-o", str(app), "-e", script(octo or octo_bin())],
+                       check=True, capture_output=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as e:
+        detail = (getattr(e, "stderr", None) or b"").decode(errors="replace").strip() or str(e)
+        say(f"couldn't make the Octo app: {detail.splitlines()[-1]}; the lab opens in your browser instead")
+        return None
     subprocess.run(["mdimport", str(app)], capture_output=True, timeout=30)
     return app
 

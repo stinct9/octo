@@ -20,3 +20,19 @@ def test_every_text_file_and_every_path_in_any_case(tmp_path):
     (tmp_path / "ok.py").write_text("ashanti = 1  # not the word\n")
     found = PC.scan(tmp_path, ["Asha"])
     assert sorted(found["Asha"]) == [".gitignore:1", "App.xcodeproj/project.pbxproj:2", "people/asha_notes.md:path"]
+
+
+def test_every_plan_the_copy_names_is_in_the_copy():
+    """Review 10 Nov, item 9: the copy leaves out docs/*-plan.md, so each one its code names is there as a short note."""
+    import json
+    import re
+
+    import pytest
+    if not PC.CONFIG.exists():  # the public copy itself: no config, nothing to check
+        pytest.skip("no public-copy.json (a public copy)")
+    cfg = json.loads(PC.CONFIG.read_text())
+    copy = {p: PC.ROOT / p for p in PC.tracked() if not PC.excluded(p, cfg["exclude"])}
+    copy.update({p: PC.ROOT / s for p, s in cfg["replace"].items()})
+    named = {m for p, f in copy.items() if p.endswith((".md", ".py", ".sh", ".vue", ".swift", ".ts", ".h", ".ino"))
+             and f.is_file() for m in re.findall(r"docs/[\w.-]+-plan\.md", f.read_text(errors="replace"))}
+    assert named and not sorted(named - set(copy))

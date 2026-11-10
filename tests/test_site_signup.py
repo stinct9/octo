@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 
 SITE = Path(__file__).resolve().parents[1] / "site"
+# A public copy leaves site/ out (public-copy.json), and its tests must pass to release (review 10 Nov).
+if not SITE.is_dir():
+    pytest.skip("no site/ (a public copy)", allow_module_level=True)
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="no node")

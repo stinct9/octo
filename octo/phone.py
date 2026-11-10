@@ -9,7 +9,8 @@ off by default.
   address; it's remade when those change (the CA stays, so phones keep trusting it). It's served
   with the CA behind it, so the app finds the CA it pinned in the handshake.
 - Pairing: the QR code carries a one-time secret (2 minutes); Safari's page takes an 8-digit code,
-  valid once for 2 minutes and voided after 5 wrong tries. The phone gets a random device token as a
+  valid once for 2 minutes; 5 wrong tries from one address shut that address out until it expires, and 100 in all
+  void it (review 10 Nov, L10: before, 5 from anyone on the Wi-Fi voided the owner's code). The phone gets a random device token as a
   Secure, HttpOnly, SameSite=Strict cookie (the app also in the answer, to keep in the Keychain); only
   its hash is stored. Unpairing deletes it.
 - Where it listens: the home Wi-Fi address while the Mac is at home, and its Tailscale address
@@ -36,7 +37,8 @@ from .db import new_id, row, rows
 PORT = 8766
 DIR = DATA / "phone"
 CODE_TTL_S = 120
-CODE_TRIES = 5
+CODE_TRIES = 5  # wrong tries from one address
+CODE_TOTAL_TRIES = 100  # from everyone: about one chance in a million that a guess gets in
 COOKIE = "octo_device"
 OPENSSL = "/usr/bin/openssl"
 
@@ -417,7 +419,7 @@ class Pairing:
     def __init__(self) -> None:
         self.code: str | None = None
         self.expires = 0.0
-        self.tries = 0
+        self.tries: dict[str, int] = {}  # wrong tries per address
         self.secret: str | None = None
         self.secret_expires = 0.0
 
@@ -435,18 +437,21 @@ class Pairing:
     def new_code(self) -> dict:
         self.code = f"{secrets.randbelow(10 ** 8):08d}"
         self.expires = time.time() + CODE_TTL_S
-        self.tries = 0
+        self.tries = {}
         return {"code": self.code, "expires_in": CODE_TTL_S}
 
-    def use(self, code: str) -> bool:
+    def use(self, code: str, who: str = "") -> bool:
+        """`who`: the caller's address. Its own wrong tries shut it out, not everyone else."""
         if not self.code or time.time() > self.expires:
             self.code = None
+            return False
+        if self.tries.get(who, 0) >= CODE_TRIES:
             return False
         if secrets.compare_digest(code.strip(), self.code):
             self.code = None  # once only
             return True
-        self.tries += 1
-        if self.tries >= CODE_TRIES:
+        self.tries[who] = self.tries.get(who, 0) + 1
+        if sum(self.tries.values()) >= CODE_TOTAL_TRIES:
             self.code = None
         return False
 

@@ -10,3 +10,10 @@ paired Mac's key); every request between them is signed with a shared key and a 
 values need a bonded, authenticated link; API keys live in a file readable only by the Mac's user; the lab
 listens on 127.0.0.1 and answers only a browser or app let in on this Mac (and, if switched on, HTTPS on the home
 network for a paired phone). What leaves the Mac, and when: [PRIVACY.md](PRIVACY.md).
+
+**A recorder that has been out of your hands** should be treated as untrusted: the recorder has no Secure Boot, so
+someone holding it could have changed its firmware. The remedy is to reflash it over USB with
+`octo device flash --direct`, which writes its bootloader, partition table and firmware through the chip's own
+loader, not through the firmware that's on it. From a release this is the whole flash image, which also clears its
+settings and pairing; built from source it rewrites only those parts and keeps its settings. Then pair it again
+(`octo device pair`), which replaces the key it trusts.

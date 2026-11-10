@@ -99,7 +99,7 @@ async function add() {
 // One service
 const testModel = ref<Record<string, string>>({})
 const tested = ref<Record<string, string>>({})
-const firstModel = (c: Connection) => c.kind === 'anthropic' ? 'claude-haiku-4-5' : c.models[0]  // the cheapest to ask
+const firstModel = (c: Connection) => c.kind === 'anthropic' ? 'claude-haiku-5-5' : c.models[0]  // the cheapest to ask
 async function test(c: Connection) {
   const model = testModel.value[c.id] || firstModel(c)
   tested.value = { ...tested.value, [c.id]: 'Asking…' }

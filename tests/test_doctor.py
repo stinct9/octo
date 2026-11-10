@@ -78,6 +78,7 @@ def test_just_installed_it_reads_calm_and_says_where_octo_is(conn, monkeypatch):
     monkeypatch.setattr(DR, "permissions", lambda conn: [])
     what = {c.what for c in DR.run(conn, fresh=True)}
     assert not {"You", "Your principles", "A model for reviews"} & what and not any(w.startswith("Model ") for w in what)
+    assert "A copy off this Mac" not in what and "A copy off this Mac" in {c.what for c in DR.run(conn)}  # review 10 Nov
     out = DR.report([DR.Check(DR.WARN, "The Octo app", "not in Applications", "octo launcher install")], fresh=True)
     assert "/bin/octo' launcher install" in out and "coming down in the background" in out
 

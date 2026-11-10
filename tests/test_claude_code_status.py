@@ -37,3 +37,34 @@ def test_ready_on_a_plan(tmp_path, monkeypatch):
     s = CC.status()
     assert s["fix"] is None and s["plan"] == "max" and s["auth"] == "claude.ai"
     assert "someone@example.com" not in json.dumps(s)  # the account's address never reaches the page
+
+
+def test_found_through_the_login_shell(tmp_path, monkeypatch):
+    """Review 10 Nov: under nvm or volta `claude` is only on the shell's PATH; the shell is asked once, and the child
+    gets its folder on PATH (for the node beside it). The shell call is faked."""
+    exe = tmp_path / "nvm" / "bin" / "claude"
+    exe.parent.mkdir(parents=True)
+    exe.write_text("#!/bin/sh\n")
+    exe.chmod(0o755)
+    calls = []
+
+    def run(args, **kw):
+        calls.append(args)
+        return CC.subprocess.CompletedProcess(args, 0, stdout=f"Now using node v22\n{exe}\n", stderr="")
+
+    monkeypatch.setattr(CC, "_shell", {"path": None, "asked": 0.0})
+    monkeypatch.setattr(CC.subprocess, "run", run)
+    assert "nvm" not in CC.clean_env().get("PATH", "")
+    assert CC._from_login_shell() == str(exe) and CC._from_login_shell() == str(exe)
+    assert len(calls) == 1 and calls[0][1:] == ["-ilc", "command -v claude"]
+    assert CC.clean_env()["PATH"].startswith(str(exe.parent) + ":")
+
+
+def test_not_found_through_the_login_shell_is_asked_again_later(monkeypatch):
+    calls = []
+    monkeypatch.setattr(CC, "_shell", {"path": None, "asked": 0.0})
+    monkeypatch.setattr(CC.subprocess, "run", lambda args, **kw: calls.append(args)
+                        or CC.subprocess.CompletedProcess(args, 1, stdout="", stderr=""))
+    assert CC._from_login_shell() is None and CC._from_login_shell() is None and len(calls) == 1
+    CC._shell["asked"] -= CC.SHELL_RETRY_S + 1
+    assert CC._from_login_shell() is None and len(calls) == 2

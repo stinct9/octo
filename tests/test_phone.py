@@ -13,15 +13,21 @@ from octo.db import connect
 from octo.phone_api import install
 
 
-def test_a_code_works_once_expires_and_dies_after_five_wrong_tries(monkeypatch):
+def test_a_code_works_once_expires_and_shuts_out_an_address_after_five_wrong_tries(monkeypatch):
     p = PH.Pairing()
     code = p.new_code()["code"]
     assert len(code) == 8 and code.isdigit()
     assert p.use(code) and not p.use(code)  # once only
     code = p.new_code()["code"]
+    wrong = "00000000" if code != "00000000" else "11111111"
     for _ in range(PH.CODE_TRIES):
-        assert not p.use("00000000" if code != "00000000" else "11111111")
-    assert not p.use(code)  # voided by the wrong tries
+        assert not p.use(wrong, "10.0.0.9")
+    assert not p.use(code, "10.0.0.9")  # that address is out until the code expires
+    assert p.use(code, "10.0.0.2")  # review 10 Nov, L10: the owner's phone still gets in
+    code = p.new_code()["code"]
+    for n in range(PH.CODE_TOTAL_TRIES):  # many addresses, each under its own limit: the total voids it
+        assert not p.use(wrong, f"10.0.{n // 4}.{n % 4}")
+    assert not p.use(code, "10.0.0.2")
     code = p.new_code()["code"]
     later = time.time() + PH.CODE_TTL_S + 1
     monkeypatch.setattr(PH.time, "time", lambda: later)

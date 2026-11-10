@@ -17,7 +17,14 @@ main() {
   local lab="$base/lab.noindex"
 
   if [ "$(uname -m)" != "arm64" ]; then
-    echo "Octo needs an Apple Silicon Mac (M1 or later): its speech models run on Apple's GPU."
+    # An Apple Silicon Mac whose Terminal runs under Rosetta reads as Intel here (review 10 Nov).
+    if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+      echo "This Mac is Apple Silicon, but Terminal is running under Rosetta (as an Intel app). Either quit Terminal,"
+      echo "untick \"Open using Rosetta\" in its Get Info (Finder, Applications, Utilities) and open it again, or put"
+      echo "arch -arm64 before bash in the same line, then run it again."
+    else
+      echo "Octo needs an Apple Silicon Mac (M1 or later): its speech models run on Apple's GPU."
+    fi
     exit 1
   fi
   tmp="$(mktemp -d)"  # not local: the EXIT trap reads it after main returns

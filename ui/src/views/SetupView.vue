@@ -276,16 +276,16 @@ onMounted(async () => {
 
       <p class="muted">The reviews and the coach write to you as "you"; these lines tell them who that is.</p>
       <form class="grid" @submit.prevent="saveYou">
-        <label class="field">Your name<input v-model="profile.name" type="text" autocomplete="name"></label>
-        <label class="field">Refer to you as
-          <select v-model="profile.pronoun"><option value="they">they</option><option value="she">she</option><option value="he">he</option></select>
+        <label class="field" for="you-name">Your name<input id="you-name" v-model="profile.name" type="text" autocomplete="name"></label>
+        <label class="field" for="you-pronoun">Refer to you as
+          <select id="you-pronoun" v-model="profile.pronoun"><option value="they">they</option><option value="she">she</option><option value="he">he</option></select>
         </label>
-        <label class="field wide">Who you are, in a line (optional)
-          <input v-model="profile.about" type="text" placeholder="e.g. a nurse who leads a ward team"></label>
-        <label class="field wide">Where your principles come from (optional)
-          <input v-model="profile.principles_from" type="text" placeholder="a teaching, a tradition, your own experience…"></label>
-        <label class="field wide">Advice you never want, whatever it would gain you (optional)
-          <input v-model="profile.never" type="text"></label>
+        <label class="field wide" for="you-about">Who you are, in a line (optional)
+          <input id="you-about" v-model="profile.about" type="text" placeholder="e.g. a nurse who leads a ward team"></label>
+        <label class="field wide" for="you-from">Where your principles come from (optional)
+          <input id="you-from" v-model="profile.principles_from" type="text" placeholder="a teaching, a tradition, your own experience…"></label>
+        <label class="field wide" for="you-never">Advice you never want, whatever it would gain you (optional)
+          <input id="you-never" v-model="profile.never" type="text"></label>
         <div class="line wide"><button type="submit" class="btn" :disabled="!profile.name?.trim()">Save</button>
           <span v-if="youError" class="error small" role="alert">{{ youError }}</span>
           <span v-else-if="youNote" class="ok small" aria-live="polite">{{ youNote }}</span></div>

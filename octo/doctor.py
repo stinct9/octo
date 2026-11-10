@@ -375,9 +375,11 @@ def permissions(conn) -> list[Check]:
 
 def run(conn, fresh: bool = False) -> list[Check]:
     """`fresh`: install.sh's check, just after installing (onboarding review 5, 28 Oct). The models are still coming
-    down and the setup steps are the Setup page's to do, so they're left out rather than shown as ✗."""
+    down and the setup steps are the Setup page's to do, so they're left out rather than shown as ✗. So is "A copy off
+    this Mac" (review 10 Nov): a lab that holds nothing yet has nothing to lose; Setup and plain `octo doctor` keep it."""
     return [*machine(), *places(), *apple_tools(), *software(), *([] if fresh else models(conn)), *running(),
-            *permissions(conn), *home(conn), *([] if fresh else lab(conn))]
+            *permissions(conn), *(c for c in home(conn) if not (fresh and c.what == "A copy off this Mac")),
+            *([] if fresh else lab(conn))]
 
 
 def spelled(fix: str) -> str:

@@ -214,7 +214,11 @@ def choices(conn, step: Step) -> tuple[Choice, ...]:
     offered in every lab (P5, 31 Oct)."""
     if step.stage not in ("insight", "commitments"):
         return step.choices
-    return step.choices + provider_choices()
+    # A model no longer offered (Claude Haiku 4.5, review 10 Nov) stays a choice only where it's the one chosen.
+    r = row(conn, "SELECT choice FROM settings WHERE stage=?", step.stage)
+    return step.choices + tuple(c for c in provider_choices()
+                                if c.params["reader"]["kind"] != "anthropic" or c.params["model"] in PV.OFFERED
+                                or (r and c.id == r["choice"]))
 
 
 def default(step: Step) -> Choice:

@@ -110,7 +110,7 @@
 #endif
 #include <Wire.h>
 
-const char *FW = "rec-27";
+const char *FW = "rec-28";
 // Its name on the network: "octo-" and the last two bytes of its Wi-Fi address, from the chip's fuses, as its
 // Bluetooth name (rec-16, review 8 Oct finding 12: every recorder was octo-rec.local, so two in one home collided).
 // The Mac learns it from "device" in the status, and finds a recorder that changed name by its Bluetooth name.
@@ -2484,10 +2484,16 @@ void loop() {
     case 'U': usbUpdate(); break;
     case 'K': usbKeep(); break;
     case 'X': usbReject(); break;
-    // Tests only, not kept across restarts: does the radio disturb the card or the mic?
+#ifdef OCTO_TEST_COMMANDS
+    // Tests only, not kept across restarts: does the radio disturb the card or the mic? Out of release builds since
+    // rec-28 (security L6, review 10 Nov): they answered anyone who plugged in, and nothing on the Mac sends them.
+    // Turn on with `#define OCTO_TEST_COMMANDS` above, or arduino-cli's
+    // `--build-property compiler.cpp.extra_flags=-DOCTO_TEST_COMMANDS`. '1'/'0' stay: the button does the same, and the
+    // screen shows it.
     case 'w': wifiDisabled = true; WiFi.disconnect(true); WiFi.mode(WIFI_OFF); wifiUp = false; bench::result(statusFields()); break;
     case 'W': wifiDisabled = false; WiFi.mode(WIFI_STA); wifiNextTry = millis(); bench::result(statusFields()); break;
     case 'H': bench::result(bench::kvs("hang", "loop")); for (;;) {} break;  // rec-20: the watchdog restarts it in 30 s
+#endif
   }
   // Remount: every second while recovering from an error (audio waits in the ring buffer), every
   // 10 s when there's no card. After 5 quick failures, stop capturing and say so.
