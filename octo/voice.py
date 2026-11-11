@@ -297,18 +297,40 @@ def add_voiceprint(conn, person_id: str, embedding: np.ndarray, seconds: float, 
                  (new_id("vp"), person_id, embedding.astype(np.float32).tobytes(), seconds, source, time.time(), EMBEDDING_MODEL))
 
 
-def all_voiceprints(conn) -> list[dict]:
-    return [{"person_id": r["person_id"], "name": r["name"], "is_self": bool(r["is_self"]),
-             "embedding": np.frombuffer(r["embedding"], dtype=np.float32)}
-            for r in rows(conn, "SELECT v.person_id, v.embedding, p.name, p.is_self FROM voiceprints v "
-                                "JOIN people p ON p.id = v.person_id WHERE v.model=? AND v.seconds >= ?",
+# A print far from its own person's others is a blend (a label on a speaker who was two people) and teaches the wrong
+# voice: left out of naming (pipeline review 11 Nov, Jay; open question F2). bench.printaudit's FAR_FROM_OWN; on the
+# lab's 191 prints the same person's mean ran 0.74 (median), the two blends 0.03 and 0.10. Only with >= 2 others, so a
+# person's second print is never judged by their first alone.
+FAR_FROM_OWN = 0.30
+FAR_MIN_OTHERS = 2
+
+
+def _usable(prints: list[dict]) -> list[dict]:
+    """`prints` (each with an `embedding`) less those far from their own person's other prints."""
+    by: dict[str, list[dict]] = {}
+    for p in prints:
+        by.setdefault(p["person_id"], []).append(p)
+
+    def far(p: dict) -> bool:
+        others = [q for q in by[p["person_id"]] if q is not p]
+        return len(others) >= FAR_MIN_OTHERS and float(np.mean([cosine(p["embedding"], q["embedding"]) for q in others])) < FAR_FROM_OWN
+    return [p for p in prints if not far(p)]
+
+
+def _current_prints(conn) -> list[dict]:
+    return [{**r, "is_self": bool(r["is_self"]), "embedding": np.frombuffer(r["embedding"], dtype=np.float32)}
+            for r in rows(conn, "SELECT v.id, v.person_id, v.embedding, p.name, p.is_self FROM voiceprints v "
+                                "JOIN people p ON p.id = v.person_id WHERE v.model=? AND v.seconds >= ? ORDER BY v.id",
                                 EMBEDDING_MODEL, MIN_PRINT_S)]
+
+
+def all_voiceprints(conn) -> list[dict]:
+    return [{k: p[k] for k in ("person_id", "name", "is_self", "embedding")} for p in _usable(_current_prints(conn))]
 
 
 def voiceprints_version(conn) -> str:
     """Changes whenever voiceprints are added or removed, or the embedding model changes, so identify re-runs."""
-    ids = [r["id"] for r in rows(conn, "SELECT id FROM voiceprints WHERE model=? AND seconds >= ? ORDER BY id",
-                                 EMBEDDING_MODEL, MIN_PRINT_S)]
+    ids = [p["id"] for p in _usable(_current_prints(conn))]
     # hashlib, not hash(): Python's hash() is randomised per process, which would re-run identify every time.
     return hashlib.sha256(",".join([EMBEDDING_MODEL, *ids]).encode()).hexdigest()[:12] if ids else "none"
 

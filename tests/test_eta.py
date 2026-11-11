@@ -106,3 +106,15 @@ def test_its_own_runs_replace_the_default(conn):
                      "started_at, finished_at) VALUES (?, 'speakers', ?, 'h', 'done', 1, '[]', '{}', 0, 100, ?)",
                      (f"r{i}", f"ses_{i}", 100 + 10 + 3 * m))
     assert E.rates(conn)["speakers"] == pytest.approx((10, 3))
+
+
+def test_a_run_that_spanned_the_mac_asleep_is_left_out(conn):
+    for i, m in enumerate((1, 2, 4, 6, 9)):
+        _session(conn, f"ses_{i}", m, NOW - 9000)
+        conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, upstream, params, queued_at, "
+                     "started_at, finished_at) VALUES (?, 'speakers', ?, 'h', 'done', 1, '[]', '{}', 0, 100, ?)",
+                     (f"r{i}", f"ses_{i}", 100 + 10 + 3 * m))
+    _session(conn, "ses_slept", 34, NOW - 9000)  # 31 Oct: 12 h for 34 min
+    conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, upstream, params, queued_at, "
+                 "started_at, finished_at) VALUES ('rs', 'speakers', 'ses_slept', 'h', 'done', 1, '[]', '{}', 0, 100, 43474)")
+    assert E.rates(conn)["speakers"] == pytest.approx((10, 3))

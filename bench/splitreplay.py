@@ -64,7 +64,8 @@ def replay(conn) -> list[dict]:
                                   round(SP._own_share(turns, cut, cut + SP.WINDOW_S, ign), 2)],
                   "suggested": bool(c), "strong": bool(c and c["strong"]),
                   "auto_would": bool(c and c["overlap"] <= SP.AUTO_MAX_OVERLAP
-                                     and (c["gap_s"] >= SP.AUTO_MIN_GAP_S or SP.ended(lines, c["at"])))})
+                                     and (c["gap_s"] >= SP.AUTO_MIN_GAP_S or SP.ended(lines, c["at"]))),
+                  "clear_would": bool(c and c["overlap"] <= SP.CLEAR_MAX_OVERLAP)})  # the second tier, date and review aside
         out.append(r)
     return out
 

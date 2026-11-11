@@ -222,13 +222,16 @@ def test_the_split_route_takes_one_point_or_several(tmp_path, monkeypatch):
     assert [x["end_s"] for x in rows(connect(tmp_path / "m.db"), "SELECT end_s FROM sessions ORDER BY start_s")][:2] == [950.0, 1550.0]
 
 
-def test_a_change_with_nobody_shared_and_the_owner_away_on_one_side_is_strong():
+def test_a_change_with_nobody_shared_is_strong():
     # 30 Oct 21:29: the owner listening, then in the next one; the lab didn't cut it (an 11 s pause)
     away = meeting(["B", "D"], 0, 15) + meeting(["G", "J", "K"], 15 * 60 + 11, 15)
     assert [g["strong"] for g in S.suggest(turns(*away), {"J"})] == [True]
     assert [g["strong"] for g in S.suggest(turns(*away))] == [False]  # the owner not known: can't tell
-    both = meeting(["B", "J", "D"], 0, 15) + meeting(["G", "J", "K"], 15 * 60 + 11, 15)  # 29 Oct 20:43: one
-    assert [g["strong"] for g in S.suggest(turns(*both), {"J"})] == [False]
+    both = meeting(["B", "J", "D"], 0, 15) + meeting(["G", "J", "K"], 15 * 60 + 11, 15)
+    assert [g["strong"] for g in S.suggest(turns(*both), {"J"})] == [True]  # since 11 Nov: the owner's share doesn't matter
+    # 29 Oct 20:43 (one conversation) was 0.02 shared: B says a little after the pause
+    carried = both + [("B", 15 * 60 + 300, 15 * 60 + 312)]
+    assert [(g["strong"], g["overlap"] > 0.01) for g in S.suggest(turns(*carried), {"J"})] == [(False, True)]
 
 
 def test_its_one_hides_the_suggestion_and_the_lab_never_cuts_there(tmp_path, monkeypatch):
@@ -253,3 +256,38 @@ def test_its_one_hides_the_suggestion_and_the_lab_never_cuts_there(tmp_path, mon
     assert S.auto(conn, sid) is None  # would have cut here otherwise (85 s, nobody shared)
     S.add(conn, "r1", at)  # Splitting there by hand still works
     assert S.for_recording(conn, "r1") == [round(at, 2)]
+
+
+def test_the_second_tier_cuts_a_complete_change_only_in_new_unreviewed_conversations(tmp_path):
+    # Pipeline review 11 Nov: nobody shared, a 20 s pause, the others not silent a minute and no goodbye
+    from octo.db import row
+    quick = meeting(["B", "J", "D"], 0, 15) + meeting(["G", "J", "K"], 15 * 60 + 20, 15)
+    for d in "12345":
+        (tmp_path / d).mkdir()
+
+    def lab(d, made=S.CLEAR_FROM + 60):
+        conn = _lab_with(tmp_path / d, quick)
+        conn.execute("UPDATE recordings SET created_at=?", (made,))
+        return conn
+    assert S.auto(lab("1", made=S.CLEAR_FROM - 60), "s1") is None  # recorded before the tier: left as it was
+    conn = lab("2")
+    second = S.auto(conn, "s1")
+    assert second and row(conn, "SELECT by FROM splits")["by"] == "lab"
+    conn = lab("3")
+    conn.execute("INSERT INTO stage_runs (id, stage, target, input_hash, status, is_current, output, queued_at) "
+                 "VALUES ('in', 'insight', 's1', 'h', 'done', 1, '{}', 0)")
+    assert S.auto(conn, "s1") is None  # a review exists: cutting would make it again
+    conn = lab("4")
+    conn.execute("UPDATE sessions SET reviewed_at=1")
+    assert S.auto(conn, "s1") is None  # answered
+    conn = lab("5")
+    (at,) = [g["at"] for g in S.suggest(turns(*quick), {"J"})]
+    S.keep_whole(conn, row(conn, "SELECT * FROM sessions"), at)
+    assert S.auto(conn, "s1") is None  # It's one / joined back: never cut there
+
+
+def test_the_second_tier_leaves_a_change_with_a_little_shared(tmp_path):
+    near = meeting(["B", "J", "D"], 0, 15) + meeting(["G", "J", "K"], 15 * 60 + 20, 15) + [("B", 15 * 60 + 300, 15 * 60 + 312)]
+    conn = _lab_with(tmp_path, near)
+    conn.execute("UPDATE recordings SET created_at=?", (S.CLEAR_FROM + 60,))
+    assert S.auto(conn, "s1") is None

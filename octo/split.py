@@ -42,7 +42,14 @@ EDGE_S = 90.0  # where a goodbye or hello is looked for, before and after
 # an 11 s pause) was two conversations and the lab didn't cut it; 1 Oct 19:58 (0.03) and 29 Oct 20:43 (0.02, the
 # owner on both sides) were one; 22 Oct 21:31 (0.00, the owner 29% then 0%) the owner wasn't sure.
 STRONG_MAX_OVERLAP = 0.01
-STRONG_OWN_SHARE = 0.05
+STRONG_OWN_SHARE = 0.05  # until 11 Nov; kept for the record, no longer part of `strong`
+# A second tier (pipeline review 11 Nov, Jay's call): a change this complete is cut without the minute of silence or
+# the goodbye. Replayed over every split so far (`python -m bench.splitreplay`): the owner's 12 measurable hand cuts were
+# at 0.00 shared (9) or 0.03 (3); the others silent 11-58 s at the 10 the first tier missed; the two places the owner
+# called one conversation were at 0.02 and 0.03. Only recordings made from CLEAR_FROM on and before any review exists,
+# so no conversation of before re-runs and no review is made again.
+CLEAR_MAX_OVERLAP = 0.01
+CLEAR_FROM = 1794421800  # 12 Nov 2026, 00:00 +05:30
 # shortcut: English only, from 16 Oct's calls; add Hindi words once a Hindi meeting switch is seen.
 GOODBYE = re.compile(r"\b(bye|goodbye|see you|talk (to you )?later|thanks everyone|thank you (all|everyone|so much)"
                      r"|have a good|take care|cheers)\b")
@@ -97,9 +104,9 @@ def _candidates(turns: list[dict], ignore: set[str]) -> list[dict]:
                         others = [x for x in turns if x["speaker"] not in ignore]
                         gap = (min(x["start"] for x in others if x["start"] >= at)
                                - max(x["end"] for x in others if x["end"] <= at))
-                        strong = bool(ignore) and overlap <= STRONG_MAX_OVERLAP and min(
-                            _own_share(turns, at - WINDOW_S, at, ignore),
-                            _own_share(turns, at, at + WINDOW_S, ignore)) < STRONG_OWN_SHARE
+                        # Since 11 Nov whatever the owner's share: the owner's share missed both hand cuts made
+                        # after 31 Oct (2 Nov, 4 Nov), each at 0.00 shared.
+                        strong = bool(ignore) and overlap <= STRONG_MAX_OVERLAP
                         found.append({"at": at, "pause_s": round(pause, 1), "gap_s": round(gap, 1),
                                       "overlap": round(overlap, 2), "strong": strong,
                                       "before": sorted(before, key=lambda s: -before[s]),
@@ -194,7 +201,7 @@ def auto(conn, session_id: str) -> str | None:
     """Split by the lab, once identify has found the owner (they're in both parts and are left out of the
     comparison), where the people change clearly. Before speakers are asked about and before the review,
     so nothing is spent on a blend. Not once the owner has answered or rated its review, nor where a split was
-    joined back. Returns the second part's session id, or None."""
+    joined back. The second tier (CLEAR_*) only on recordings from CLEAR_FROM and before any review is made. Returns the second part's session id, or None."""
     from . import sessions as SV
     from .db import row
     from .runs import pinned_review
@@ -208,11 +215,14 @@ def auto(conn, session_id: str) -> str | None:
         return None
     undone = [r[0] for r in conn.execute("SELECT at_s FROM splits WHERE recording_id=? AND undone_at IS NOT NULL",
                                          (sess["recording_id"],))]
+    clear_tier = (conn.execute("SELECT created_at FROM recordings WHERE id=?", (sess["recording_id"],)).fetchone()[0] >= CLEAR_FROM
+                  and not conn.execute("SELECT 1 FROM stage_runs WHERE stage='insight' AND target=? AND status='done' LIMIT 1",
+                                       (session_id,)).fetchone())
     # Every candidate, clearest first: a nearby clearer one that doesn't qualify mustn't hide one that does.
     for f in sorted(_candidates(out["turns"], me), key=lambda f: f["overlap"]):
         at = sess["start_s"] + f["at"]
-        if (f["overlap"] <= AUTO_MAX_OVERLAP and (f["gap_s"] >= AUTO_MIN_GAP_S or ended(out["lines"], f["at"]))
-                and all(abs(at - u) >= MIN_PART_S for u in undone)):
+        first = f["overlap"] <= AUTO_MAX_OVERLAP and (f["gap_s"] >= AUTO_MIN_GAP_S or ended(out["lines"], f["at"]))
+        if (first or (clear_tier and f["overlap"] <= CLEAR_MAX_OVERLAP)) and all(abs(at - u) >= MIN_PART_S for u in undone):
             return split_now(conn, sess, at, by="lab")
     return None
 

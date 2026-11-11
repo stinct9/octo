@@ -32,6 +32,9 @@ DEFAULT: dict[str, tuple[float, float]] = {
     "speakers": (20.0, 4.9), "diarize": (4.0, 0.8), "identify": (20.0, 0.4), "numbers": (0.5, 0.0),
     "insight": (26.0, 2.3), "commitments": (20.0, 1.0),  # commitments (B14): a guess, until the lab has its own runs
 }
+# A run longer than the worker's limit (pipeline.WORKER_TIMEOUT_S, 3 h) can only have spanned the Mac asleep: the
+# limit's clock stops then. 31 Oct: 12 h for 34 min of audio, nothing else finishing meanwhile (pipeline review 11 Nov).
+ASLEEP_S = 3 * 3600
 LATE_FACTOR, LATE_SLACK_S = 1.5, 60.0  # a running step past this is "taking longer than usual"
 _TTL_S = 5.0
 _cache: tuple[float, dict] | None = None
@@ -70,6 +73,7 @@ def rates(conn) -> dict[str, tuple[float, float]]:
                        "coalesce((s.end_s - s.start_s), r.duration_s) / 60.0 AS minutes FROM stage_runs sr "
                        "LEFT JOIN sessions s ON s.id = sr.target LEFT JOIN recordings r ON r.id = sr.target "
                        "WHERE sr.status='done' AND sr.started_at > 0 AND sr.finished_at >= sr.started_at "
+                       f"AND sr.finished_at - sr.started_at <= {ASLEEP_S} "
                        "ORDER BY sr.finished_at DESC")
     by: dict[str, list[tuple[float, float]]] = {}
     for f in found:
