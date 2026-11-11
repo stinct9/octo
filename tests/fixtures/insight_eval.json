@@ -1,5 +1,7 @@
 {
-  "about": "Scripted transcripts with known answers, for checking insight models (octo evalinsight). Written by Claude as test material, not by the owner: they test whether a model finds moments that are there and stays quiet where none are. 'expect' maps principle number to true (a clear moment of the owner's own conduct) or false (nothing bears on it, even if the topic is related). Principles not listed are ambiguous and not scored.",
+  "about": "Scripted transcripts with known answers, for checking insight models (octo evalinsight). Written by Claude as test material, not by the owner: they test whether a model finds moments that are there and stays quiet where none are. 'expect' maps principle number to true (a clear moment of the owner's own conduct) or false (nothing bears on it, even if the topic is related). Principles not listed are ambiguous and not scored. The last three scripts were written by Claude with one plain lapse each; their expected verdicts ('verdict': principle number → held / partly / missed / depends) were confirmed by the owner on 11 Nov. 'report' lists principles shown by the review check (--review) but not scored.",
+  "numbered_by": "The rubric's principles when 'expect' was last numbered (2 Oct, 13 principles): number → principle id (insight.principle_id, a hash of the words). The review check (--review) finds each in today's rubric by its id, as Progress does for a renumbered rubric; one no longer there is reported apart.",
+  "principle_ids": {"1": "ae8eae5b", "2": "0ab664b9", "3": "ad89051f", "4": "ff5bd1d7", "5": "1b44e64d", "6": "8e5d9e55", "7": "845150be", "8": "8f9b7eb4", "9": "3d563560", "10": "8bafb889", "11": "cff649b4", "12": "ddd9a9a1", "13": "7b1ed215"},
   "transcripts": [
     {
       "name": "sofa budget",
@@ -58,6 +60,68 @@
         ["B", "Yeah. I should drop it. The work matters more than who gets the credit."]
       ],
       "expect": {"6": true, "9": true, "12": true, "4": false}
+    },
+    {
+      "name": "sofa budget, no apology",
+      "speakers": {"A": "Nisha", "B": "Sam"},
+      "me": "B",
+      "lines": [
+        ["A", "We need to decide on the sofa this week. The one at Home Centre is forty thousand."],
+        ["B", "Forty? That's fine, let's just order it."],
+        ["A", "But we said we'd keep the living room under thirty."],
+        ["B", "I already said it's fine. Why do we have to go over this again?"],
+        ["A", "Because last time you said the same about the dining table and we went over by twenty."],
+        ["B", "Can you just let me finish for once? You always bring up the dining table."],
+        ["A", "I'm only asking that we look at two more shops."],
+        ["B", "Fine. Whatever you want. Do what you like."],
+        ["A", "That's not fair. I'm trying to plan properly."],
+        ["B", "Plan properly? You've been planning this room for six months. I'm done talking about it."],
+        ["A", "So what do we do about the sofa?"],
+        ["B", "I don't care. Buy it, don't buy it. Just stop asking me."]
+      ],
+      "expect": {"7": true},
+      "verdict": {"7": "missed"},
+      "report": ["12"]
+    },
+    {
+      "name": "the test report",
+      "speakers": {"A": "Meera", "B": "Sam"},
+      "me": "B",
+      "lines": [
+        ["A", "The client wants the test report before Friday's release. We've only run about half the regression suite."],
+        ["B", "Send it anyway. Mark the suite as complete."],
+        ["A", "Complete? The payments cases haven't been run at all."],
+        ["B", "They won't open the report. They just want to see the word \"passed\"."],
+        ["A", "And if they ask about payments?"],
+        ["B", "Tell them it was covered. We'll run those cases quietly next week."],
+        ["A", "I'm not comfortable signing that."],
+        ["B", "Then leave your name off and put mine. It's a formality, Meera."],
+        ["A", "Okay. I'll send it this afternoon as it is, then."],
+        ["B", "Good. And don't mention the half-run suite in the stand-up tomorrow."]
+      ],
+      "expect": {"3": true},
+      "verdict": {"3": "missed"},
+      "report": ["12"]
+    },
+    {
+      "name": "after the roadmap review",
+      "speakers": {"A": "Arjun", "B": "Sam"},
+      "me": "B",
+      "lines": [
+        ["A", "I'll say it plainly, Sam. That roadmap was amateur work. I told the whole room so and I'd say it again."],
+        ["B", "You've said enough. Remember this when your budget request comes to me next month."],
+        ["A", "Is that a threat?"],
+        ["B", "Call it what you like. I've already asked Meera to take your team off the launch."],
+        ["A", "Because I criticised one document?"],
+        ["B", "Because you made me look small in front of the room. Now you'll find out how that feels."],
+        ["A", "That's petty, and you know it."],
+        ["B", "Maybe. But I'm not the one who'll be explaining a missed launch to the director."],
+        ["A", "So that's how it is."],
+        ["B", "That's how it is. We're done here."]
+      ],
+      "expect": {"8": true},
+      "verdict": {"8": "missed"},
+      "report": ["12", "7"]
     }
   ]
 }

@@ -17,6 +17,7 @@
   octo compare SESSION [--models a,b]   blind A/B of two local models' insights (plan §4.8)
   octo compare SESSION --reveal         which model was A and which was B
   octo evalinsight [--models a,b]       score models on scripted transcripts with known answers
+  octo evalinsight --review             the review itself on them: which verdict each planted moment gets
   octo coach [--show]                   ask the coach across your reviews (one Claude call), or show its last note
   octo gate include|exclude SESSION    count a conversation on Progress, or not
   octo redo SESSION STAGE               run one step of one conversation again (and what follows)
@@ -708,6 +709,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bundle-id", help="default app.octo.recorder.<team>; the first lab's is app.octo.recorder")
     p = sub.add_parser("evalinsight")
     p.add_argument("--models", default="qwen3:8b,gemma3:12b")
+    p.add_argument("--review", action="store_true", help="run the review itself (review_any) on the review's model: "
+                                                          "which verdict each planted moment gets")
     p = sub.add_parser("compare")
     p.add_argument("session")
     p.add_argument("--models", default="qwen3:8b,gemma3:12b")
@@ -929,6 +932,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "device":
         return device_command(conn, args)
+
+    if args.cmd == "evalinsight" and args.review:
+        from .insight_eval import review_eval, review_report
+        from .owner import load as owner_profile
+        from .settings import reader
+        from .stages import STAGES
+        d = STAGES["insight"].params  # unchosen: what the first lab reviews on (Claude Code, Opus 5.5, effort high)
+        e = review_eval(reader(conn) or {"kind": "claude-code", "model": d["model"], "effort": d["effort"]},
+                        owner_profile(conn), on_progress=lambda msg: print(f"  {msg}", flush=True))
+        NOTES.mkdir(exist_ok=True)
+        path = NOTES / f"review_eval_{time.strftime('%Y%m%d_%H%M')}.md"
+        path.write_text(review_report(e))
+        print(review_report(e))
+        print(f"saved: {path}")
+        return 0
 
     if args.cmd == "evalinsight":
         from .insight_eval import evaluate, report
