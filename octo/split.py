@@ -50,6 +50,15 @@ STRONG_OWN_SHARE = 0.05  # until 11 Nov; kept for the record, no longer part of 
 # so no conversation of before re-runs and no review is made again.
 CLEAR_MAX_OVERLAP = 0.01
 CLEAR_FROM = 1794421800  # 12 Nov 2026, 00:00 +05:30
+# Neither tier cuts where the owner talked through the change: at least half of the others' silence filled by the
+# owner's own talk is the owner carrying on with someone new, as likely one conversation as two, so it's only
+# suggested (first on the page). 13 Nov: the lab cut 12 Nov 21:17 (one person before, another after, the others silent
+# 63 s, the owner talking for 0.67 of it) and the owner said it was one. Replayed over every split
+# (`python -m bench.splitreplay`, from the parts as heard again apart): 11 of the 12 hand cuts are at 0.00-0.26, one
+# at 0.58; of the lab's 7, 12 Nov 21:17 is at 0.63, 12 Nov 21:03 at 0.55 (0.12 as the lab saw it then: still cut) and
+# 16 Oct's second call at 0.73, a real change the lab cut that is now suggested instead. Shared words across the cut
+# didn't tell them apart (learnings, Splitting, 13 Nov).
+THROUGH_SHARE = 0.5
 # shortcut: English only, from 16 Oct's calls; add Hindi words once a Hindi meeting switch is seen.
 GOODBYE = re.compile(r"\b(bye|goodbye|see you|talk (to you )?later|thanks everyone|thank you (all|everyone|so much)"
                      r"|have a good|take care|cheers)\b")
@@ -80,8 +89,9 @@ def _carry(frm: dict[str, float], to: dict[str, float]) -> float:
 
 
 def _candidates(turns: list[dict], ignore: set[str]) -> list[dict]:
-    """Every pause where the people change: [{"at", "pause_s", "gap_s", "before", "after", "overlap", "strong"}].
-    `gap_s` is how long the others were silent around it (the owner left out); `overlap` the more shared of
+    """Every pause where the people change: [{"at", "pause_s", "gap_s", "through", "before", "after", "overlap",
+    "strong"}]. `gap_s` is how long the others were silent around it (the owner left out), `through` the share of
+    that silence the owner talked through (THROUGH_SHARE); `overlap` the more shared of
     the 10 minutes on each side and the whole conversation on each side; `strong` see STRONG_*."""
     turns = sorted(turns, key=lambda t: t["start"])
     if len(turns) < 2:
@@ -102,13 +112,16 @@ def _candidates(turns: list[dict], ignore: set[str]) -> list[dict]:
                                   _carry(whole_b, whole_a), _carry(whole_a, whole_b))
                     if overlap <= MAX_OVERLAP:
                         others = [x for x in turns if x["speaker"] not in ignore]
-                        gap = (min(x["start"] for x in others if x["start"] >= at)
-                               - max(x["end"] for x in others if x["end"] <= at))
+                        g0 = max(x["end"] for x in others if x["end"] <= at)
+                        g1 = min(x["start"] for x in others if x["start"] >= at)
+                        gap = g1 - g0
+                        own = sum(max(0.0, min(x["end"], g1) - max(x["start"], g0)) for x in turns if x["speaker"] in ignore)
                         # Since 11 Nov whatever the owner's share: the owner's share missed both hand cuts made
                         # after 31 Oct (2 Nov, 4 Nov), each at 0.00 shared.
                         strong = bool(ignore) and overlap <= STRONG_MAX_OVERLAP
                         found.append({"at": at, "pause_s": round(pause, 1), "gap_s": round(gap, 1),
                                       "overlap": round(overlap, 2), "strong": strong,
+                                      "through": round(own / gap, 2) if gap > 0 else 0.0,
                                       "before": sorted(before, key=lambda s: -before[s]),
                                       "after": sorted(after, key=lambda s: -after[s])})
         end_so_far = max(end_so_far, t["end"])
@@ -201,7 +214,8 @@ def auto(conn, session_id: str) -> str | None:
     """Split by the lab, once identify has found the owner (they're in both parts and are left out of the
     comparison), where the people change clearly. Before speakers are asked about and before the review,
     so nothing is spent on a blend. Not once the owner has answered or rated its review, nor where a split was
-    joined back. The second tier (CLEAR_*) only on recordings from CLEAR_FROM and before any review is made. Returns the second part's session id, or None."""
+    joined back. The second tier (CLEAR_*) only on recordings from CLEAR_FROM and before any review is made. Never where the owner
+    talked through the change (THROUGH_SHARE): that's suggested. Returns the second part's session id, or None."""
     from . import sessions as SV
     from .db import row
     from .runs import pinned_review
@@ -222,7 +236,7 @@ def auto(conn, session_id: str) -> str | None:
     for f in sorted(_candidates(out["turns"], me), key=lambda f: f["overlap"]):
         at = sess["start_s"] + f["at"]
         first = f["overlap"] <= AUTO_MAX_OVERLAP and (f["gap_s"] >= AUTO_MIN_GAP_S or ended(out["lines"], f["at"]))
-        if (first or (clear_tier and f["overlap"] <= CLEAR_MAX_OVERLAP)) and all(abs(at - u) >= MIN_PART_S for u in undone):
+        if (first or (clear_tier and f["overlap"] <= CLEAR_MAX_OVERLAP)) and f["through"] < THROUGH_SHARE and all(abs(at - u) >= MIN_PART_S for u in undone):
             return split_now(conn, sess, at, by="lab")
     return None
 

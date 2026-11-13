@@ -140,9 +140,19 @@ def test_the_lab_splits_calls_back_to_back_when_the_first_one_ended(tmp_path):
     assert S.auto(_lab_with(tmp_path / "1", calls), "s1") is None  # suggested only: nothing says the call ended
     said = [{"start": 15 * 60 - 20, "text": "Thanks, bye!"}, {"start": 15 * 60 + 12, "text": "Hi Omar, can you hear me?"}]
     assert S.auto(_lab_with(tmp_path / "2", calls, lines=said), "s1")
-    # 25:19: the owner talks between the calls; the others are silent 70 s
-    between = meeting(["B", "J", "D"], 0, 15) + [("J", 15 * 60 + 10, 15 * 60 + 70)] + meeting(["G", "J", "K"], 15 * 60 + 80, 15)
+    # the others silent 70 s, the owner saying a little in it: the first one ended
+    between = meeting(["B", "J", "D"], 0, 15) + [("J", 15 * 60 + 10, 15 * 60 + 30)] + meeting(["G", "J", "K"], 15 * 60 + 80, 15)
     assert S.auto(_lab_with(tmp_path / "3", between), "s1")
+
+
+def test_the_lab_only_suggests_where_the_owner_talked_through_the_change(tmp_path):
+    # 12 Nov 21:17: one person before, another after, the owner talking for most of the others' silence; the owner
+    # said it was one conversation. (16 Oct 25:19, two calls, looks the same and is now suggested too.)
+    through = meeting(["B", "J", "D"], 0, 15) + [("J", 15 * 60 + 10, 15 * 60 + 70)] + meeting(["G", "J", "K"], 15 * 60 + 80, 15)
+    conn = _lab_with(tmp_path, through)
+    conn.execute("UPDATE recordings SET created_at=?", (S.CLEAR_FROM + 60,))  # the second tier neither
+    (f,) = S.suggest(turns(*through), {"J"})
+    assert f["strong"] and f["through"] >= S.THROUGH_SHARE and S.auto(conn, "s1") is None
 
 
 def test_join_back_needs_a_split(tmp_path):
