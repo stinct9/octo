@@ -36,6 +36,7 @@
   PUT  /api/octo/prefs/{key}            {"value": true|false|"text"}: one of them; the last saved wins (octo/routes/prefs.py)
   GET  /api/octo/actions                every open "What to do" step from current reviews
   GET  /api/octo/actions/ticktick       which of those are completed in TickTick
+  POST /api/octo/actions/let-go         "Let the older ones go": each listed step or promise over 14 days old let go (B40)
   POST /api/octo/recordings?name=&source=   the raw audio file as the body; header X-Octo-Upload: 1
   GET  /api/octo/incoming                recent recordings still being processed, or that found nothing
   POST /api/octo/sessions/{id}/keep      restore a conversation dropped because the owner's voice wasn't heard

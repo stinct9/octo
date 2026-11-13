@@ -6,6 +6,8 @@
 // Since 5 Nov (review item 5) the owner's own commitments are here too, "you promised", each once: one that is the
 // same promise as a step is the step, and closing it closes both (the server's). A promise alone is marked through
 // its commitment, so it never counts as acted (B14).
+// Since 12 Nov (B40) newest first, and "Let the older ones go" at the foot: each item over two weeks old gets its
+// own Let it go on the server in one go; Undo right after is each one's own Let it go undone.
 import { computed, onMounted, ref } from 'vue'
 import { lab } from '../lab/api'
 import { dueDay, today as localToday, when } from '../lab/format'
@@ -24,10 +26,17 @@ const error = ref('')
 const showAll = ref(false)
 const unfolded = ref(true)
 const FOLDED = 5
+const OLDER_DAYS = 14  // the server's SV.OLDER_DAYS
+const asking = ref(false)
+const batch = ref<OpenTask[]>([])  // the last "Let the older ones go", for its Undo
 
 const key = (t: OpenTask) => `${t.session_id}/${t.item}`
 const today = localToday()
 const shown = computed(() => (showAll.value ? tasks.value ?? [] : (tasks.value ?? []).slice(0, FOLDED)))
+const older = computed(() => {
+  const cut = Date.now() / 1000 - OLDER_DAYS * 86400
+  return (tasks.value ?? []).filter((t) => t.at && t.at < cut && !done.value[key(t)] && !letGone.value[key(t)])
+})
 const open = computed(() => (tasks.value ?? []).filter((t) => !done.value[key(t)] && !letGone.value[key(t)]).length)
 
 async function load() {
@@ -69,6 +78,20 @@ async function letGo(t: OpenTask, on: boolean) {
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   }
+}
+async function letOlderGo() {
+  asking.value = false
+  try {
+    const gone = new Set((await lab.actionsLetGo(older.value.map(key))).let_go)
+    batch.value = (tasks.value ?? []).filter((t) => gone.has(key(t)))
+    letGone.value = { ...letGone.value, ...Object.fromEntries([...gone].map((k) => [k, true])) }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  }
+}
+async function undoBatch() {
+  for (const t of batch.value) await letGo(t, false)
+  batch.value = []
 }
 async function saveNote(t: OpenTask) {
   const d = done.value[key(t)]
@@ -124,6 +147,22 @@ async function saveNote(t: OpenTask) {
     </ul>
     <button v-if="tasks.length > FOLDED" type="button" class="link small more" @click="showAll = !showAll">
       {{ showAll ? 'Show fewer' : `Show all ${tasks.length}` }}</button>
+    <div v-if="!only && batch.length" class="older small">
+      <span class="muted">Let {{ batch.length }} go</span>
+      <button type="button" class="link small" @click="undoBatch">Undo</button>
+    </div>
+    <div v-else-if="!only && older.length" class="older small">
+      <template v-if="asking">
+        <span>Let {{ older.length }} {{ older.length === 1 ? 'step' : 'steps and promises' }} from more than two weeks ago
+          go? They leave this list and aren't counted as done; you can undo it right after.</span>
+        <span class="older-actions">
+          <button type="button" class="btn btn-small" @click="letOlderGo">Let them go</button>
+          <button type="button" class="link small" @click="asking = false">Cancel</button>
+        </span>
+      </template>
+      <button v-else type="button" class="link small" @click="asking = true">
+        Let the {{ older.length }} older than two weeks go</button>
+    </div>
     </template>
   </section>
 </template>
@@ -151,6 +190,8 @@ li:first-child { border-top: 0; }
 .note input { font: inherit; font-size: 14px; color: var(--ink); background: var(--ground); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 40px; }
 .link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font: inherit; min-height: 32px; }
 .more { align-self: flex-start; }
+.older { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; }
+.older-actions { display: flex; align-items: center; gap: 14px; }
 .small { font-size: 13px; }
 .muted { color: var(--muted); }
 .error { color: var(--fail); }

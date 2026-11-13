@@ -354,9 +354,59 @@ def test_a_promise_of_yours_without_a_step_is_listed_and_never_counts_as_acted(t
     _done(conn, sid)
     mine = row(conn, "SELECT id FROM commitments WHERE by_self=1")["id"]
     got = SV.open_tasks(conn)
-    assert [(t["kind"], t["item"]) for t in got] == [("promise", mine), ("step", "n0")]  # due first
-    assert got[0]["title"] == "Send Asha the deck" and got[0]["to"] == "Asha" and got[0]["run"] is None
+    assert [(t["kind"], t["item"]) for t in got] == [("step", "n0"), ("promise", mine)]  # one conversation: steps first
+    assert got[1]["title"] == "Send Asha the deck" and got[1]["to"] == "Asha" and got[1]["run"] is None
     before = R.checks(conn)
     CM.mark(conn, mine, "done")  # Did it on home
     assert R.checks(conn) == before and not rows(conn, "SELECT 1 FROM feedback")  # B14: never acted
     assert [t["item"] for t in SV.open_tasks(conn)] == ["n0"]
+
+
+def test_newest_first_and_let_the_older_ones_go(tmp_path):
+    # B40 (12 Nov): home's list newest first, whatever is due; "Let the older ones go" gives each item over 14
+    # days old that the page showed its own Let it go: a step let go (its paired promise dropped), a promise alone
+    # dropped, nothing acted.
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from octo import review as R
+    from octo import sessions as SV
+    from octo.api import make_router
+    conn = connect(tmp_path / "t.db")
+    day, now = 86400, time.time()
+    convs = {}
+    for name, ago, steps in (("old_a", 20 * day, STEPS), ("old_b", 15 * day, STEPS[1:]), ("new", 3600, STEPS[1:])):
+        n = len(convs) + 1
+        sid = make(conn, sid=f"ses_20261019_0000000{n}", at=now - ago, rec=f"rec_20261019_0000000{n}", dz_id=f"dz_{n}")
+        _review_with(conn, sid, steps, rid=f"in_{n}")
+        _done(conn, sid, rid=f"cm_{n}")
+        convs[name] = sid
+    mine = {r["session_id"]: r["id"] for r in rows(conn, "SELECT id, session_id FROM commitments WHERE by_self=1")}
+    got = SV.open_tasks(conn)
+    assert [(t["session_id"], t["kind"]) for t in got] == [
+        (convs["new"], "step"), (convs["new"], "promise"), (convs["old_b"], "step"), (convs["old_b"], "promise"),
+        (convs["old_a"], "step"), (convs["old_a"], "step")]  # newest first; old_a's promise is its n0
+    assert got[4]["promise"] == mine[convs["old_a"]] and got[0]["due"] is None and got[4]["due"]  # due no longer first
+    before = R.checks(conn)
+    app = FastAPI()
+    app.include_router(make_router(lambda: connect(tmp_path / "t.db"), processor=type("P", (), {"kick": lambda self: None})()))
+    c = TestClient(app)
+    keys = [f"{t['session_id']}/{t['item']}" for t in got]
+    # The write guards: JSON only, this app's own origin.
+    assert c.post("/api/octo/actions/let-go", content="keys=x", headers={"content-type": "application/x-www-form-urlencoded"}).status_code == 415
+    assert c.post("/api/octo/actions/let-go", json={"keys": keys}, headers={"origin": "https://evil.example"}).status_code == 403
+    assert SV.open_tasks(conn) == got
+    # old_a's n1 wasn't shown (left out of keys): it stays. The new conversation's are under 14 days: they stay.
+    sent = [k for k in keys if k != f"{convs['old_a']}/n1"]
+    assert c.post("/api/octo/actions/let-go", json={"keys": sent}).json() == {"let_go": [keys[2], keys[3], keys[4]]}
+    assert [f"{t['session_id']}/{t['item']}" for t in SV.open_tasks(conn)] == [keys[0], keys[1], keys[5]]
+    assert CM.get(conn, mine[convs["old_a"]])["state"] == "dropped"  # paired: the step's Let it go dropped its promise
+    assert CM.get(conn, mine[convs["old_b"]])["state"] == "dropped"  # a promise alone, dropped
+    assert CM.get(conn, mine[convs["new"]])["state"] is None
+    fb = rows(conn, "SELECT insight_run, item, acted, let_go_at FROM feedback ORDER BY insight_run, item")
+    assert [(f["insight_run"], f["item"], bool(f["acted"]), bool(f["let_go_at"])) for f in fb] == [
+        ("in_1", "n0", False, True), ("in_2", "n0", False, True)]
+    assert R.checks(conn) == before  # never acted
+    # Undo is each one's own: the step's let_go false opens it and its promise again.
+    c.post(f"/api/octo/sessions/{convs['old_a']}/feedback", json={"run": "in_1", "item": "n0", "let_go": False})
+    assert CM.get(conn, mine[convs["old_a"]])["state"] is None

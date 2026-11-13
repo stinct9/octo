@@ -54,6 +54,7 @@ REVIEWED = {
     ("GET", "/api/octo/phone/hello"): A,
     ("POST", "/api/octo/sessions/{session_id}/answer"): A,
     ("POST", "/api/octo/sessions/{session_id}/feedback"): A,
+    ("POST", "/api/octo/actions/let-go"): A,
     ("POST", "/api/octo/sessions/{session_id}/focus"): A,
     ("POST", "/api/octo/sessions/{session_id}/reflection"): A, ("POST", "/api/octo/people/{person_id}/intention"): A,  # B15
     ("POST", "/api/octo/marks"): A,  # B16

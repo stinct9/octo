@@ -525,12 +525,15 @@ def _shown(conn, session_id: str, output: bool = True) -> dict | None:
     return ins if ins and ins["status"] == "done" and (not ins["stale"] or pinned_review(conn, session_id)) else None
 
 
+OLDER_DAYS = 14  # home's "Let the older ones go" (B40): steps and promises from conversations older than this
+
+
 def open_tasks(conn) -> list[dict]:
     """Every "What to do" step from the reviews shown now that the owner hasn't marked done or let go, for
     the home page (review 4 Oct, M01): until then the only way to mark one acted was inside each past
     conversation. Since 5 Nov (review item 5) the owner's own open commitments too, as "you promised"
     (`kind` "promise"), each once: one that is the same promise as a step is the step (`promise` names it).
-    Due first (soonest at the top), then the rest, newest conversation first."""
+    Newest conversation first (B40, 12 Nov; due dates first until then, and old steps buried new ones)."""
     out, paired = [], set()
     for s in rows(conn, "SELECT s.id, s.start_s, s.in_gate, s.reviewed_at, r.started_at FROM sessions s "
                         "JOIN recordings r ON r.id = s.recording_id WHERE s.status='active'"):
@@ -562,7 +565,6 @@ def open_tasks(conn) -> list[dict]:
                     "counts": bool(row(conn, "SELECT in_gate FROM sessions WHERE id=?", v["session_id"])["in_gate"]),
                     "ticktick": (v["ticktick"] or {}).get("url"), "promise": v["id"]})
     out.sort(key=lambda t: -(t["at"] or 0))
-    out.sort(key=lambda t: t["due"] or "9999")  # stable: due dates first, ties stay newest first
     return out
 
 

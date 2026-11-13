@@ -398,6 +398,16 @@ def paired_in(conn, session_id: str, review: dict | None) -> dict[str, dict]:
     return pair(review["next"], mine_in(conn, ids))
 
 
+def let_go_step(conn, session_id: str, run: dict, item: str, on: bool) -> None:
+    """Let it go on a review's "What to do" step (6 Oct): off home's list, never acted; the paired commitment of the
+    owner's follows (5 Nov). on=False undoes it. The feedback route and home's "Let the older ones go" (B40) both come here."""
+    conn.execute("INSERT OR IGNORE INTO feedback (insight_run, item, session_id, updated_at) VALUES (?, ?, ?, ?)",
+                 (run["id"], item, session_id, time.time()))
+    conn.execute("UPDATE feedback SET let_go_at=?, updated_at=? WHERE insight_run=? AND item=?",
+                 (time.time() if on else None, time.time(), run["id"], item))
+    close_paired(conn, paired_in(conn, session_id, load_json(run["output"])).get(item), let_go=on)
+
+
 def close_paired(conn, c: dict | None, *, acted: bool | None = None, let_go: bool | None = None) -> None:
     """A step closed or opened again: its paired commitment follows (Did it → done, Let it go → dropped; undone, only
     the mark the step gave it is taken back)."""

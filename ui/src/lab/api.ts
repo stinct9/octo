@@ -153,6 +153,7 @@ export const lab = {
   states: () => get<States>('/api/octo/progress/states'),
   actions: () => get<OpenTask[]>('/api/octo/actions'),
   actionsTicktick: () => get<{ done: Record<string, boolean | null> }>('/api/octo/actions/ticktick'),
+  actionsLetGo: (keys: string[]) => post<{ let_go: string[] }>('/api/octo/actions/let-go', { keys }),
   merge: (id: string, letter: string, into: string) =>
     post<FixResult>(`/api/octo/sessions/${encodeURIComponent(id)}/speakers/${letter}/merge`, { into }),
   moveLine: (id: string, line: number, to: string) =>

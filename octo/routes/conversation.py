@@ -212,13 +212,11 @@ def add(router: APIRouter, lab: Lab) -> None:
         if body.acted is not None:
             conn.execute("UPDATE feedback SET acted=?, updated_at=? WHERE insight_run=? AND item=?",
                          (int(body.acted), time.time(), run["id"], item["id"]))
+        from .. import commitments as CM
         if body.let_go is not None:
-            conn.execute("UPDATE feedback SET let_go_at=?, updated_at=? WHERE insight_run=? AND item=?",
-                         (time.time() if body.let_go else None, time.time(), run["id"], item["id"]))
-        if body.acted is not None or body.let_go is not None:  # the same promise as a commitment: it follows (5 Nov)
-            from .. import commitments as CM
-            CM.close_paired(conn, CM.paired_in(conn, session_id, load_json(run["output"])).get(item["id"]),
-                            acted=body.acted, let_go=body.let_go)
+            CM.let_go_step(conn, session_id, run, item["id"], body.let_go)
+        if body.acted is not None:  # the same promise as a commitment: it follows (5 Nov)
+            CM.close_paired(conn, CM.paired_in(conn, session_id, load_json(run["output"])).get(item["id"]), acted=body.acted)
         R.mark_reviewed_if_done(conn, session_id, run["id"])
         return {"feedback": SV.feedback_view(conn, run["id"]), "todo": SV.todo(conn, session_id)}
 

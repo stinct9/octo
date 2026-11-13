@@ -9,7 +9,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import aside as AS
 from .. import frame as FR
@@ -19,10 +19,14 @@ from .. import parts as PT
 from .. import pipeline as P
 from .. import sessions as SV
 from .. import settings as ST
-from ..db import row, rows
+from ..db import row, rows, tx
 from ..pipeline import DuplicateRecording, add_recording, current
 from ..api import code_changed, _receive
 from .common import AUDIO_TYPES, Lab, SOURCES, same_origin, upload_origin
+
+
+class LetOlderGo(BaseModel):
+    keys: list[str] = Field(max_length=5000)  # "session_id/item" as the page showed them: nothing it didn't show goes
 
 
 class QuestionCheck(BaseModel):
@@ -114,6 +118,28 @@ def add(router: APIRouter, lab: Lab) -> None:
             if t["ticktick"] and t["kind"] == "step":  # a promise's TickTick task is the commitment's own
                 sent[f"{t['session_id']}/{t['item']}"] = TT.sent(conn, t["run"])[t["item"]]
         return {"done": TT.done(sent)}
+
+    @router.post("/actions/let-go", dependencies=[Depends(same_origin)])
+    def actions_let_go(body: LetOlderGo) -> dict:
+        """"Let the older ones go" (B40): each open step or promise of the owner's whose conversation is over
+        SV.OLDER_DAYS old, among the keys the page showed, gets its own Let it go: a step let go, never acted (its
+        paired commitment follows), a promise dropped. Returns the keys let go; Undo is each one's own Let it go undone."""
+        from .. import commitments as CM
+        conn = db()
+        cut, wanted, gone = time.time() - SV.OLDER_DAYS * 86400, set(body.keys), []
+        with tx(conn):
+            for t in SV.open_tasks(conn):
+                key = f"{t['session_id']}/{t['item']}"
+                if key not in wanted or not t["at"] or t["at"] >= cut:
+                    continue
+                if t["kind"] == "promise":
+                    CM.mark(conn, t["item"], "dropped")
+                else:
+                    CM.let_go_step(conn, t["session_id"], row(conn, "SELECT * FROM stage_runs WHERE id=?", t["run"]),
+                                   t["item"], True)
+                    R.mark_reviewed_if_done(conn, t["session_id"], t["run"])
+                gone.append(key)
+        return {"let_go": gone}
 
     def states(conn) -> dict:
         """Where every conversation is, so what's waiting on the owner is visible (review 4 Oct, M03); on the list's

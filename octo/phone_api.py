@@ -266,6 +266,7 @@ PHONE_ROUTES: dict[tuple[str, str], str] = {
     # answering and marking
     ("POST", "/api/octo/sessions/{session_id}/answer"): ANYWHERE,
     ("POST", "/api/octo/sessions/{session_id}/feedback"): ANYWHERE,
+    ("POST", "/api/octo/actions/let-go"): ANYWHERE,  # B40: each item's own Let it go, as feedback and commitments are
     ("POST", "/api/octo/sessions/{session_id}/focus"): ANYWHERE,
     ("POST", "/api/octo/sessions/{session_id}/reflection"): ANYWHERE,  # B15: in the owner's words
     ("POST", "/api/octo/sessions/{session_id}/speakers/{letter}"): ANYWHERE,  # "Yes, it's me", who someone is
