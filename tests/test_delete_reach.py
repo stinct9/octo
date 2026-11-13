@@ -12,7 +12,7 @@ REFS = ("session_id", "person_id", "by_person", "to_person", "target")
 # What's left on purpose: the conversation's row, as 'deleted', so finding conversations again can't bring it back.
 KEPT_AFTER_DELETE = {"sessions.id"}
 # Forget leaves the steps' ids for them (who-is-who matches, the commitments step's inputs); their words go
-# (L9, Jay 5 Nov: tests/test_forget_words.py), and the reviews that read them wait for Redo the review.
+# (L9, 5 Nov: tests/test_forget_words.py), and the reviews that read them wait for Redo the review.
 KEPT_AFTER_FORGET = {"stage_runs.params", "stage_runs.output"}
 
 

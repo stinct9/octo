@@ -1,4 +1,4 @@
-"""Forget takes their words (security review L9, Jay 5 Nov): their lines read "(forgotten)" in every table, the owner's
+"""Forget takes their words (security review L9, 5 Nov): their lines read "(forgotten)" in every table, the owner's
 stay, and the reviews that read them are held for Redo the review, never made again by themselves."""
 
 from octo import pipeline as P

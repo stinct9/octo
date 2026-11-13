@@ -1,4 +1,4 @@
-"""Who has solved this (B38, goal 2; Jay 5 Nov): on the focus or a coach note's *work on*, the owner notes who has
+"""Who has solved this (B38, goal 2; 5 Nov): on the focus or a coach note's *work on*, the owner notes who has
 solved it (a person, a book, a talk), what they did or would say, and where from, in their own words.
 
 - The owner writes every word. Octo never suggests a person, a book or a quote, and nothing is fetched: the coach and

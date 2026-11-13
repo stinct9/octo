@@ -254,10 +254,10 @@ def drop_old_audio(conn, now: float | None = None, days: int = RAW_AUDIO_DAYS) -
     return gone
 
 
-# ---- Forget takes their words (security review L9, Jay 5 Nov) ----------------------------------------------------
+# ---- Forget takes their words (security review L9, 5 Nov) ----------------------------------------------------
 # Their lines read "(forgotten)" in every stored run of the conversations they were in: the transcript, who said what,
 # the reviews' and commitments' quotes, the Hindi drafts. The owner's lines stay. A review that read them isn't made
-# again by itself (Jay's reviews never re-run unasked): it's held, and its page offers Redo the review.
+# again by itself (the owner's reviews never re-run unasked): it's held, and its page offers Redo the review.
 
 FORGOTTEN = "(forgotten)"
 from .runs import FORGOTTEN_REVIEWS as HELD, review_held  # noqa: E402,F401  (L9; read models check it too)

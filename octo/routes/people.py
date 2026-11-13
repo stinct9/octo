@@ -67,7 +67,7 @@ def add(router: APIRouter, lab: Lab) -> None:
         if p["is_self"]:
             raise HTTPException(409, "that's you: re-enrol instead of forgetting")
         # Their words go from every stored run; the reviews that read them are held for Redo the review, never redone
-        # by themselves (L9, Jay 5 Nov: his reviews don't re-run unasked).
+        # by themselves (L9, 5 Nov: the owner's reviews don't re-run unasked).
         forget_person(conn, p["name"])
         processor.kick()
         return {"forgotten": p["name"]}

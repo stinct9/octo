@@ -546,7 +546,7 @@ def test_a_key_is_tested_before_its_kept(tmp_path, monkeypatch):
 
 
 def test_the_pipeline_page_reads_as_the_first_labs_notebook_only_there(new_lab, tmp_path):
-    # Review 5 Nov, item 1: Jay's dates, tests and history are his lab's; a buyer reads what each step does, plainly.
+    # Review 5 Nov, item 1: the first lab's dates, tests and history are its own; a buyer reads what each step does, plainly.
     jays = connect(tmp_path / "jays.db")
     jays.execute("INSERT OR REPLACE INTO app_config (key, value, updated_at) VALUES ('lab_origin', '\"first\"', 0)")
     first = {s["stage"]: s for s in ST.describe(jays)}

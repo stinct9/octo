@@ -43,7 +43,7 @@ EDGE_S = 90.0  # where a goodbye or hello is looked for, before and after
 # owner on both sides) were one; 22 Oct 21:31 (0.00, the owner 29% then 0%) the owner wasn't sure.
 STRONG_MAX_OVERLAP = 0.01
 STRONG_OWN_SHARE = 0.05  # until 11 Nov; kept for the record, no longer part of `strong`
-# A second tier (pipeline review 11 Nov, Jay's call): a change this complete is cut without the minute of silence or
+# A second tier (pipeline review 11 Nov, the owner's call): a change this complete is cut without the minute of silence or
 # the goodbye. Replayed over every split so far (`python -m bench.splitreplay`): the owner's 12 measurable hand cuts were
 # at 0.00 shared (9) or 0.03 (3); the others silent 11-58 s at the 10 the first tier missed; the two places the owner
 # called one conversation were at 0.02 and 0.03. Only recordings made from CLEAR_FROM on and before any review exists,

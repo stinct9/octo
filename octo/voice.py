@@ -298,7 +298,7 @@ def add_voiceprint(conn, person_id: str, embedding: np.ndarray, seconds: float, 
 
 
 # A print far from its own person's others is a blend (a label on a speaker who was two people) and teaches the wrong
-# voice: left out of naming (pipeline review 11 Nov, Jay; open question F2). bench.printaudit's FAR_FROM_OWN; on the
+# voice: left out of naming (pipeline review 11 Nov; open question F2). bench.printaudit's FAR_FROM_OWN; on the
 # lab's 191 prints the same person's mean ran 0.74 (median), the two blends 0.03 and 0.10. Only with >= 2 others, so a
 # person's second print is never judged by their first alone.
 FAR_FROM_OWN = 0.30
